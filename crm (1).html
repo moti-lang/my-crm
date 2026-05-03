@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ניהול לקוחות</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #060b14; font-family: 'Heebo', sans-serif; direction: rtl; color: #f1f5f9; min-height: 100vh; }
+input, button { font-family: 'Heebo', sans-serif; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #1e293b; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+@keyframes fadeUp { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const SUPABASE_URL = "https://millozjbbrafovfghciq.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ZYwesip007nxPg3zwGS9_w_Zorkybj6";
+
+const api = async (method, path, body) => {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+    method,
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) { const err = await res.text(); throw new Error(err); }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+};
+
+const STATUSES = [
+  { label: "לקוח חדש", color: "#94a3b8", bg: "#1e293b", icon: "✦" },
+  { label: "שיחה טלפונית", color: "#38bdf8", bg: "#0c2a3b", icon: "✆" },
+  { label: "פגישת זום", color: "#a78bfa", bg: "#1e1040", icon: "◈" },
+  { label: "אפיון מערכת", color: "#fb923c", bg: "#2d1a07", icon: "◎" },
+  { label: "הצעת מחיר", color: "#facc15", bg: "#2d2500", icon: "◆" },
+  { label: "נסגרה עסקה", color: "#4ade80", bg: "#062016", icon: "✔" },
+];
+
+const PIPELINE = STATUSES.map(s => s.label);
+const getStatus = label => STATUSES.find(s => s.label === label) || STATUSES[0];
+
+function StatusBadge({ status, small }) {
+  const s = getStatus(status);
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", gap:"5px", background:s.bg, color:s.color, border:`1px solid ${s.color}33`, borderRadius:"6px", padding:small?"2px 8px":"4px 12px", fontSize:small?"11px":"12px", fontWeight:600, whiteSpace:"nowrap" }}>
+      {s.icon} {status}
+    </span>
+  );
+}
+
+function ProgressBar({ status }) {
+  const idx = PIPELINE.indexOf(status);
+  const pct = ((idx + 1) / PIPELINE.length) * 100;
+  const s = getStatus(status);
+  return (
+    <div style={{ width:"100%", height:"3px", background:"#1e293b", borderRadius:"2px", overflow:"hidden" }}>
+      <div style={{ height:"100%", width:`${pct}%`, background:s.color, borderRadius:"2px", transition:"width 0.4s ease", boxShadow:`0 0 6px ${s.color}88` }} />
+    </div>
+  );
+}
+
+function Modal({ client, onSave, onClose }) {
+  const [form, setForm] = React.useState(client || { name:"", phone:"", status:STATUSES[0].label });
+  const [errors, setErrors] = React.useState({});
+  const [saving, setSaving] = React.useState(false);
+
+  const handleSubmit = async () => {
+    const e = {};
+    if (!form.name.trim()) e.name = "שם חובה";
+    if (!form.phone.trim()) e.phone = "טלפון חובה";
+    if (Object.keys(e).length) { setErrors(e); return; }
+    setSaving(true);
+    await onSave(form);
+    setSaving(false);
+  };
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"#00000099", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100, backdropFilter:"blur(4px)" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:"16px", padding:"32px", width:"min(420px,92vw)", boxShadow:"0 24px 80px #000a", direction:"rtl" }}>
+        <h2 style={{ margin:"0 0 24px", fontSize:"18px", fontWeight:700, color:"#f1f5f9" }}>{client ? "עריכת לקוח" : "לקוח חדש"}</h2>
+        {[{key:"name",label:"שם לקוח",type:"text",placeholder:"ישראל ישראלי"},{key:"phone",label:"מספר טלפון",type:"tel",placeholder:"050-0000000"}].map(({key,label,type,placeholder}) => (
+          <div key={key} style={{ marginBottom:"16px" }}>
+            <label style={{ display:"block", fontSize:"12px", color:"#64748b", marginBottom:"6px", fontWeight:600 }}>{label}</label>
+            <input type={type} value={form[key]} placeholder={placeholder}
+              onChange={e => { setForm({...form,[key]:e.target.value}); setErrors({...errors,[key]:""}); }}
+              style={{ width:"100%", background:"#1e293b", border:`1px solid ${errors[key]?"#f87171":"#334155"}`, borderRadius:"8px", padding:"10px 12px", color:"#f1f5f9", fontSize:"14px", outline:"none" }} />
+            {errors[key] && <p style={{ margin:"4px 0 0", color:"#f87171", fontSize:"11px" }}>{errors[key]}</p>}
+          </div>
+        ))}
+        <div style={{ marginBottom:"24px" }}>
+          <label style={{ display:"block", fontSize:"12px", color:"#64748b", marginBottom:"6px", fontWeight:600 }}>מצב הזמנה</label>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:"8px" }}>
+            {STATUSES.map(s => (
+              <button key={s.label} onClick={() => setForm({...form,status:s.label})}
+                style={{ padding:"6px 12px", borderRadius:"6px", fontSize:"12px", cursor:"pointer", fontWeight:600, background:form.status===s.label?s.bg:"transparent", color:form.status===s.label?s.color:"#475569", border:`1px solid ${form.status===s.label?s.color+"66":"#1e293b"}` }}>
+                {s.icon} {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:"10px" }}>
+          <button onClick={handleSubmit} disabled={saving}
+            style={{ padding:"10px 24px", borderRadius:"8px", border:"none", background:saving?"#334155":"linear-gradient(135deg,#3b82f6,#6366f1)", color:"#fff", fontWeight:700, fontSize:"14px", cursor:"pointer" }}>
+            {saving?"שומר...":client?"שמור שינויים":"הוסף לקוח"}
+          </button>
+          <button onClick={onClose} style={{ padding:"10px 18px", borderRadius:"8px", border:"1px solid #334155", background:"transparent", color:"#64748b", fontWeight:600, fontSize:"14px", cursor:"pointer" }}>ביטול</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuickStatusPicker({ client, onUpdate, onClose }) {
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:99, display:"flex", alignItems:"center", justifyContent:"center", background:"#00000055" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:"12px", padding:"16px", minWidth:"220px", direction:"rtl", boxShadow:"0 16px 48px #000c" }}>
+        <p style={{ margin:"0 0 12px", fontSize:"12px", color:"#64748b", fontWeight:600 }}>עדכן מצב</p>
+        {STATUSES.map((st, i) => (
+          <button key={st.label} onClick={() => { onUpdate(st.label); onClose(); }}
+            style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%", padding:"8px 10px", borderRadius:"6px", border:"none", cursor:"pointer", background:client.status===st.label?st.bg:"transparent", color:client.status===st.label?st.color:"#94a3b8", fontSize:"13px", fontWeight:client.status===st.label?700:500 }}>
+            {st.icon} {st.label}
+            {i === PIPELINE.indexOf(client.status) && <span style={{ marginRight:"auto", color:st.color }}>✓</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [clients, setClients] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [modal, setModal] = React.useState(null);
+  const [quickPick, setQuickPick] = React.useState(null);
+  const [search, setSearch] = React.useState("");
+  const [filterStatus, setFilterStatus] = React.useState("הכל");
+  const [toast, setToast] = React.useState(null);
+
+  const showToast = (msg, error) => { setToast({msg,error}); setTimeout(() => setToast(null), 3000); };
+
+  const loadClients = async () => {
+    try {
+      const data = await api("GET", "/clients?order=created_at.desc");
+      setClients(data || []);
+    } catch(e) { showToast("שגיאה בטעינת הנתונים", true); }
+    finally { setLoading(false); }
+  };
+
+  React.useEffect(() => { loadClients(); }, []);
+
+  const handleSave = async (form) => {
+    try {
+      if (modal?.mode === "edit") {
+        await api("PATCH", `/clients?id=eq.${modal.client.id}`, { name:form.name, phone:form.phone, status:form.status });
+        setClients(clients.map(c => c.id === modal.client.id ? {...c,...form} : c));
+        showToast("הלקוח עודכן ✓");
+      } else {
+        const created = await api("POST", "/clients", { name:form.name, phone:form.phone, status:form.status });
+        setClients([created[0], ...clients]);
+        showToast("לקוח חדש נוסף ✓");
+      }
+      setModal(null);
+    } catch(e) { showToast("שגיאה בשמירה", true); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("למחוק לקוח זה?")) return;
+    try {
+      await api("DELETE", `/clients?id=eq.${id}`);
+      setClients(clients.filter(c => c.id !== id));
+      showToast("הלקוח הוסר");
+    } catch(e) { showToast("שגיאה במחיקה", true); }
+  };
+
+  const handleStatusUpdate = async (id, newStatus) => {
+    try {
+      await api("PATCH", `/clients?id=eq.${id}`, { status:newStatus });
+      setClients(clients.map(c => c.id === id ? {...c,status:newStatus} : c));
+      showToast("מצב עודכן ✓");
+    } catch(e) { showToast("שגיאה בעדכון", true); }
+  };
+
+  const filtered = clients.filter(c => {
+    const matchSearch = c.name.includes(search) || c.phone.includes(search);
+    const matchFilter = filterStatus === "הכל" || c.status === filterStatus;
+    return matchSearch && matchFilter;
+  });
+
+  const stats = STATUSES.map(s => ({ ...s, count:clients.filter(c => c.status===s.label).length }));
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#060b14", direction:"rtl", color:"#f1f5f9" }}>
+      <div style={{ borderBottom:"1px solid #1e293b", padding:"20px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", background:"#080e1a" }}>
+        <div>
+          <h1 style={{ margin:0, fontSize:"20px", fontWeight:800, color:"#f8fafc" }}><span style={{ color:"#3b82f6" }}>◈</span> ניהול לקוחות</h1>
+          <p style={{ margin:"2px 0 0", fontSize:"12px", color:"#475569" }}>{loading?"טוען...":`${clients.length} לקוחות במערכת`}</p>
+        </div>
+        <button onClick={() => setModal({mode:"add"})} style={{ padding:"9px 18px", borderRadius:"8px", border:"none", background:"linear-gradient(135deg,#3b82f6,#6366f1)", color:"#fff", fontWeight:700, fontSize:"13px", cursor:"pointer", boxShadow:"0 4px 16px #3b82f633" }}>+ לקוח חדש</button>
+      </div>
+
+      <div style={{ padding:"16px 28px", display:"flex", gap:"8px", overflowX:"auto", borderBottom:"1px solid #1e293b" }}>
+        <button onClick={() => setFilterStatus("הכל")} style={{ padding:"6px 14px", borderRadius:"6px", border:`1px solid ${filterStatus==="הכל"?"#3b82f6":"#1e293b"}`, background:filterStatus==="הכל"?"#1e3a5f":"transparent", color:filterStatus==="הכל"?"#60a5fa":"#475569", fontWeight:600, fontSize:"12px", cursor:"pointer", whiteSpace:"nowrap" }}>הכל ({clients.length})</button>
+        {stats.map(s => (
+          <button key={s.label} onClick={() => setFilterStatus(s.label)} style={{ padding:"6px 14px", borderRadius:"6px", border:`1px solid ${filterStatus===s.label?s.color+"66":"#1e293b"}`, background:filterStatus===s.label?s.bg:"transparent", color:filterStatus===s.label?s.color:"#475569", fontWeight:600, fontSize:"12px", cursor:"pointer", whiteSpace:"nowrap" }}>{s.icon} {s.label} ({s.count})</button>
+        ))}
+      </div>
+
+      <div style={{ padding:"16px 28px" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  חיפוש לפי שם או טלפון..."
+          style={{ width:"min(360px,100%)", background:"#1e293b", border:"1px solid #334155", borderRadius:"8px", padding:"9px 14px", color:"#f1f5f9", fontSize:"13px", outline:"none" }} />
+      </div>
+
+      <div style={{ padding:"0 28px 40px" }}>
+        {loading && <div style={{ textAlign:"center", padding:"60px 0", color:"#334155" }}><p style={{ fontSize:"14px" }}>טוען נתונים מהענן...</p></div>}
+        {!loading && filtered.length === 0 && <div style={{ textAlign:"center", padding:"60px 0", color:"#334155" }}><div style={{ fontSize:"36px", marginBottom:"8px" }}>◎</div><p style={{ fontSize:"14px" }}>לא נמצאו לקוחות</p></div>}
+        {filtered.map(client => {
+          const s = getStatus(client.status);
+          const idx = PIPELINE.indexOf(client.status);
+          return (
+            <div key={client.id} style={{ background:"#0c1525", border:"1px solid #1e293b", borderRadius:"12px", padding:"16px 18px", marginBottom:"10px" }}>
+              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:"12px", flexWrap:"wrap" }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom:"6px", flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:700, fontSize:"15px", color:"#f1f5f9" }}>{client.name}</span>
+                    <StatusBadge status={client.status} small />
+                  </div>
+                  <p style={{ margin:"0 0 10px", fontSize:"13px", color:"#64748b" }}>{client.phone}</p>
+                  <ProgressBar status={client.status} />
+                  <p style={{ margin:"4px 0 0", fontSize:"11px", color:"#334155" }}>שלב {idx+1} מתוך {PIPELINE.length}</p>
+                </div>
+                <div style={{ display:"flex", gap:"6px", alignItems:"center", flexShrink:0, flexWrap:"wrap" }}>
+                  {idx < PIPELINE.length-1 && (
+                    <button onClick={() => handleStatusUpdate(client.id, PIPELINE[idx+1])} style={{ padding:"6px 10px", borderRadius:"6px", border:`1px solid ${s.color}44`, background:s.bg, color:s.color, fontWeight:700, fontSize:"11px", cursor:"pointer", whiteSpace:"nowrap" }}>◀ {PIPELINE[idx+1]}</button>
+                  )}
+                  <button onClick={() => setQuickPick(client.id)} style={{ padding:"6px 10px", borderRadius:"6px", border:"1px solid #1e293b", background:"#1e293b", color:"#94a3b8", fontSize:"12px", cursor:"pointer" }}>⇅</button>
+                  <button onClick={() => setModal({mode:"edit",client})} style={{ padding:"6px 10px", borderRadius:"6px", border:"1px solid #1e293b", background:"#1e293b", color:"#94a3b8", fontSize:"12px", cursor:"pointer" }}>עריכה</button>
+                  <button onClick={() => handleDelete(client.id)} style={{ padding:"6px 10px", borderRadius:"6px", border:"1px solid #1e293b", background:"transparent", color:"#475569", fontSize:"12px", cursor:"pointer" }}>✕</button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {modal && <Modal client={modal.mode==="edit"?modal.client:null} onSave={handleSave} onClose={() => setModal(null)} />}
+      {quickPick && <QuickStatusPicker client={clients.find(c => c.id===quickPick)} onUpdate={status => handleStatusUpdate(quickPick,status)} onClose={() => setQuickPick(null)} />}
+      {toast && (
+        <div style={{ position:"fixed", bottom:"24px", left:"50%", transform:"translateX(-50%)", background:toast.error?"#1a0a0a":"#1e293b", border:`1px solid ${toast.error?"#f87171":"#334155"}`, borderRadius:"8px", padding:"10px 20px", color:toast.error?"#f87171":"#4ade80", fontWeight:600, fontSize:"13px", zIndex:200, animation:"fadeUp 0.3s ease" }}>
+          {toast.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
