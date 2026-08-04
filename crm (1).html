@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ניהול לקוחות</title>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -16,6 +18,18 @@ input, button { font-family: 'Heebo', sans-serif; }
 ::-webkit-scrollbar-track { background: #1e293b; }
 ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 @keyframes fadeUp { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* --- Leaflet: התאמה לערכת הצבעים הכהה ולכיוון RTL --- */
+.leaflet-container { background: #060b14; font-family: 'Heebo', sans-serif; }
+.leaflet-popup-content-wrapper { background: #0f172a; color: #f1f5f9; border: 1px solid #1e293b; border-radius: 12px; box-shadow: 0 16px 48px #000c; }
+.leaflet-popup-content { margin: 14px 16px; direction: rtl; text-align: right; font-size: 13px; line-height: 1.5; }
+.leaflet-popup-tip { background: #0f172a; border: 1px solid #1e293b; }
+.leaflet-popup-close-button { color: #64748b !important; }
+.leaflet-control-zoom a { background: #0f172a !important; color: #94a3b8 !important; border-color: #1e293b !important; }
+.leaflet-control-zoom a:hover { background: #1e293b !important; }
+.leaflet-control-attribution { background: #0f172acc !important; color: #475569 !important; font-size: 10px; }
+.leaflet-control-attribution a { color: #64748b !important; }
+.crm-pin { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; font-size: 13px; font-weight: 700; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -53,6 +67,35 @@ const STATUSES = [
 const PIPELINE = STATUSES.map(s => s.label);
 const getStatus = label => STATUSES.find(s => s.label === label) || STATUSES[0];
 
+// --- מפה: המרת כתובת לקואורדינטות דרך Nominatim (OpenStreetMap, ללא מפתח API) ---
+const GEOCODE_COUNTRY = "il";   // הטיית תוצאות לישראל. לריק = חיפוש עולמי
+const ISRAEL_CENTER = [31.5, 34.9];
+
+const esc = str => String(str ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+
+// Supabase עשוי להחזיר float8 כמחרוזת — מנרמלים למספר, ומחזירים null אם אין קואורדינטות
+const coordsOf = c => {
+  const lat = Number(c?.lat), lng = Number(c?.lng);
+  if (c?.lat == null || c?.lng == null || !isFinite(lat) || !isFinite(lng)) return null;
+  return [lat, lng];
+};
+
+const geocode = async (address) => {
+  if (!address || !address.trim()) return { lat: null, lng: null };
+  try {
+    const params = new URLSearchParams({ format: "json", limit: "1", "accept-language": "he", q: address.trim() });
+    if (GEOCODE_COUNTRY) params.set("countrycodes", GEOCODE_COUNTRY);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
+    if (!res.ok) return { lat: null, lng: null };
+    const data = await res.json();
+    if (!data.length) return { lat: null, lng: null };
+    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  } catch (e) {
+    return { lat: null, lng: null };
+  }
+};
+
 function StatusBadge({ status, small }) {
   const s = getStatus(status);
   return (
@@ -74,7 +117,7 @@ function ProgressBar({ status }) {
 }
 
 function Modal({ client, onSave, onClose }) {
-  const [form, setForm] = React.useState(client || { name:"", phone:"", status:STATUSES[0].label });
+  const [form, setForm] = React.useState(client || { name:"", phone:"", address:"", status:STATUSES[0].label });
   const [errors, setErrors] = React.useState({});
   const [saving, setSaving] = React.useState(false);
 
@@ -92,13 +135,17 @@ function Modal({ client, onSave, onClose }) {
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"#00000099", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100, backdropFilter:"blur(4px)" }}>
       <div onClick={e => e.stopPropagation()} style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:"16px", padding:"32px", width:"min(420px,92vw)", boxShadow:"0 24px 80px #000a", direction:"rtl" }}>
         <h2 style={{ margin:"0 0 24px", fontSize:"18px", fontWeight:700, color:"#f1f5f9" }}>{client ? "עריכת לקוח" : "לקוח חדש"}</h2>
-        {[{key:"name",label:"שם לקוח",type:"text",placeholder:"ישראל ישראלי"},{key:"phone",label:"מספר טלפון",type:"tel",placeholder:"050-0000000"}].map(({key,label,type,placeholder}) => (
+        {[{key:"name",label:"שם לקוח",type:"text",placeholder:"ישראל ישראלי"},
+          {key:"phone",label:"מספר טלפון",type:"tel",placeholder:"050-0000000"},
+          {key:"address",label:"כתובת",type:"text",placeholder:"הרצל 12, תל אביב",hint:"אופציונלי — משמש להצגת הלקוח על המפה"}
+         ].map(({key,label,type,placeholder,hint}) => (
           <div key={key} style={{ marginBottom:"16px" }}>
             <label style={{ display:"block", fontSize:"12px", color:"#64748b", marginBottom:"6px", fontWeight:600 }}>{label}</label>
-            <input type={type} value={form[key]} placeholder={placeholder}
+            <input type={type} value={form[key] || ""} placeholder={placeholder}
               onChange={e => { setForm({...form,[key]:e.target.value}); setErrors({...errors,[key]:""}); }}
               style={{ width:"100%", background:"#1e293b", border:`1px solid ${errors[key]?"#f87171":"#334155"}`, borderRadius:"8px", padding:"10px 12px", color:"#f1f5f9", fontSize:"14px", outline:"none" }} />
             {errors[key] && <p style={{ margin:"4px 0 0", color:"#f87171", fontSize:"11px" }}>{errors[key]}</p>}
+            {hint && !errors[key] && <p style={{ margin:"4px 0 0", color:"#334155", fontSize:"11px" }}>{hint}</p>}
           </div>
         ))}
         <div style={{ marginBottom:"24px" }}>
@@ -141,6 +188,65 @@ function QuickStatusPicker({ client, onUpdate, onClose }) {
   );
 }
 
+function MapView({ clients, onEdit }) {
+  const containerRef = React.useRef(null);
+  const mapRef = React.useRef(null);
+  const layerRef = React.useRef(null);
+  const editRef = React.useRef(onEdit);
+  editRef.current = onEdit;
+
+  // אתחול המפה פעם אחת בלבד — Leaflet מנהל את ה-DOM שלו בעצמו
+  React.useEffect(() => {
+    if (mapRef.current || !containerRef.current) return;
+    const map = L.map(containerRef.current, { attributionControl: true }).setView(ISRAEL_CENTER, 7);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: "abcd", maxZoom: 19,
+    }).addTo(map);
+    layerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+    // הקונטיינר נמדד לפני שהוא מקבל גובה סופי — מכריחים חישוב מחדש
+    const t = setTimeout(() => map.invalidateSize(), 0);
+    const onResize = () => map.invalidateSize();
+    window.addEventListener("resize", onResize);
+    return () => { clearTimeout(t); window.removeEventListener("resize", onResize); map.remove(); mapRef.current = null; };
+  }, []);
+
+  // סנכרון הסיכות מול רשימת הלקוחות המסוננת
+  React.useEffect(() => {
+    const map = mapRef.current, layer = layerRef.current;
+    if (!map || !layer) return;
+    layer.clearLayers();
+    const points = [];
+    clients.forEach(client => {
+      const pos = coordsOf(client);
+      if (!pos) return;
+      const s = getStatus(client.status);
+      const icon = L.divIcon({
+        className: "",
+        html: `<div class="crm-pin" style="background:${s.bg};color:${s.color};border:2px solid ${s.color};box-shadow:0 0 10px ${s.color}66">${s.icon}</div>`,
+        iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -16],
+      });
+      const marker = L.marker(pos, { icon, title: client.name }).addTo(layer);
+      marker.bindPopup(`
+        <div style="font-weight:700;font-size:14px;margin-bottom:6px">${esc(client.name)}</div>
+        <div style="display:inline-flex;align-items:center;gap:5px;background:${s.bg};color:${s.color};border:1px solid ${s.color}33;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-bottom:8px">${s.icon} ${esc(client.status)}</div>
+        <div style="color:#94a3b8;margin-top:6px"><a href="tel:${esc(client.phone)}" style="color:#60a5fa;text-decoration:none">${esc(client.phone)}</a></div>
+        <div style="color:#64748b;font-size:12px;margin-top:2px">${esc(client.address || "")}</div>
+        <button data-crm-edit="1" style="margin-top:10px;padding:5px 12px;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-family:'Heebo',sans-serif;font-size:12px;font-weight:600;cursor:pointer">עריכה</button>
+      `);
+      marker.on("popupopen", e => {
+        const btn = e.popup.getElement()?.querySelector("[data-crm-edit]");
+        if (btn) btn.onclick = () => { map.closePopup(); editRef.current(client); };
+      });
+      points.push(pos);
+    });
+    if (points.length) map.fitBounds(points, { padding: [50, 50], maxZoom: 14 });
+  }, [clients]);
+
+  return <div ref={containerRef} style={{ width:"100%", height:"min(70vh,620px)", borderRadius:"12px", border:"1px solid #1e293b", overflow:"hidden" }} />;
+}
+
 function App() {
   const [clients, setClients] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -149,6 +255,8 @@ function App() {
   const [search, setSearch] = React.useState("");
   const [filterStatus, setFilterStatus] = React.useState("הכל");
   const [toast, setToast] = React.useState(null);
+  const [view, setView] = React.useState("list");
+  const [backfilling, setBackfilling] = React.useState(false);
 
   const showToast = (msg, error) => { setToast({msg,error}); setTimeout(() => setToast(null), 3000); };
 
@@ -163,18 +271,49 @@ function App() {
   React.useEffect(() => { loadClients(); }, []);
 
   const handleSave = async (form) => {
+    const address = (form.address || "").trim();
+    const prev = modal?.mode === "edit" ? modal.client : null;
+    // ממירים כתובת לקואורדינטות רק כשהיא חדשה או השתנתה, כדי לא להעמיס על Nominatim
+    let geo = { lat: prev?.lat ?? null, lng: prev?.lng ?? null };
+    if (!address) geo = { lat: null, lng: null };
+    else if (!prev || (prev.address || "").trim() !== address || coordsOf(prev) === null) geo = await geocode(address);
+
+    const payload = { name:form.name, phone:form.phone, status:form.status, address:address || null, lat:geo.lat, lng:geo.lng };
     try {
-      if (modal?.mode === "edit") {
-        await api("PATCH", `/clients?id=eq.${modal.client.id}`, { name:form.name, phone:form.phone, status:form.status });
-        setClients(clients.map(c => c.id === modal.client.id ? {...c,...form} : c));
-        showToast("הלקוח עודכן ✓");
+      if (prev) {
+        await api("PATCH", `/clients?id=eq.${prev.id}`, payload);
+        setClients(clients.map(c => c.id === prev.id ? {...c, ...payload} : c));
       } else {
-        const created = await api("POST", "/clients", { name:form.name, phone:form.phone, status:form.status });
+        const created = await api("POST", "/clients", payload);
         setClients([created[0], ...clients]);
-        showToast("לקוח חדש נוסף ✓");
       }
       setModal(null);
-    } catch(e) { showToast("שגיאה בשמירה", true); }
+      if (address && geo.lat == null) showToast("נשמר, אך לא נמצאה הכתובת על המפה", true);
+      else showToast(prev ? "הלקוח עודכן ✓" : "לקוח חדש נוסף ✓");
+    } catch(e) {
+      showToast(/address|lat|lng/i.test(String(e.message)) ? "חסרות עמודות address/lat/lng בטבלה — ראה README" : "שגיאה בשמירה", true);
+    }
+  };
+
+  // השלמת קואורדינטות ללקוחות שיש להם כתובת אך טרם מופו (Nominatim מוגבל לפנייה אחת לשנייה)
+  const missingCoords = clients.filter(c => (c.address || "").trim() && !coordsOf(c));
+
+  const backfillCoords = async () => {
+    setBackfilling(true);
+    let ok = 0;
+    for (const client of missingCoords) {
+      const geo = await geocode(client.address);
+      if (geo.lat != null) {
+        try {
+          await api("PATCH", `/clients?id=eq.${client.id}`, { lat:geo.lat, lng:geo.lng });
+          setClients(cs => cs.map(c => c.id === client.id ? {...c, ...geo} : c));
+          ok++;
+        } catch(e) { /* ממשיכים ליתר הלקוחות */ }
+      }
+      await new Promise(r => setTimeout(r, 1100));
+    }
+    setBackfilling(false);
+    showToast(ok ? `${ok} כתובות מופו ✓` : "לא נמצאו כתובות מתאימות", !ok);
   };
 
   const handleDelete = async (id) => {
@@ -195,7 +334,7 @@ function App() {
   };
 
   const filtered = clients.filter(c => {
-    const matchSearch = c.name.includes(search) || c.phone.includes(search);
+    const matchSearch = c.name.includes(search) || c.phone.includes(search) || (c.address || "").includes(search);
     const matchFilter = filterStatus === "הכל" || c.status === filterStatus;
     return matchSearch && matchFilter;
   });
@@ -209,7 +348,15 @@ function App() {
           <h1 style={{ margin:0, fontSize:"20px", fontWeight:800, color:"#f8fafc" }}><span style={{ color:"#3b82f6" }}>◈</span> ניהול לקוחות</h1>
           <p style={{ margin:"2px 0 0", fontSize:"12px", color:"#475569" }}>{loading?"טוען...":`${clients.length} לקוחות במערכת`}</p>
         </div>
-        <button onClick={() => setModal({mode:"add"})} style={{ padding:"9px 18px", borderRadius:"8px", border:"none", background:"linear-gradient(135deg,#3b82f6,#6366f1)", color:"#fff", fontWeight:700, fontSize:"13px", cursor:"pointer", boxShadow:"0 4px 16px #3b82f633" }}>+ לקוח חדש</button>
+        <div style={{ display:"flex", alignItems:"center", gap:"10px", flexWrap:"wrap" }}>
+          <div style={{ display:"flex", background:"#0f172a", border:"1px solid #1e293b", borderRadius:"8px", padding:"3px" }}>
+            {[{key:"list",label:"☰ רשימה"},{key:"map",label:"🗺 מפה"}].map(v => (
+              <button key={v.key} onClick={() => setView(v.key)}
+                style={{ padding:"6px 14px", borderRadius:"6px", border:"none", cursor:"pointer", fontSize:"12px", fontWeight:700, background:view===v.key?"#1e293b":"transparent", color:view===v.key?"#60a5fa":"#475569" }}>{v.label}</button>
+            ))}
+          </div>
+          <button onClick={() => setModal({mode:"add"})} style={{ padding:"9px 18px", borderRadius:"8px", border:"none", background:"linear-gradient(135deg,#3b82f6,#6366f1)", color:"#fff", fontWeight:700, fontSize:"13px", cursor:"pointer", boxShadow:"0 4px 16px #3b82f633" }}>+ לקוח חדש</button>
+        </div>
       </div>
 
       <div style={{ padding:"16px 28px", display:"flex", gap:"8px", overflowX:"auto", borderBottom:"1px solid #1e293b" }}>
@@ -220,14 +367,40 @@ function App() {
       </div>
 
       <div style={{ padding:"16px 28px" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  חיפוש לפי שם או טלפון..."
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  חיפוש לפי שם, טלפון או כתובת..."
           style={{ width:"min(360px,100%)", background:"#1e293b", border:"1px solid #334155", borderRadius:"8px", padding:"9px 14px", color:"#f1f5f9", fontSize:"13px", outline:"none" }} />
       </div>
 
       <div style={{ padding:"0 28px 40px" }}>
         {loading && <div style={{ textAlign:"center", padding:"60px 0", color:"#334155" }}><p style={{ fontSize:"14px" }}>טוען נתונים מהענן...</p></div>}
-        {!loading && filtered.length === 0 && <div style={{ textAlign:"center", padding:"60px 0", color:"#334155" }}><div style={{ fontSize:"36px", marginBottom:"8px" }}>◎</div><p style={{ fontSize:"14px" }}>לא נמצאו לקוחות</p></div>}
-        {filtered.map(client => {
+
+        {!loading && view === "map" && (
+          <React.Fragment>
+            {missingCoords.length > 0 && (
+              <div style={{ display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap", background:"#2d2500", border:"1px solid #facc1533", borderRadius:"10px", padding:"10px 14px", marginBottom:"12px" }}>
+                <span style={{ fontSize:"12px", color:"#facc15", fontWeight:600 }}>◆ {missingCoords.length} לקוחות עם כתובת שטרם מופתה</span>
+                <button onClick={backfillCoords} disabled={backfilling}
+                  style={{ padding:"5px 12px", borderRadius:"6px", border:"1px solid #facc1544", background:backfilling?"#1e293b":"#facc1518", color:backfilling?"#475569":"#facc15", fontWeight:700, fontSize:"11px", cursor:backfilling?"default":"pointer" }}>
+                  {backfilling ? "ממפה..." : "מפה אותם עכשיו"}
+                </button>
+              </div>
+            )}
+            <MapView clients={filtered} onEdit={client => setModal({mode:"edit",client})} />
+            <div style={{ display:"flex", gap:"14px", flexWrap:"wrap", marginTop:"12px" }}>
+              {STATUSES.map(s => (
+                <span key={s.label} style={{ display:"inline-flex", alignItems:"center", gap:"6px", fontSize:"11px", color:"#475569", fontWeight:600 }}>
+                  <span style={{ display:"inline-block", width:"10px", height:"10px", borderRadius:"50%", background:s.color }} /> {s.label}
+                </span>
+              ))}
+            </div>
+            <p style={{ margin:"10px 0 0", fontSize:"11px", color:"#334155" }}>
+              מוצגים {filtered.filter(c => coordsOf(c)).length} מתוך {filtered.length} לקוחות מסוננים. לקוח ללא כתובת לא מופיע על המפה.
+            </p>
+          </React.Fragment>
+        )}
+
+        {!loading && view === "list" && filtered.length === 0 && <div style={{ textAlign:"center", padding:"60px 0", color:"#334155" }}><div style={{ fontSize:"36px", marginBottom:"8px" }}>◎</div><p style={{ fontSize:"14px" }}>לא נמצאו לקוחות</p></div>}
+        {view === "list" && filtered.map(client => {
           const s = getStatus(client.status);
           const idx = PIPELINE.indexOf(client.status);
           return (
@@ -238,7 +411,13 @@ function App() {
                     <span style={{ fontWeight:700, fontSize:"15px", color:"#f1f5f9" }}>{client.name}</span>
                     <StatusBadge status={client.status} small />
                   </div>
-                  <p style={{ margin:"0 0 10px", fontSize:"13px", color:"#64748b" }}>{client.phone}</p>
+                  <p style={{ margin:"0 0 4px", fontSize:"13px", color:"#64748b" }}>{client.phone}</p>
+                  {client.address && (
+                    <p style={{ margin:"0 0 10px", fontSize:"12px", color:coordsOf(client)?"#475569":"#78350f" }}>
+                      ⌖ {client.address}{!coordsOf(client) && " (לא אותרה על המפה)"}
+                    </p>
+                  )}
+                  {!client.address && <div style={{ height:"10px" }} />}
                   <ProgressBar status={client.status} />
                   <p style={{ margin:"4px 0 0", fontSize:"11px", color:"#334155" }}>שלב {idx+1} מתוך {PIPELINE.length}</p>
                 </div>
