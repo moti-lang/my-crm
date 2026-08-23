@@ -7,6 +7,7 @@
 
 const N = require('../src/normalize');
 const A = require('../src/analyze');
+const E = require('../src/exportJson');
 
 let pass = 0, fail = 0;
 function ok(name, cond) {
@@ -57,6 +58,47 @@ let t5 = 'אפשרויות: בית הקרפיון, דגי הבירה, חנות �
 let a5 = A.analyzeCell(t5, CLIENT, RIVALS);
 eq('מוזכר אחרי 2 מתחרים ידועים → status 2 או 1', a5.status >= 1, true);
 
+console.log('\n— מיקום לפי מבנה רשימה —');
+
+// הלקוח שביעי ברשימה, ואף אחד מהשישה שלפניו אינו מתחרה מוגדר.
+// בלי זיהוי רשימה זה היה יוצא "מקום 1" ובשלושת הראשונים.
+const list7 = `הנה 7 חנויות דגים מומלצות באזור:
+1. דגי הים התיכון
+2. מרכז הדגים המרכזי
+3. חנות הדגה של יוסי
+4. דגי צפון
+5. הדייג הקטן
+6. דגי המושבה
+7. גולד פיש`;
+const a7 = A.analyzeCell(list7, CLIENT, RIVALS);
+eq('שביעי ברשימה → position 7', a7.position, 7);
+eq('שביעי ברשימה → status 1 ולא 2', a7.status, 1);
+eq('המיקום נגזר מהרשימה', a7.positionBasis, 'list');
+
+const list2 = `1. בית הקרפיון
+2. גולד פיש
+3. דגי הבירה`;
+eq('שני ברשימה → position 2', A.analyzeCell(list2, CLIENT, RIVALS).position, 2);
+eq('רשימה ממוספרת ברצף אחד מזוהה', A.listItems(t1).length, 3);
+eq('טקסט בלי רשימה לא מזוהה כרשימה', A.listItems('סתם משפט אחד בלי שום רשימה.').length, 0);
+eq('בלי רשימה — המיקום נגזר ממתחרים', A.analyzeCell(t2, CLIENT, RIVALS).positionBasis, 'rivals');
+
+console.log('\n— המלצה מפורשת מיוחסת לעסק הנכון —');
+
+const rec1 = 'הכי מומלץ באזור זה דגי הים התיכון, ומיד אחריו גולד פיש ואחר כך דגי צפון.';
+const ar1 = A.analyzeCell(rec1, CLIENT, RIVALS);
+eq('ההמלצה על עסק אחר → לא status 3', ar1.status !== 3, true);
+eq('ההמלצה על עסק אחר → אין recommendHint', ar1.recommendHint, false);
+
+const rec2 = 'ההמלצה שלי היא דגי הים התיכון. אפשרות נוספת היא גולד פיש.';
+eq('המלצה במשפט אחר → לא status 3', A.analyzeCell(rec2, CLIENT, RIVALS).status !== 3, true);
+
+const rec3 = 'ההמלצה שלי היא בית הקרפיון ולא גולד פיש.';
+eq('שם מתחרה בין הניסוח ללקוח → לא status 3', A.analyzeCell(rec3, CLIENT, RIVALS).status !== 3, true);
+
+const rec4 = 'הייתי ממליץ על גולדפיש בביתר עילית.';
+eq('המלצה ישירה על הלקוח (בווריאציה) → status 3', A.analyzeCell(rec4, CLIENT, RIVALS).status, 3);
+
 console.log('\n— חישוב ציון —');
 
 const rows = [
@@ -78,6 +120,28 @@ eq('פער בשאלה 3', s.gaps, ['ש3']);
 
 const sNone = A.score([{ status: 0, questionText: 'ש', rivals: ['א', 'ב'], sources: [] }]);
 eq('לא הופיע כלל → אין מכפלה', sNone.multiplier, null);
+
+console.log('\n— ייצוא לכלי הידני —');
+
+const EXP_CLIENT = {
+  name: 'גולד פיש', trade: 'דגים', city: 'ביתר עילית',
+  competitors: [{ name: 'בית הקרפיון' }],
+  questions: [{ text: 'ש1' }, { text: 'ש2' }]
+};
+const EXP_ROWS = [
+  { questionText: 'ש1', engine: 'chatgpt', status: 0, rivals: ['בית הקרפיון'], sources: ['b144.co.il'] },
+  { questionText: 'ש1', engine: 'google_aio', status: null, rivals: [], sources: [] }
+];
+const exp = E.buildExport(EXP_CLIENT, EXP_ROWS);
+const cells1 = exp.questions[0].cells;
+eq('תא שנמדד כלא-מופיע נשאר 0', cells1[0].status, 0);
+eq('תא שנמדד מסומן measured', cells1[0].measured, true);
+eq('תא שלא נמדד יוצא null ולא 0', cells1[1].status, null);
+eq('תא שלא נמדד מסומן כלא-נמדד', cells1[1].measured, false);
+eq('מנוע שלא רץ כלל יוצא null', cells1[2].status, null);
+eq('שאלה בלי תוצאות בכלל נשארת בייצוא', exp.questions.length, 2);
+eq('שאלה בלי תוצאות — כל התאים null', exp.questions[1].cells.map(c => c.status), [null, null, null]);
+eq('מקור נשמר בייצוא', cells1[0].source, 'b144.co.il');
 
 console.log('\n— דומיינים —');
 eq('סינון דומיינים של המנועים עצמם',

@@ -7,7 +7,7 @@ const readline = require('readline');
 const DB = require('./db');
 const R = require('./run');
 const REPORT = require('./report');
-const A = require('./analyze');
+const EXPORT = require('./exportJson');
 
 const ROOT = path.join(__dirname, '..');
 const ENGINE_LABEL = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_aio: 'תשובות AI בגוגל' };
@@ -43,6 +43,9 @@ async function verify(runId) {
     const cur = r.status === null ? 'לא נמדד' : String(r.status);
     console.log(`\n[${ENGINE_LABEL[r.engine] || r.engine}] ${r.questionText}`);
     console.log(`  סימון נוכחי: ${cur}${r.position ? ' (מקום ' + r.position + ')' : ''}`);
+    if (r.position && r.position_basis === 'rivals') {
+      console.log('  שים לב: המיקום נגזר ממתחרים מוכרים בלבד, לא ממבנה רשימה — בדוק בצילום.');
+    }
     if (r.rivals.length) console.log(`  מתחרים שזוהו: ${r.rivals.join(', ')}`);
     if (r.screenshot_path) console.log(`  צילום: ${r.screenshot_path}`);
     const a = await ask(rl, '  > ');
@@ -66,35 +69,20 @@ function exportJson(runId) {
   const rows = DB.getRunResults(db, runId);
   db.close();
 
-  const ENGINES = ['chatgpt', 'gemini', 'google_aio'];
-  const byQ = {};
-  for (const r of rows) {
-    if (!byQ[r.questionText]) byQ[r.questionText] = {};
-    byQ[r.questionText][r.engine] = r;
-  }
-
-  const out = {
-    biz: client.name, trade: client.trade, city: client.city,
-    city2: client.city2 || '', extra: client.extra || '',
-    competitors: client.competitors.map(c => c.name),
-    questions: Object.keys(byQ).map(q => ({
-      text: q,
-      cells: ENGINES.map(e => {
-        const r = byQ[q][e];
-        return {
-          status: r && r.status !== null ? r.status : 0,
-          rivals: r ? (r.rivals || []).join(', ') : '',
-          source: r ? (r.sources || [])[0] || '' : ''
-        };
-      })
-    }))
-  };
+  const out = EXPORT.buildExport(client, rows);
 
   const dir = path.join(ROOT, 'reports');
   fs.mkdirSync(dir, { recursive: true });
   const f = path.join(dir, `${client.slug}-run${runId}.json`);
   fs.writeFileSync(f, JSON.stringify(out), 'utf8');
+
+  let unmeasured = 0, total = 0;
+  for (const q of out.questions) for (const c of q.cells) { total++; if (!c.measured) unmeasured++; }
+
   console.log('נוצר: ' + f);
+  if (unmeasured) {
+    console.log(`שים לב: ${unmeasured} מתוך ${total} תאים לא נמדדו והם יוצאים כ-null (לא כאפס).`);
+  }
   console.log('הדבק את תוכן הקובץ בשדה הייבוא של הכלי הידני.');
 }
 

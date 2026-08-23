@@ -58,6 +58,7 @@ function init(db) {
       screenshot_path TEXT,
       status INTEGER,
       position INTEGER,
+      position_basis TEXT,
       auto_detected INTEGER DEFAULT 1,
       verified_by_human INTEGER DEFAULT 0,
       rivals_found TEXT DEFAULT '[]',
@@ -68,6 +69,15 @@ function init(db) {
 
     CREATE INDEX IF NOT EXISTS idx_results_run ON results(run_id);
   `);
+  migrate(db);
+}
+
+/** הוספת עמודות שנוספו אחרי שכבר היו מסדי נתונים בשטח */
+function migrate(db) {
+  const cols = db.prepare('PRAGMA table_info(results)').all().map(c => c.name);
+  if (cols.indexOf('position_basis') === -1) {
+    db.exec('ALTER TABLE results ADD COLUMN position_basis TEXT');
+  }
 }
 
 /* ---------- clients ---------- */
@@ -123,11 +133,12 @@ function finishRun(db, runId, status) {
 
 function saveResult(db, r) {
   return db.prepare(`INSERT INTO results
-    (run_id,question_id,engine,raw_text,screenshot_path,status,position,auto_detected,rivals_found,sources_found,error)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+    (run_id,question_id,engine,raw_text,screenshot_path,status,position,position_basis,auto_detected,rivals_found,sources_found,error)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(r.runId, r.questionId, r.engine, r.rawText || null, r.screenshotPath || null,
          r.status === undefined ? null : r.status,
          r.position === undefined ? null : r.position,
+         r.positionBasis || null,
          1, JSON.stringify(r.rivals || []), JSON.stringify(r.sources || []), r.error || null)
     .lastInsertRowid;
 }

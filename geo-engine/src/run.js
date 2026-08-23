@@ -104,10 +104,10 @@ async function run(slug, opts) {
 
         let analysis;
         if (res.error) {
-          analysis = { status: null, position: null, rivalsFound: [] };
+          analysis = { status: null, position: null, positionBasis: null, rivalsFound: [] };
           console.log('שגיאה: ' + res.error.slice(0, 60));
         } else if (res.absent) {
-          analysis = { status: null, position: null, rivalsFound: [] };
+          analysis = { status: null, position: null, positionBasis: null, rivalsFound: [] };
           console.log('לא הוצג בלוק AI (נרשם כלא-נמדד)');
         } else {
           analysis = A.analyzeCell(res.text, { name: client.name, variants: client.nameVariants }, client.competitors);
@@ -122,6 +122,7 @@ async function run(slug, opts) {
           runId, questionId: q.id, engine: engineKey,
           rawText: res.text, screenshotPath: shot,
           status: analysis.status, position: analysis.position,
+          positionBasis: analysis.positionBasis,
           rivals: analysis.rivalsFound,
           sources: N.domainsOf(res.urls),
           error: res.error || (res.absent ? 'no_ai_block' : null)
@@ -160,8 +161,8 @@ function reanalyze(runId) {
     if (r.error === 'no_ai_block' || (r.error && !r.raw_text)) continue;
     const a = A.analyzeCell(r.raw_text, { name: client.name, variants: client.nameVariants }, client.competitors);
     if (a.status !== r.status) changed++;
-    db.prepare('UPDATE results SET status=?, position=?, rivals_found=? WHERE id=?')
-      .run(a.status, a.position, JSON.stringify(a.rivalsFound), r.id);
+    db.prepare('UPDATE results SET status=?, position=?, position_basis=?, rivals_found=? WHERE id=?')
+      .run(a.status, a.position, a.positionBasis, JSON.stringify(a.rivalsFound), r.id);
   }
   db.close();
   console.log(`ניתוח מחדש הושלם. ${changed} תוצאות השתנו.`);

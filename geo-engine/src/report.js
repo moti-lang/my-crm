@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const DB = require('./db');
 const A = require('./analyze');
-const { CFG } = { CFG: require('../config/engines.json') };
 
 const ROOT = path.join(__dirname, '..');
 const ENGINE_LABEL = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_aio: 'תשובות AI בגוגל' };
