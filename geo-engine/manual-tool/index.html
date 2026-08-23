@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מחולל בדיקת נראות AI | אוטומציה ו-AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&family=Assistant:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#12172B;--ink2:#1E2540;--teal:#00C2A8;--dark:#08211E;--amber:#E07B39;--mist:#F4F6F9;--line:#DDE3EC;--muted:#5A6379}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Assistant",Arial,sans-serif;background:#fff;color:var(--ink);direction:rtl;line-height:1.6;font-size:16px}
+h1,h2,h3,.big{font-family:"Heebo",Arial,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px 60px}
+
+header{background:var(--ink);color:#fff;padding:18px 0}
+header .wrap{padding-bottom:0}
+.brand{color:var(--teal);font-weight:900;font-size:17px}
+.brand small{display:block;color:#8E9AB4;font-weight:400;font-size:12px;margin-top:2px}
+
+.tabs{display:flex;gap:6px;margin:16px 0 0;border-bottom:2px solid var(--line)}
+.tab{flex:1;padding:11px 8px;text-align:center;font-weight:700;font-size:15px;cursor:pointer;
+     border:0;background:none;color:var(--muted);border-bottom:3px solid transparent;font-family:inherit}
+.tab.on{color:var(--ink);border-bottom-color:var(--teal)}
+.panel{display:none;padding-top:18px}
+.panel.on{display:block}
+
+label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:12px 0 5px}
+input,textarea,select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border:1.5px solid var(--line);
+  border-radius:10px;background:#fff;color:var(--ink);font-family:inherit}
+input:focus,textarea:focus,select:focus{outline:3px solid rgba(0,194,168,.3);border-color:var(--teal)}
+textarea{min-height:80px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr;gap:0 14px}
+@media(min-width:620px){.grid2{grid-template-columns:1fr 1fr}}
+
+.btn{font:inherit;font-weight:700;font-size:16px;padding:13px 18px;border-radius:11px;border:0;
+     cursor:pointer;font-family:inherit;display:inline-block;text-align:center}
+.btn-main{background:var(--ink);color:#fff}
+.btn-teal{background:var(--teal);color:var(--dark)}
+.btn-ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.btn-sm{font-size:14px;padding:8px 12px;border-radius:8px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.row .btn{flex:1 1 150px}
+
+.note{background:var(--mist);border-radius:10px;padding:13px;font-size:14px;color:var(--muted);margin-top:14px}
+.warn{background:#FFF4EA;border-right:4px solid var(--amber);border-radius:8px;padding:12px;font-size:14px;margin-top:14px}
+
+.q{border:1.5px solid var(--line);border-radius:12px;margin-top:12px;overflow:hidden}
+.qhead{display:flex;align-items:center;gap:10px;padding:13px;cursor:pointer;background:var(--mist)}
+.qhead .txt{flex:1;font-weight:700;font-size:15px;line-height:1.4}
+.qhead .pill{font-size:12px;font-weight:700;padding:3px 9px;border-radius:99px;background:#fff;border:1px solid var(--line);white-space:nowrap}
+.qbody{padding:6px 13px 15px;display:none}
+.q.open .qbody{display:block}
+.eng{border-top:1px solid var(--line);padding-top:11px;margin-top:11px}
+.eng .name{font-weight:700;font-size:14px;margin-bottom:6px}
+
+.scorecard{background:var(--ink);color:#fff;border-radius:16px;padding:22px;text-align:center;margin-top:6px}
+.scorecard .big{font-size:58px;font-weight:900;line-height:1;color:var(--teal)}
+.scorecard .of{font-size:15px;color:#8E9AB4;margin-top:4px}
+.scorecard .verdict{font-size:16px;margin-top:12px;color:#D5DCE6}
+
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.metric{background:var(--mist);border-radius:11px;padding:14px}
+.metric .n{font-size:26px;font-weight:900;font-family:"Heebo",Arial,sans-serif;color:var(--ink)}
+.metric .l{font-size:13px;color:var(--muted);margin-top:4px}
+.metric.hi .n{color:var(--amber)}
+
+table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}
+th,td{text-align:right;padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:700;font-size:13px;color:var(--muted)}
+
+h2{font-size:20px;font-weight:900;margin-top:26px}
+h3{font-size:16px;font-weight:900;margin-top:18px}
+ul{margin-right:20px}
+li{margin-top:5px}
+.muted{color:var(--muted);font-size:14px}
+.empty{color:var(--muted);font-size:15px;padding:26px 0;text-align:center}
+
+#report{background:#fff}
+@media print{
+  header,.tabs,.noprint{display:none!important}
+  .panel{display:none!important}
+  #report{display:block!important}
+  body{font-size:12pt}
+  .wrap{max-width:100%;padding:0}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand">אוטומציה ו-AI<small>מחולל בדיקת נראות במנועי AI</small></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tabs noprint">
+    <button class="tab on" data-p="setup">1. הגדרה</button>
+    <button class="tab" data-p="run">2. הרצה</button>
+    <button class="tab" data-p="report">3. דוח</button>
+  </div>
+
+  <!-- ============ SETUP ============ -->
+  <div class="panel on" id="p-setup">
+    <div class="grid2">
+      <div>
+        <label for="biz">שם העסק</label>
+        <input id="biz" placeholder="למשל: גולד פיש">
+      </div>
+      <div>
+        <label for="trade">התחום (כמו שלקוח אומר אותו)</label>
+        <input id="trade" placeholder="למשל: קניית דגים טריים / אינסטלטור">
+      </div>
+      <div>
+        <label for="city">עיר / אזור</label>
+        <input id="city" placeholder="למשל: ביתר עילית">
+      </div>
+      <div>
+        <label for="city2">עיר נוספת (לא חובה)</label>
+        <input id="city2" placeholder="למשל: ירושלים">
+      </div>
+    </div>
+
+    <label for="extra">מאפיין ייחודי (לא חובה) — כשרות, זמינות, התמחות</label>
+    <input id="extra" placeholder="למשל: כשר למהדרין עם משלוחים">
+    <div class="note" style="margin-top:8px">טיפ: כתוב את התחום כמו שלקוח שואל, לא כמו שכתוב בח.פ. "קניית דגים טריים" עדיף על "מסחר קמעונאי בדגים". השאלות ניתנות לעריכה בשלב הבא.</div>
+
+    <label for="comp">מתחרים לבדיקה — שם בכל שורה</label>
+    <textarea id="comp" placeholder="בית הקרפיון&#10;דגי הבירה"></textarea>
+
+    <div class="row">
+      <button class="btn btn-teal" id="gen">צור את 10 השאלות</button>
+      <button class="btn btn-ghost" id="clear">איפוס הכל</button>
+    </div>
+
+    <div class="warn">
+      <b>לפני שמתחילים:</b> הרץ כל שאלה ב<b>צ׳אט זמני</b> בלבד, ובחלון גלישה בסתר. בחשבון הרגיל שלך התוצאה מוטה.
+      וצלם מסך של כל תשובה — הצילומים הם מה שמוכר, לא הציון.
+    </div>
+  </div>
+
+  <!-- ============ RUN ============ -->
+  <div class="panel" id="p-run">
+    <div id="qlist"></div>
+    <div class="row noprint">
+      <button class="btn btn-main" id="toReport">חשב ציון והצג דוח</button>
+    </div>
+    <div class="note noprint">
+      <b>גיבוי:</b> הכלי לא שומר מידע בין פתיחות. לפני שאתה סוגר — לחץ "ייצוא" והעתק את הטקסט לעצמך.
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" id="exp">ייצוא</button>
+        <button class="btn btn-ghost btn-sm" id="imp">ייבוא</button>
+      </div>
+      <textarea id="io" style="margin-top:10px;display:none"></textarea>
+    </div>
+  </div>
+
+  <!-- ============ REPORT ============ -->
+  <div class="panel" id="p-report">
+    <div id="report"><div class="empty">מלא את ההגדרה, הרץ את הבדיקות, ואז חשב ציון.</div></div>
+    <div class="row noprint" id="reportBtns" style="display:none">
+      <button class="btn btn-teal" onclick="window.print()">הדפסה / שמירה כ-PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var ENGINES = ["ChatGPT","Gemini","AI Overviews (גוגל)"];
+var STATUS = [
+  {v:"",t:"לא נמדד (לא הוצג / שגיאה)"},
+  {v:0,t:"לא מופיע"},
+  {v:1,t:"מוזכר איפשהו בתשובה"},
+  {v:2,t:"מופיע בשלושת הראשונים"},
+  {v:3,t:"מומלץ במפורש / ראשון"}
+];
+var state = { biz:"", trade:"", city:"", city2:"", extra:"", competitors:[], questions:[] };
+
+function $(id){ return document.getElementById(id); }
+function val(id){ return ($(id).value||"").trim(); }
+
+/* ---- tabs ---- */
+var tabs = document.querySelectorAll(".tab");
+for (var i=0;i<tabs.length;i++){
+  tabs[i].addEventListener("click", function(){ show(this.getAttribute("data-p")); });
+}
+function show(name){
+  var t = document.querySelectorAll(".tab");
+  for (var i=0;i<t.length;i++) t[i].classList.toggle("on", t[i].getAttribute("data-p")===name);
+  var p = document.querySelectorAll(".panel");
+  for (var j=0;j<p.length;j++) p[j].classList.toggle("on", p[j].id==="p-"+name);
+  window.scrollTo(0,0);
+}
+
+/* ---- generate questions ---- */
+function buildQuestions(){
+  var t = state.trade || "[התחום]";
+  var c = state.city  || "[העיר]";
+  var c2 = state.city2;
+  var x = state.extra;
+  var list = [
+    "מי הכי מומלץ ל" + t + " ב" + c + "?",
+    "תמליץ לי על " + t + " ב" + c,
+    "אני מחפש " + t + " ב" + c + ", על מי אתה ממליץ?",
+    "תן לי 5 המלצות ל" + t + " ב" + c,
+    t + " ב" + c + " עם ביקורות טובות — מה ההמלצות?",
+    "כמה עולה " + t + " ב" + c + "?",
+    "איך בוחרים " + t + " ב" + c + "?",
+    "מה ההבדלים בין האפשרויות ל" + t + " ב" + c + "?"
+  ];
+  list.push(x ? (t + " " + x + " באזור " + c) : (t + " ב" + c + " עם שירות מהיר"));
+  list.push(c2 ? ("מה ההמלצות ל" + t + " באזור " + c + " ו" + c2 + "?")
+               : ("מה ההמלצות ל" + t + " באזור " + c + " והסביבה?"));
+
+  state.questions = [];
+  for (var i=0;i<list.length;i++){
+    var cells = [];
+    for (var e=0;e<ENGINES.length;e++) cells.push({status:null, rivals:"", source:""});
+    state.questions.push({ text:list[i], cells:cells });
+  }
+}
+
+$("gen").addEventListener("click", function(){
+  state.biz = val("biz"); state.trade = val("trade"); state.city = val("city");
+  state.city2 = val("city2"); state.extra = val("extra");
+  var raw = val("comp").split("\n");
+  state.competitors = [];
+  for (var i=0;i<raw.length;i++){ if (raw[i].trim()) state.competitors.push(raw[i].trim()); }
+  if (!state.trade || !state.city){ alert("צריך למלא לפחות תחום ועיר."); return; }
+  buildQuestions();
+  renderQuestions();
+  show("run");
+});
+
+$("clear").addEventListener("click", function(){
+  if(!confirm("לאפס הכל?")) return;
+  ["biz","trade","city","city2","extra","comp"].forEach(function(id){ $(id).value=""; });
+  state = { biz:"", trade:"", city:"", city2:"", extra:"", competitors:[], questions:[] };
+  $("qlist").innerHTML = "";
+  $("report").innerHTML = '<div class="empty">מלא את ההגדרה, הרץ את הבדיקות, ואז חשב ציון.</div>';
+  $("reportBtns").style.display = "none";
+  show("setup");
+});
+
+/* ---- render run panel ---- */
+function renderQuestions(){
+  var host = $("qlist");
+  host.innerHTML = "";
+  if (!state.questions.length){
+    host.innerHTML = '<div class="empty">קודם צור את השאלות בלשונית ההגדרה.</div>';
+    return;
+  }
+  state.questions.forEach(function(q, qi){
+    var box = document.createElement("div");
+    box.className = "q";
+
+    var head = document.createElement("div");
+    head.className = "qhead";
+    head.innerHTML = '<div class="txt">' + (qi+1) + '. ' + esc(q.text) + '</div><div class="pill" id="pill'+qi+'"></div>';
+    head.addEventListener("click", function(){ box.classList.toggle("open"); });
+    box.appendChild(head);
+
+    var body = document.createElement("div");
+    body.className = "qbody";
+
+    var lab = document.createElement("label");
+    lab.textContent = "נוסח השאלה (אפשר לערוך)";
+    body.appendChild(lab);
+    var qin = document.createElement("input");
+    qin.value = q.text;
+    qin.addEventListener("input", function(){
+      q.text = this.value;
+      head.querySelector(".txt").textContent = (qi+1) + ". " + this.value;
+    });
+    body.appendChild(qin);
+
+    ENGINES.forEach(function(engName, ei){
+      var cell = q.cells[ei];
+      var wrap = document.createElement("div");
+      wrap.className = "eng";
+
+      var nm = document.createElement("div");
+      nm.className = "name";
+      nm.textContent = engName;
+      wrap.appendChild(nm);
+
+      var sel = document.createElement("select");
+      STATUS.forEach(function(s){
+        var o = document.createElement("option");
+        o.value = s.v; o.textContent = s.t;
+        sel.appendChild(o);
+      });
+      sel.value = (cell.status === null || cell.status === undefined) ? "" : String(cell.status);
+      sel.addEventListener("change", function(){
+        cell.status = (this.value === "") ? null : parseInt(this.value,10);
+        updatePill(qi);
+      });
+      wrap.appendChild(sel);
+
+      var l1 = document.createElement("label");
+      l1.textContent = "מי הופיע במקום (מתחרים, מופרד בפסיק)";
+      wrap.appendChild(l1);
+      var i1 = document.createElement("input");
+      i1.value = cell.rivals;
+      i1.addEventListener("input", function(){ cell.rivals = this.value; });
+      wrap.appendChild(i1);
+
+      var l2 = document.createElement("label");
+      l2.textContent = "מאיזה מקור המודל ציטט";
+      wrap.appendChild(l2);
+      var i2 = document.createElement("input");
+      i2.value = cell.source;
+      i2.addEventListener("input", function(){ cell.source = this.value; });
+      wrap.appendChild(i2);
+
+      body.appendChild(wrap);
+    });
+
+    box.appendChild(body);
+    host.appendChild(box);
+    updatePill(qi);
+  });
+}
+
+function updatePill(qi){
+  var q = state.questions[qi];
+  var hits = 0, measured = 0;
+  for (var i=0;i<q.cells.length;i++){
+    var st = q.cells[i].status;
+    if (st === null || st === undefined) continue;
+    measured++;
+    if (st > 0) hits++;
+  }
+  var el = $("pill"+qi);
+  if (el) el.textContent = measured ? (hits + "/" + measured) : "טרם נבדק";
+}
+
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* ---- scoring ---- */
+function calc(){
+  var total = 0, appear = 0, top3 = 0, direct = 0;
+  var rivalCount = {}, sourceCount = {}, gaps = [];
+
+  var skipped = 0;
+  state.questions.forEach(function(q){
+    var qHits = 0, qMeasured = 0;
+    q.cells.forEach(function(c){
+      c.rivals.split(",").forEach(function(r){
+        r = r.trim(); if (r) rivalCount[r] = (rivalCount[r]||0) + 1;
+      });
+      var s = c.source.trim();
+      if (s) sourceCount[s] = (sourceCount[s]||0) + 1;
+
+      if (c.status === null || c.status === undefined) { skipped++; return; }
+      total++; qMeasured++;
+      if (c.status >= 1) { appear++; qHits++; }
+      if (c.status >= 2) top3++;
+      if (c.status === 3) direct++;
+    });
+    if (qMeasured > 0 && qHits === 0) gaps.push(q.text);
+  });
+
+  var pAppear = total ? appear/total : 0;
+  var pTop3   = total ? top3/total   : 0;
+  var pDirect = total ? direct/total : 0;
+  var score = Math.round(100 * (0.4*pAppear + 0.3*pTop3 + 0.3*pDirect));
+
+  var rivalTotal = 0;
+  for (var k in rivalCount) rivalTotal += rivalCount[k];
+  var mult = appear > 0 ? (rivalTotal/appear) : (rivalTotal > 0 ? null : 0);
+
+  return { total:total, skipped:skipped, appear:appear, top3:top3, direct:direct,
+           pAppear:pAppear, pTop3:pTop3, pDirect:pDirect, score:score,
+           rivalCount:rivalCount, sourceCount:sourceCount, gaps:gaps,
+           rivalTotal:rivalTotal, mult:mult };
+}
+
+function pct(x){ return Math.round(x*100) + "%"; }
+
+function sortObj(o){
+  var arr = [];
+  for (var k in o) arr.push([k, o[k]]);
+  arr.sort(function(a,b){ return b[1]-a[1]; });
+  return arr;
+}
+
+$("toReport").addEventListener("click", function(){
+  if (!state.questions.length){ alert("קודם צור שאלות."); return; }
+  renderReport();
+  show("report");
+});
+
+function renderReport(){
+  var r = calc();
+  if (!r.total){
+    $("report").innerHTML = '<div class="empty">עדיין לא סומן אף תא כנמדד. סמן לפחות תוצאה אחת ואז חשב שוב.</div>';
+    $("reportBtns").style.display = "none";
+    return;
+  }
+  var verdict, vColor;
+  if (r.score >= 70)      verdict = "נראות טובה. המיקוד הוא שמירה על המצב והרחבה לשאלות נוספות.";
+  else if (r.score >= 40) verdict = "נראות חלקית. העסק קיים במערכת אבל מפסיד את רוב השאלות למתחרים.";
+  else                    verdict = "נראות נמוכה. ברוב השאלות שלקוח אמיתי שואל, העסק לא עולה כלל.";
+
+  var d = new Date();
+  var date = d.getDate() + "." + (d.getMonth()+1) + "." + d.getFullYear();
+
+  var h = "";
+  h += '<h2 style="margin-top:0">דוח נראות במנועי AI</h2>';
+  h += '<div class="muted">' + esc(state.biz || "—") + ' · ' + esc(state.trade) + ' · ' + esc(state.city) +
+       (state.city2 ? " ו" + esc(state.city2) : "") + ' · ' + date + '</div>';
+
+  h += '<div class="scorecard"><div class="big">' + r.score + '</div>' +
+       '<div class="of">מתוך 100</div><div class="verdict">' + verdict + '</div></div>';
+
+  h += '<div class="metrics">';
+  h += '<div class="metric"><div class="n">' + pct(r.pAppear) + '</div><div class="l">הופעה בתשובות</div></div>';
+  h += '<div class="metric"><div class="n">' + pct(r.pTop3) + '</div><div class="l">הופעה בשלושת הראשונים</div></div>';
+  h += '<div class="metric"><div class="n">' + pct(r.pDirect) + '</div><div class="l">המלצה ישירה</div></div>';
+  if (r.mult === null) {
+    h += '<div class="metric hi"><div class="n">—</div><div class="l">המתחרים הופיעו ' + r.rivalTotal + ' פעמים, העסק אף פעם</div></div>';
+  } else {
+    h += '<div class="metric' + (r.mult > 1 ? ' hi' : '') + '"><div class="n">פי ' + (Math.round(r.mult*10)/10) +
+         '</div><div class="l">המתחרים מופיעים יותר ממך</div></div>';
+  }
+  h += '</div>';
+
+  h += '<div class="note">הבדיקה כללה ' + state.questions.length + ' שאלות על ' + ENGINES.length +
+       ' מנועים. נמדדו בפועל ' + r.total + ' תאים' +
+       (r.skipped ? ' (' + r.skipped + ' לא נמדדו — לא הוצגה תשובת AI או אירעה שגיאה, ואינם נספרים בציון)' : '') +
+       '. הציון: 40% משקל להופעה, 30% למיקום בשלושת הראשונים, 30% להמלצה ישירה.</div>';
+
+  /* competitors */
+  var rivals = sortObj(r.rivalCount);
+  if (rivals.length){
+    h += '<h3>מי תופס את המקום שלך</h3><table><tr><th>מתחרה</th><th>מספר הופעות</th></tr>';
+    for (var i=0;i<rivals.length && i<10;i++){
+      h += '<tr><td>' + esc(rivals[i][0]) + '</td><td>' + rivals[i][1] + '</td></tr>';
+    }
+    h += '</table>';
+  }
+
+  /* sources */
+  var srcs = sortObj(r.sourceCount);
+  if (srcs.length){
+    h += '<h3>מאיפה המודלים שואבים מידע בתחום הזה</h3><table><tr><th>מקור</th><th>ציטוטים</th></tr>';
+    for (var j=0;j<srcs.length && j<10;j++){
+      h += '<tr><td>' + esc(srcs[j][0]) + '</td><td>' + srcs[j][1] + '</td></tr>';
+    }
+    h += '</table>';
+    h += '<div class="muted" style="margin-top:8px">אלה המקומות שצריך להיות בהם. נוכחות שם משפיעה יותר מכל שינוי באתר.</div>';
+  }
+
+  /* per-question table */
+  h += '<h3>פירוט לפי שאלה</h3><table><tr><th>שאלה</th>';
+  ENGINES.forEach(function(e){ h += '<th>' + esc(e.replace(" (גוגל)","")) + '</th>'; });
+  h += '</tr>';
+  state.questions.forEach(function(q){
+    h += '<tr><td>' + esc(q.text) + '</td>';
+    q.cells.forEach(function(c){
+      var mark = (c.status === null || c.status === undefined) ? "—" : (c.status === 0 ? "✗" : (c.status === 3 ? "★" : (c.status === 2 ? "▲" : "•")));
+      h += '<td style="text-align:center">' + mark + '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</table>';
+  h += '<div class="muted" style="margin-top:8px">✗ לא מופיע · • מוזכר · ▲ בשלושת הראשונים · ★ מומלץ במפורש · — לא נמדד</div>';
+
+  /* gaps */
+  if (r.gaps.length){
+    h += '<h3>השאלות שבהן העסק לא מופיע כלל</h3><ul>';
+    for (var g=0; g<r.gaps.length; g++) h += '<li>' + esc(r.gaps[g]) + '</li>';
+    h += '</ul><div class="muted">אלה העדיפויות לעבודה. כל שאלה כזאת היא לקוח שהלך למתחרה.</div>';
+  }
+
+  h += '<h3>הערה על השיטה</h3>';
+  h += '<div class="muted">הבדיקה בוצעה בצ׳אט זמני ובגלישה בסתר, כדי למנוע הטיה מהיסטוריית שימוש. ' +
+       'תשובות של מודלים משתנות מטבען גם ללא שינוי מצד העסק, ולכן המדידה חוזרת אחת לחודש על אותו מערך שאלות. ' +
+       'אין דרך להבטיח מקום ראשון בתשובות AI — המטרה היא להגדיל את הסיכוי להופעה ולציטוט.</div>';
+
+  $("report").innerHTML = h;
+  $("reportBtns").style.display = "flex";
+}
+
+/* ---- export / import ---- */
+$("exp").addEventListener("click", function(){
+  var io = $("io");
+  io.style.display = "block";
+  io.value = JSON.stringify(state);
+  io.select();
+});
+$("imp").addEventListener("click", function(){
+  var io = $("io");
+  if (io.style.display === "none"){ io.style.display = "block"; io.value = ""; io.focus(); return; }
+  try {
+    var s = JSON.parse(io.value);
+    if (!s.questions) throw new Error("bad");
+    state = s;
+    $("biz").value = s.biz||""; $("trade").value = s.trade||""; $("city").value = s.city||"";
+    $("city2").value = s.city2||""; $("extra").value = s.extra||"";
+    $("comp").value = (s.competitors||[]).join("\n");
+    renderQuestions();
+    io.style.display = "none";
+    alert("נטען.");
+  } catch(e){ alert("הטקסט לא תקין. הדבק את מה שקיבלת בייצוא."); }
+});
+
+renderQuestions();
+</script>
+</body>
+</html>
