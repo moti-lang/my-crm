@@ -1,0 +1,54 @@
+{
+  "_comment": "כל הסלקטורים יושבים כאן ורק כאן. כשממשק משתנה — מתקנים בקובץ הזה בלבד, בלי לגעת בקוד. לכל שדה אפשר לתת כמה סלקטורים חלופיים; המערכת מנסה אותם לפי הסדר ולוקחת את הראשון שנמצא.",
+
+  "chatgpt": {
+    "label": "ChatGPT",
+    "url": "https://chatgpt.com/?temporary-chat=true",
+    "requiresLogin": false,
+    "authFile": "data/auth-chatgpt.json",
+    "selectors": {
+      "input": ["#prompt-textarea", "div[contenteditable='true']", "textarea[data-id]"],
+      "submit": ["button[data-testid='send-button']", "button[aria-label*='Send']", "button[aria-label*='שלח']"],
+      "stopButton": ["button[data-testid='stop-button']", "button[aria-label*='Stop']"],
+      "answer": ["div[data-message-author-role='assistant']", "article:last-of-type"],
+      "citations": ["a[href^='http']"],
+      "dismiss": ["button:has-text('Stay logged out')", "button:has-text('Dismiss')", "button[aria-label='Close']"]
+    },
+    "waitAfterSubmitMs": 4000,
+    "settleMs": 3500,
+    "maxWaitMs": 120000
+  },
+
+  "gemini": {
+    "label": "Gemini",
+    "url": "https://gemini.google.com/app",
+    "requiresLogin": true,
+    "authFile": "data/auth-gemini.json",
+    "selectors": {
+      "input": ["div.ql-editor[contenteditable='true']", "rich-textarea div[contenteditable='true']", "textarea"],
+      "submit": ["button[aria-label*='Send']", "button[aria-label*='שלח']", "button.send-button"],
+      "stopButton": ["button[aria-label*='Stop']", "button[aria-label*='עצור']"],
+      "answer": ["model-response", "message-content", "div.model-response-text"],
+      "citations": ["a[href^='http']"],
+      "dismiss": ["button:has-text('Got it')", "button:has-text('הבנתי')", "button:has-text('No thanks')"]
+    },
+    "waitAfterSubmitMs": 4000,
+    "settleMs": 3500,
+    "maxWaitMs": 120000
+  },
+
+  "google_aio": {
+    "label": "AI Overviews (גוגל)",
+    "url": "https://www.google.com/search?q={QUERY}&hl=he&gl=il",
+    "requiresLogin": false,
+    "authFile": null,
+    "selectors": {
+      "aiBlock": ["div[data-attrid='SGE']", "div#eob_a", "div[jsname='xXq91c']", "div.YzCcne", "block-component"],
+      "citations": ["a[href^='http']"],
+      "dismiss": ["button:has-text('Accept all')", "button:has-text('אני מסכים')", "button#L2AGLb"]
+    },
+    "waitAfterSubmitMs": 3000,
+    "settleMs": 3000,
+    "maxWaitMs": 60000
+  }
+}

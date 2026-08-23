@@ -1,0 +1,22 @@
+{
+  "name": "geo-engine",
+  "version": "1.0.0",
+  "description": "מנוע בדיקת נראות עסקים במנועי AI - ChatGPT, Gemini, Google AI Overviews",
+  "type": "commonjs",
+  "main": "src/cli.js",
+  "scripts": {
+    "setup": "npx playwright install chromium",
+    "login": "node src/cli.js login",
+    "run": "node src/cli.js run",
+    "analyze": "node src/cli.js analyze",
+    "verify": "node src/cli.js verify",
+    "report": "node src/cli.js report",
+    "export": "node src/cli.js export",
+    "runs": "node src/cli.js runs",
+    "test": "node test/logic.test.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "playwright": "^1.48.0"
+  }
+}
