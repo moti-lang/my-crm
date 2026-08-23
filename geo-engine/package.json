@@ -14,7 +14,8 @@
     "report": "node src/cli.js report",
     "export": "node src/cli.js export",
     "runs": "node src/cli.js runs",
-    "test": "node test/logic.test.js && node test/export-contract.test.js"
+    "test": "node test/logic.test.js && node test/export-contract.test.js",
+    "smoke": "node test/driver-smoke.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
