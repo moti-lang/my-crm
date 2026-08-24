@@ -143,8 +143,8 @@ async function run(slug, opts) {
   }
 
   console.log(`\n✓ הריצה הסתיימה. מזהה ריצה: ${runId}`);
-  console.log(`  לאימות ידני:  npm run verify -- ${runId}`);
-  console.log(`  ליצירת דוח:   npm run report -- ${runId}\n`);
+  console.log(`  לאימות ידני:  node src/cli.js review ${runId}`);
+  console.log(`  ליצירת דוח:   node src/cli.js report ${runId}\n`);
   return runId;
 }
 

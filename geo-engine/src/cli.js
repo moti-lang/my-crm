@@ -8,6 +8,7 @@ const DB = require('./db');
 const R = require('./run');
 const REPORT = require('./report');
 const EXPORT = require('./exportJson');
+const REVIEW = require('./review');
 
 const ROOT = path.join(__dirname, '..');
 const ENGINE_LABEL = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_aio: 'תשובות AI בגוגל' };
@@ -58,6 +59,41 @@ async function verify(runId) {
   rl.close();
   db.close();
   console.log('\nהאימות נשמר.\n');
+}
+
+/* ---------- דף אימות בדפדפן ---------- */
+function review(runId) {
+  const out = REVIEW.generate(runId, DB);
+  console.log('\nדף האימות נוצר:');
+  console.log('  ' + out.file);
+  console.log('\nפתח אותו בדפדפן, סמן, והדבק בחזרה את השורה שהוא נותן.\n');
+}
+
+/* ---------- החלת סימונים מדף האימות ---------- */
+function applySet(runId, spec) {
+  const marks = REVIEW.parseSet(spec);
+  const db = DB.open();
+  const run = DB.getRun(db, runId);
+  if (!run) { db.close(); throw new Error('ריצה לא נמצאה: ' + runId); }
+
+  const rows = DB.getRunResults(db, runId);
+  const byId = {};
+  for (const r of rows) byId[r.id] = r;
+
+  let changed = 0, same = 0;
+  for (const m of marks) {
+    const r = byId[m.id];
+    if (!r) { db.close(); throw new Error('תוצאה ' + m.id + ' אינה שייכת לריצה ' + runId); }
+    const before = (r.status === null || r.status === undefined) ? null : r.status;
+    if (before === m.status) { same++; }
+    else { changed++; }
+    // המיקום נשמר רק כשהתוצאה עדיין "בשלושת הראשונים"; אחרת הוא חסר משמעות
+    DB.updateResult(db, m.id, { status: m.status, position: m.status === 2 ? r.position : null });
+  }
+  db.close();
+  console.log(`\nהאימות נשמר. ${changed} תוצאות שונו, ${same} אושרו כפי שהן.`);
+  console.log(`כל ${marks.length} התוצאות מסומנות עכשיו כמאומתות ידנית.`);
+  console.log(`\nליצירת דוח מעודכן:  node src/cli.js report ${runId}\n`);
 }
 
 /* ---------- ייצוא לכלי הידני ---------- */
@@ -117,7 +153,11 @@ async function main() {
       case 'login':      await R.login(args[0] || 'gemini'); break;
       case 'run':        await R.run(args[0], { engine: flags.engine, headless: flags.headless === 'true', notes: flags.notes }); break;
       case 'analyze':    R.reanalyze(parseInt(args[0], 10)); break;
-      case 'verify':     await verify(parseInt(args[0], 10)); break;
+      case 'review':     review(parseInt(args[0], 10)); break;
+      case 'verify':
+        if (flags.set) applySet(parseInt(args[0], 10), flags.set);
+        else await verify(parseInt(args[0], 10));
+        break;
       case 'report':     await REPORT.generate(parseInt(args[0], 10), { pdf: flags.pdf !== 'false' }); break;
       case 'export':     exportJson(parseInt(args[0], 10)); break;
       case 'runs':       runs(args[0]); break;
@@ -130,7 +170,9 @@ async function main() {
   node src/cli.js run <slug>            ריצה מלאה
   node src/cli.js run <slug> --engine=chatgpt
   node src/cli.js analyze <run-id>      ניתוח מחדש על טקסט שמור
-  node src/cli.js verify <run-id>       מעבר ידני ותיקון
+  node src/cli.js review <run-id>       דף אימות שנפתח בדפדפן (מומלץ)
+  node src/cli.js verify <run-id>       מעבר ידני בטרמינל
+  node src/cli.js verify <run-id> --set=12:2,13:n   החלת הסימונים מדף האימות
   node src/cli.js report <run-id>       יצירת דוח HTML + PDF
   node src/cli.js export <run-id>       ייצוא JSON לכלי הידני
   node src/cli.js runs [slug]           רשימת ריצות
@@ -144,4 +186,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = { clientAdd, verify, exportJson, runs };
+module.exports = { clientAdd, verify, applySet, review, exportJson, runs };

@@ -143,6 +143,30 @@ eq('שאלה בלי תוצאות בכלל נשארת בייצוא', exp.question
 eq('שאלה בלי תוצאות — כל התאים null', exp.questions[1].cells.map(c => c.status), [null, null, null]);
 eq('מקור נשמר בייצוא', cells1[0].source, 'b144.co.il');
 
+console.log('\n— דף האימות —');
+const RV = require('../src/review');
+
+const RVCLIENT = { name: 'גולד פיש', nameVariants: ['גולדפיש', 'Gold Fish'],
+                   competitors: [{ name: 'בית הקרפיון', variants: ['הקרפיון'] }] };
+const RVTEXT = 'דגי השרון ידועים, ואפשר גם גולדפיש. בית הקרפiון… בית הקרפיון במאה שערים.';
+const marked = RV.highlight(RVTEXT, RVCLIENT, RVCLIENT.competitors);
+ok('שם הלקוח מסומן גם בווריאציה צמודה', marked.indexOf('<mark class="me">גולדפיש</mark>') !== -1);
+ok('מתחרה מסומן בנפרד', marked.indexOf('<mark class="rival">בית הקרפיון</mark>') !== -1);
+ok('עסק לא מוכר אינו מסומן', marked.indexOf('<mark class="me">דגי השרון') === -1
+                          && marked.indexOf('<mark class="rival">דגי השרון') === -1);
+ok('התאמה חוצה רווחים', RV.nameRegex('גולד פיש', []).test('קניתי בגולדפיש אתמול'));
+ok('סימון בורח מתגיות HTML', RV.highlight('<script>x</script>', { name: 'ש', nameVariants: [] }, [])
+     .indexOf('&lt;script&gt;') !== -1);
+
+eq('פענוח --set תקין', RV.parseSet('12:2,13:n,14:0'),
+   [{ id: 12, status: 2 }, { id: 13, status: null }, { id: 14, status: 0 }]);
+let threw = false;
+try { RV.parseSet('12:9'); } catch (e) { threw = true; }
+ok('סטטוס מחוץ לטווח נדחה', threw);
+threw = false;
+try { RV.parseSet(''); } catch (e) { threw = true; }
+ok('--set ריק נדחה', threw);
+
 console.log('\n— דומיינים —');
 eq('סינון דומיינים של המנועים עצמם',
    N.domainsOf(['https://www.b144.co.il/x', 'https://chatgpt.com/y', 'https://zap.co.il/z']),

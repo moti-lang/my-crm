@@ -10,6 +10,7 @@
     "login": "node src/cli.js login",
     "run": "node src/cli.js run",
     "analyze": "node src/cli.js analyze",
+    "review": "node src/cli.js review",
     "verify": "node src/cli.js verify",
     "report": "node src/cli.js report",
     "export": "node src/cli.js export",
