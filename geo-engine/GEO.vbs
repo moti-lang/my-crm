@@ -28,6 +28,15 @@ errFile = fso.BuildPath(dataDir, "app-error.txt")
 logFile = fso.BuildPath(dataDir, "app-log.txt")
 chkFile = fso.BuildPath(dataDir, "node-check.txt")
 
+' Already running? Then this click means "show me the program", not "start
+' another one". Starting a second copy could only fail on the taken port,
+' which is exactly what made the shortcut look broken while the program was
+' up and serving.
+If Answering() Then
+  OpenUi
+  WScript.Quit 0
+End If
+
 On Error Resume Next
 If fso.FileExists(urlFile) Then fso.DeleteFile urlFile, True
 If fso.FileExists(errFile) Then fso.DeleteFile errFile, True
@@ -76,6 +85,39 @@ MsgBox "The program did not respond within 90 seconds." & vbCrLf & vbCrLf & _
        "--- end ---" & vbCrLf & vbCrLf & _
        "Run GEO.bat to watch it start in a visible window.", 48, title
 WScript.Quit 1
+
+' Opens the interface the way the program itself would: an app window with
+' no address bar where a Chromium browser exists, the default browser if not.
+Sub OpenUi()
+  Dim url, dirs, rel, d, r, exe
+  url = "http://127.0.0.1:7317/"
+  dirs = Array(sh.ExpandEnvironmentStrings("%ProgramFiles(x86)%"), _
+               sh.ExpandEnvironmentStrings("%ProgramFiles%"), _
+               sh.ExpandEnvironmentStrings("%LOCALAPPDATA%"))
+  rel = Array("Microsoft\Edge\Application\msedge.exe", _
+              "Google\Chrome\Application\chrome.exe")
+
+  For Each r In rel
+    For Each d In dirs
+      exe = fso.BuildPath(d, r)
+      If fso.FileExists(exe) Then
+        On Error Resume Next
+        sh.Run """" & exe & """ --app=" & url & " --window-size=1200,900", 1, False
+        If Err.Number = 0 Then
+          On Error GoTo 0
+          Exit Sub
+        End If
+        Err.Clear
+        On Error GoTo 0
+      End If
+    Next
+  Next
+
+  On Error Resume Next
+  sh.Run "explorer.exe """ & url & """", 1, False
+  Err.Clear
+  On Error GoTo 0
+End Sub
 
 ' True once the program answers on its port.
 Function Answering()
