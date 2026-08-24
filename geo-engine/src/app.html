@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>מנוע בדיקת נראות</title>
+<style>
+:root{
+  --ink:#12172B;--ground:#fff;--surface:#F4F6F9;--surface2:#EAEEF4;
+  --line:#DDE3EC;--muted:#5A6379;--faint:#8E9AB4;
+  --teal:#00A891;--teal-dk:#00897B;--teal-bg:#E4F5F2;
+  --amber:#C25F1E;--amber-bg:#FDF0E6;
+  --term:#12172B;--term-fg:#DDE3EC;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--surface);color:var(--ink);direction:rtl;
+  font-family:"Segoe UI",system-ui,Arial,sans-serif;font-size:16px;line-height:1.6;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 18px 80px}
+/* כשהפלט פתוח הוא תופס עד 56vh, ובלי זה הכרטיס האחרון נחסם */
+body.term-open main.wrap{padding-bottom:62vh}
+
+header{background:var(--ink);color:#fff;padding:18px 0;margin-bottom:22px}
+header .wrap{padding-bottom:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:19px;font-weight:800;color:var(--teal)}
+header .sub{font-size:13px;color:#8E9AB4}
+header .spacer{flex:1}
+.badge{font-size:12px;background:rgba(255,255,255,.1);border:1px solid #2A3252;border-radius:99px;padding:3px 11px;color:#D5DCE6}
+.badge.warn{background:#3A2A15;border-color:#5C4326;color:#F0B87A}
+
+.card{background:var(--ground);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:18px}
+.card > h2{font-size:19px;font-weight:800;margin-bottom:4px}
+.card > .hint{color:var(--muted);font-size:14.5px;margin-bottom:16px}
+summary{font-size:19px;font-weight:800;cursor:pointer}
+summary:focus-visible{outline:3px solid var(--teal);outline-offset:3px;border-radius:4px}
+
+label{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:14px 0 6px}
+select,input[type=text]{
+  width:100%;font:inherit;font-size:15.5px;padding:10px 12px;
+  border:1.5px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);
+}
+select:focus,input:focus{outline:3px solid rgba(0,168,145,.28);border-color:var(--teal)}
+
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn{
+  font:inherit;font-size:15.5px;font-weight:700;padding:11px 18px;border-radius:10px;
+  border:0;cursor:pointer;background:var(--ink);color:#fff;
+}
+.btn.go{background:var(--teal);color:#04211D}
+.btn.go:hover{background:#00BFA5}
+.btn.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.btn.ghost:hover{background:var(--surface)}
+.btn.sm{font-size:13.5px;padding:7px 12px;border-radius:8px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+
+.opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.opt{border:1.5px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-size:14.5px;font-weight:600;user-select:none}
+.opt input{position:absolute;opacity:0;width:0;height:0}
+.opt.on{background:var(--teal);border-color:var(--teal);color:#04211D}
+
+table{width:100%;border-collapse:collapse;font-size:15px;margin-top:6px}
+th,td{text-align:right;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.04em}
+tr:last-child td{border-bottom:0}
+td.acts{white-space:nowrap}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:99px}
+.pill.ok{background:var(--teal-bg);color:var(--teal-dk)}
+.pill.no{background:var(--surface2);color:var(--muted)}
+
+.empty{color:var(--muted);padding:22px 0;text-align:center}
+.note{background:var(--amber-bg);border-inline-start:3px solid var(--amber);border-radius:9px;padding:12px 14px;font-size:14.5px;margin-top:14px}
+.note b{color:var(--amber)}
+
+#term{
+  position:fixed;inset:auto 0 0 0;background:var(--term);color:var(--term-fg);
+  border-top:2px solid var(--teal);max-height:56vh;display:none;z-index:50;
+}
+#term .bar{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #2A3252;flex-wrap:wrap}
+#term .bar b{font-size:14.5px}
+#term .bar .st{font-size:13px;color:#8E9AB4;flex:1}
+#term pre{
+  margin:0;padding:12px 16px 18px;overflow:auto;max-height:44vh;
+  font-family:Consolas,ui-monospace,monospace;font-size:13px;line-height:1.65;white-space:pre-wrap;
+}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid #2A3252;border-top-color:var(--teal);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>מנוע בדיקת נראות</h1>
+    <span class="sub">רץ מקומית במחשב שלך</span>
+    <span class="spacer"></span>
+    <span class="badge" id="brandBadge"></span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="card">
+    <h2>בדיקה חדשה</h2>
+    <div class="hint">בוחר לקוח, בוחר מנועים, לוחץ. 10 עד 15 דקות לכל מנוע.</div>
+
+    <label for="client">לקוח</label>
+    <select id="client"></select>
+
+    <label>מנועים</label>
+    <div class="opts" id="engines"></div>
+
+    <div class="note" id="cdpNote" style="display:none">
+      <b>Gemini ותשובות AI בגוגל דורשים את הדפדפן שלך.</b>
+      גוגל חוסמת דפדפן שנפתח אוטומטית. לחץ קודם על "פתח את הדפדפן שלי",
+      התחבר, והשאר את החלון פתוח.
+    </div>
+
+    <div class="row">
+      <button class="btn go" id="runBtn">התחל בדיקה</button>
+      <button class="btn ghost" id="browserBtn">פתח את הדפדפן שלי</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>הבדיקות שלך</h2>
+    <div class="hint">סמן ריצות כדי להפיק מהן דוח אחד. אחרי בדיקה — קודם אימות, ואז דוח.</div>
+    <div id="runs"></div>
+
+    <div id="reportRow" style="display:none">
+      <label for="vsSel">השוואה למדידה קודמת</label>
+      <select id="vsSel"><option value="">בלי השוואה</option></select>
+      <div class="row">
+        <button class="btn go" id="reportBtn">הפק דוח מהמסומנות</button>
+        <button class="btn ghost sm" id="clearSel">נקה בחירה</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>שמירת אימות ידנית</summary>
+      <div class="hint" style="margin-top:12px">לא נחוץ בדרך כלל — דף האימות שומר לבד. זה מסלול גיבוי, אם קיבלת שורה מפקודה בטרמינל.</div>
+      <input type="text" id="setLine" placeholder="node src/cli.js verify 7 --set=41:3,42:3,...">
+      <div class="row"><button class="btn" id="verifyBtn">שמור</button></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>דוחות</h2>
+    <div id="reports"></div>
+  </div>
+
+  <div class="card">
+    <h2>לקוחות</h2>
+    <div class="hint">טעינת לקוח מקובץ בתיקיית <code>clients/</code>.</div>
+    <select id="clientFile"></select>
+    <div class="row"><button class="btn ghost" id="addClientBtn">טען לקוח</button></div>
+  </div>
+
+</main>
+
+<div id="term">
+  <div class="bar">
+    <span class="spin" id="spin"></span>
+    <b id="termTitle">רץ…</b>
+    <span class="st" id="termSt"></span>
+    <button class="btn ghost sm" id="termStop">עצור</button>
+    <button class="btn ghost sm" id="termClose">סגור</button>
+  </div>
+  <pre id="termOut"></pre>
+</div>
+
+<script>
+var S = { state:null, sel:{}, job:null, timer:null };
+
+function el(id){ return document.getElementById(id); }
+function api(p, body){
+  return fetch(p, body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {})
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'שגיאה'); return j; }); });
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ---------- מצב ---------- */
+function load(){
+  return api('/api/state').then(function(st){
+    S.state = st;
+    el('brandBadge').textContent = st.branded ? 'מיתוג פעיל' : 'אין מיתוג — הדוח ייצא בלי לוגו';
+    el('brandBadge').className = st.branded ? 'badge' : 'badge warn';
+
+    var c = el('client');
+    c.innerHTML = st.clients.length
+      ? st.clients.map(function(x){ return '<option value="'+esc(x.slug)+'">'+esc(x.name)+' — '+esc(x.trade||'')+'</option>'; }).join('')
+      : '<option value="">אין לקוחות. טען אחד למטה</option>';
+
+    var cf = el('clientFile');
+    cf.innerHTML = st.clientFiles.length
+      ? st.clientFiles.map(function(f){ return '<option>'+esc(f)+'</option>'; }).join('')
+      : '<option value="">אין קבצים בתיקיית clients</option>';
+
+    if (!el('engines').dataset.built) {
+      el('engines').innerHTML = st.engines.map(function(e){
+        return '<label class="opt on"><input type="checkbox" value="'+esc(e.key)+'" checked>'+esc(e.label)+'</label>';
+      }).join('');
+      el('engines').dataset.built = '1';
+      el('engines').addEventListener('change', syncEngines);
+      syncEngines();
+    }
+    drawRuns(); drawReports();
+  }).catch(function(e){ alert('לא הצלחתי לקרוא את המצב: ' + e.message); });
+}
+
+function chosenEngines(){
+  return [].slice.call(document.querySelectorAll('#engines input:checked')).map(function(i){ return i.value; });
+}
+function syncEngines(){
+  [].slice.call(document.querySelectorAll('#engines .opt')).forEach(function(l){
+    l.className = l.querySelector('input').checked ? 'opt on' : 'opt';
+  });
+  var need = chosenEngines().some(function(e){ return e === 'gemini' || e === 'google_aio'; });
+  el('cdpNote').style.display = need ? 'block' : 'none';
+}
+
+function drawRuns(){
+  var rs = S.state.runs;
+  if (!rs.length) { el('runs').innerHTML = '<div class="empty">עוד אין בדיקות. התחל אחת למעלה.</div>'; return; }
+  var h = '<table><tr><th></th><th>מתי</th><th>לקוח</th><th>מנועים</th><th>תאים</th><th>אימות</th><th></th></tr>';
+  rs.forEach(function(r){
+    h += '<tr><td><input type="checkbox" class="rsel" value="'+r.id+'"'+(S.sel[r.id]?' checked':'')+'></td>'
+       + '<td>'+esc(r.date)+'</td><td>'+esc(r.name)+'</td>'
+       + '<td>'+esc(r.engineNames||'—')+'</td><td>'+r.cells+'</td>'
+       + '<td>'+(r.verified>0?'<span class="pill ok">אומת</span>':'<span class="pill no">לא אומת</span>')+'</td>'
+       + '<td class="acts"><button class="btn ghost sm rev" data-id="'+r.id+'">אימות</button></td></tr>';
+  });
+  el('runs').innerHTML = h + '</table>';
+
+  [].slice.call(document.querySelectorAll('.rsel')).forEach(function(b){
+    b.addEventListener('change', function(){
+      if (this.checked) S.sel[this.value] = true; else delete S.sel[this.value];
+      el('reportRow').style.display = Object.keys(S.sel).length ? 'block' : 'none';
+      drawVs();
+    });
+  });
+  [].slice.call(document.querySelectorAll('.rev')).forEach(function(b){
+    b.addEventListener('click', function(){
+      // אותו מקור כמו הממשק, ולכן השמירה שם היא לחיצה אחת ולא העתקה
+      window.open('/review?run=' + encodeURIComponent(this.dataset.id), '_blank');
+    });
+  });
+  el('reportRow').style.display = Object.keys(S.sel).length ? 'block' : 'none';
+  drawVs();
+}
+
+/**
+ * רשימת ההשוואה מכילה רק ריצות שאינן מסומנות —
+ * דוח שמשווה את עצמו לעצמו הוא מספר בלי משמעות.
+ */
+function drawVs(){
+  var sel = el('vsSel'), keep = sel.value;
+  var opts = ['<option value="">בלי השוואה</option>'];
+  S.state.runs.forEach(function(r){
+    if (S.sel[r.id]) return;
+    opts.push('<option value="'+r.id+'">'+esc(r.date)+' — '+esc(r.name)+'</option>');
+  });
+  sel.innerHTML = opts.join('');
+  if (keep && !S.sel[keep]) sel.value = keep;
+}
+
+function drawReports(){
+  var rp = S.state.reports;
+  if (!rp.length) { el('reports').innerHTML = '<div class="empty">עוד אין דוחות.</div>'; return; }
+  el('reports').innerHTML = '<table>' + rp.map(function(f){
+    return '<tr><td>'+esc(f)+'</td><td class="acts"><button class="btn ghost sm op" data-f="'+esc(f)+'">פתח</button></td></tr>';
+  }).join('') + '</table>';
+  [].slice.call(document.querySelectorAll('.op')).forEach(function(b){
+    b.addEventListener('click', function(){
+      api('/api/open', {file:this.dataset.f}).catch(function(e){ alert(e.message); });
+    });
+  });
+}
+
+/* ---------- ריצה חיה ---------- */
+function watch(jobId, title){
+  S.job = jobId;
+  el('term').style.display = 'block';
+  document.body.classList.add('term-open');
+  el('termTitle').textContent = title;
+  el('termOut').textContent = '';
+  el('spin').style.display = 'inline-block';
+  el('termSt').textContent = '';
+  if (S.timer) clearInterval(S.timer);
+  S.timer = setInterval(poll, 1200);
+  poll();
+}
+function poll(){
+  if (!S.job) return;
+  api('/api/job?id=' + S.job).then(function(j){
+    var out = el('termOut');
+    var atEnd = out.scrollTop + out.clientHeight >= out.scrollHeight - 30;
+    out.textContent = j.lines.join('\\n');
+    if (atEnd) out.scrollTop = out.scrollHeight;
+    if (j.done) {
+      clearInterval(S.timer); S.timer = null; S.job = null;
+      el('spin').style.display = 'none';
+      el('termSt').textContent = j.code === 0 ? 'הסתיים בהצלחה' : 'הסתיים עם שגיאה';
+      load();
+    }
+  }).catch(function(){ /* ננסה שוב בפעימה הבאה */ });
+}
+
+/* ---------- פעולות ---------- */
+el('runBtn').addEventListener('click', function(){
+  var slug = el('client').value;
+  if (!slug) return alert('אין לקוח נבחר.');
+  var eng = chosenEngines();
+  if (!eng.length) return alert('בחר לפחות מנוע אחד.');
+  var cdp = eng.some(function(e){ return e==='gemini'||e==='google_aio'; });
+  var single = eng.length === 1 ? eng[0] : null;
+  if (eng.length > 1 && eng.length < S.state.engines.length) {
+    return alert('אפשר לבחור מנוע אחד, או את כולם. לבחירה חלקית — הרץ כל מנוע בנפרד.');
+  }
+  api('/api/run', {slug:slug, engine:single, cdp:cdp})
+    .then(function(o){ watch(o.job, 'בדיקה רצה — אל תסגור את הדפדפן שנפתח'); })
+    .catch(function(e){ alert(e.message); });
+});
+
+el('browserBtn').addEventListener('click', function(){
+  api('/api/browser', {}).then(function(o){ watch(o.job, 'פותח את הדפדפן שלך'); })
+    .catch(function(e){ alert(e.message); });
+});
+
+el('reportBtn').addEventListener('click', function(){
+  var list = Object.keys(S.sel);
+  if (!list.length) return;
+  var vs = el('vsSel').value;
+  api('/api/report', vs ? {runs:list.join(','), vs:vs} : {runs:list.join(',')})
+    .then(function(o){ watch(o.job, 'מפיק דוח'); })
+    .catch(function(e){ alert(e.message); });
+});
+el('clearSel').addEventListener('click', function(){ S.sel = {}; drawRuns(); });
+
+el('verifyBtn').addEventListener('click', function(){
+  var t = el('setLine').value.trim();
+  var m = t.match(/verify\s+(\d+)\s+--set=([\d:,n]+)/i) || t.match(/^(\d+)\s+([\d:,n]+)$/i);
+  if (!m) return alert('הדבק את השורה המלאה שדף האימות נתן.');
+  api('/api/verify', {run:m[1], set:m[2]})
+    .then(function(o){ watch(o.job, 'שומר אימות'); el('setLine').value=''; })
+    .catch(function(e){ alert(e.message); });
+});
+
+el('addClientBtn').addEventListener('click', function(){
+  var f = el('clientFile').value;
+  if (!f) return alert('אין קובץ לטעון.');
+  api('/api/client-add', {file:f}).then(function(o){ watch(o.job, 'טוען לקוח'); })
+    .catch(function(e){ alert(e.message); });
+});
+
+el('termClose').addEventListener('click', function(){
+  el('term').style.display='none';
+  document.body.classList.remove('term-open');
+  if (S.timer) { clearInterval(S.timer); S.timer=null; }
+  S.job=null;
+});
+el('termStop').addEventListener('click', function(){
+  if (!S.job) return;
+  if (!confirm('לעצור את הריצה? מה שנמדד עד עכשיו נשמר.')) return;
+  api('/api/stop', {job:S.job}).catch(function(){});
+});
+
+load();
+</script>
+</body>
+</html>

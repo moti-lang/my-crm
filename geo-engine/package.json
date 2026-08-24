@@ -5,6 +5,7 @@
   "type": "commonjs",
   "main": "src/cli.js",
   "scripts": {
+    "app": "node src/app.js",
     "setup": "npx playwright install chromium",
     "client:add": "node src/cli.js client:add",
     "login": "node src/cli.js login",
@@ -15,7 +16,8 @@
     "report": "node src/cli.js report",
     "export": "node src/cli.js export",
     "runs": "node src/cli.js runs",
-    "test": "node test/logic.test.js && node test/export-contract.test.js",
+    "test": "node test/logic.test.js && node test/export-contract.test.js && node test/app.test.js",
+    "test:app": "node test/app.test.js",
     "smoke": "node test/driver-smoke.test.js"
   },
   "dependencies": {

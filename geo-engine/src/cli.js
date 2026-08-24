@@ -115,6 +115,7 @@ function applySet(runId, spec) {
   console.log(`\nהאימות נשמר. ${changed} תוצאות שונו, ${same} אושרו כפי שהן.`);
   console.log(`כל ${marks.length} התוצאות מסומנות עכשיו כמאומתות ידנית.`);
   console.log(`\nליצירת דוח מעודכן:  node src/cli.js report ${runId}\n`);
+  return { changed, same, total: marks.length };
 }
 
 /* ---------- ייצוא לכלי הידני ---------- */

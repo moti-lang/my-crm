@@ -4,7 +4,10 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'geo.db');
+// GEO_DB קיים כדי שבדיקות יוכלו לרוץ על מסד זמני ולא על הנתונים האמיתיים
+const DB_PATH = process.env.GEO_DB
+  ? path.resolve(process.env.GEO_DB)
+  : path.join(__dirname, '..', 'data', 'geo.db');
 
 function open() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });

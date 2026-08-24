@@ -155,20 +155,40 @@ try {
   if ($r.Code -ne 0) { Die ("טעינת הלקוח נכשלה:`n" + $r.Out) }
   Info $r.Out.Trim()
 
-  # ---------- 9. ריצה ----------
-  Write-Host ''
-  Write-Host '════════════════════════════════════════' -ForegroundColor Yellow
-  Write-Host ' הריצה האמיתית — 10 עד 15 דקות.' -ForegroundColor Yellow
-  Write-Host ' ייפתח דפדפן. אל תיגע בו ואל תסגור אותו.' -ForegroundColor Yellow
-  Write-Host ' המתנה בין שאלות נראית כמו תקיעה — היא מכוונת.' -ForegroundColor Yellow
-  Write-Host '════════════════════════════════════════' -ForegroundColor Yellow
-  Read-Host ' Enter כדי להתחיל'
+  # ---------- 9. קיצור דרך ----------
+  # מכאן והלאה הכל נעשה מהממשק, ולכן צריך דבר אחד ללחוץ עליו.
+  Step 9 'יוצר קיצור דרך על שולחן העבודה'
+  $Launcher = Join-Path $Proj 'GEO.bat'
+  if (Test-Path $Launcher) {
+    try {
+      $Link = Join-Path ([Environment]::GetFolderPath('Desktop')) 'מנוע בדיקת נראות.lnk'
+      $ws = New-Object -ComObject WScript.Shell
+      $sc = $ws.CreateShortcut($Link)
+      $sc.TargetPath       = $Launcher
+      $sc.WorkingDirectory = $Proj
+      $sc.Description      = 'בדיקת נראות עסקים במנועי AI'
+      $sc.Save()
+      Good 'נוצר: מנוע בדיקת נראות'
+    } catch {
+      Info 'לא הצלחתי ליצור קיצור. אפשר לפתוח ידנית את GEO.bat בתיקיית הפרויקט.'
+    }
+  } else {
+    Info 'GEO.bat לא נמצא בפרויקט.'
+  }
 
-  Run 'node' @('src/cli.js','run','goldfish','--engine=chatgpt') -Live | Out-Null
-
+  # ---------- 10. פתיחת הממשק ----------
   Write-Host ''
-  Write-Host ' הריצה הסתיימה.' -ForegroundColor Green
-  try { Start-Process explorer.exe -ArgumentList $Proj } catch {}
+  Write-Host '════════════════════════════════════════' -ForegroundColor Green
+  Write-Host ' ההתקנה הסתיימה. הממשק נפתח עכשיו.' -ForegroundColor Green
+  Write-Host ' מכאן והלאה — לחיצה כפולה על' -ForegroundColor Green
+  Write-Host ' "מנוע בדיקת נראות" בשולחן העבודה.' -ForegroundColor Green
+  Write-Host '════════════════════════════════════════' -ForegroundColor Green
+  Read-Host ' Enter כדי לפתוח'
+
+  try { Start-Process -FilePath $Launcher -WorkingDirectory $Proj } catch {
+    Info 'פתח ידנית את GEO.bat בתיקיית הפרויקט.'
+    try { Start-Process explorer.exe -ArgumentList $Proj } catch {}
+  }
 
 }
 catch {
