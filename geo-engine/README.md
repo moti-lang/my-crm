@@ -22,6 +22,14 @@ npx playwright install chromium
 npm test
 ```
 
+> **ב-Windows:** אם מופיע `npm.ps1 cannot be loaded because running scripts is disabled on this system` — זו חסימת ברירת המחדל של PowerShell על הרצת סקריפטים, לא בעיה בפרויקט. תיקון חד-פעמי, לחשבון שלך בלבד ובלי הרשאות מנהל:
+>
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+> ```
+>
+> לחלופין אפשר לעקוף את npm ולהריץ ישירות: `node test/logic.test.js`
+
 אמור להציג 65 בדיקות לוגיקה ועוד 15 בדיקות-חוזה שעברו. **הן רצות בלי אינטרנט ובלי דפדפן** — הן בודקות את לוגיקת הזיהוי והציון, ואת ההתאמה בין הייצוא לכלי הידני.
 
 ---
