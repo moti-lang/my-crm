@@ -35,26 +35,78 @@ async function dismissAll(page, selectors) {
 }
 
 /**
- * ממתין עד שהתשובה מפסיקה לגדול.
- * מודד את אורך הטקסט כל 700ms; כשלא השתנה במשך settleMs — סיימנו.
+ * הודעות ביניים שהמנועים מציגים בזמן שהם עדיין עובדים.
+ *
+ * למה זה קיים: Gemini מציג "מחפש באינטרנט" או "מתחבר אל מפות Google"
+ * בתוך אותו אזור שבו תופיע התשובה. הטקסט הזה קצר ויושב יציב כמה שניות,
+ * ולכן המתנה שמסתמכת רק על "הטקסט הפסיק להשתנות" חושבת שהתשובה הסתיימה
+ * ושומרת את הודעת הטעינה במקום התשובה.
  */
-async function waitForSettle(page, answerSelectors, settleMs, maxWaitMs) {
-  const start = Date.now();
-  let lastLen = -1, stableSince = Date.now();
-  while (Date.now() - start < maxWaitMs) {
-    let len = 0;
-    for (const sel of answerSelectors) {
-      try {
-        const els = page.locator(sel);
-        const n = await els.count();
-        if (n > 0) { len = (await els.last().innerText()).length; break; }
-      } catch (e) { /* ממשיכים */ }
-    }
-    if (len !== lastLen) { lastLen = len; stableSince = Date.now(); }
-    else if (len > 0 && Date.now() - stableSince > settleMs) return true;
-    await page.waitForTimeout(700);
+const WORKING_HINTS = [
+  'מחפש באינטרנט', 'מתחבר אל', 'חושב', 'מנתח', 'עובד על זה', 'רק רגע',
+  'searching the internet', 'searching', 'thinking', 'analyzing',
+  'connecting to', 'working on it', 'just a sec'
+];
+
+/** האם הטקסט הוא הודעת ביניים ולא תשובה */
+function looksLikeWorking(text) {
+  const t = String(text == null ? '' : text).trim();
+  if (!t) return true;
+  // תשובה אמיתית ארוכה בהרבה מהודעת סטטוס
+  if (t.length > 120) return false;
+  const low = t.toLowerCase();
+  return WORKING_HINTS.some(h => low.indexOf(h.toLowerCase()) !== -1);
+}
+
+/** האם אחד מהסלקטורים נראה על המסך כרגע */
+async function anyVisible(page, selectors) {
+  for (const sel of selectors || []) {
+    try {
+      const loc = page.locator(sel).first();
+      if (await loc.count() > 0 && await loc.isVisible()) return true;
+    } catch (e) { /* סלקטור לא תקין — ממשיכים */ }
   }
   return false;
+}
+
+/** קורא את הטקסט מאזור התשובה */
+async function readAnswer(page, answerSelectors) {
+  for (const sel of answerSelectors) {
+    try {
+      const els = page.locator(sel);
+      if (await els.count() > 0) return await els.last().innerText();
+    } catch (e) { /* ממשיכים */ }
+  }
+  return '';
+}
+
+/**
+ * ממתין עד שהתשובה באמת הסתיימה.
+ *
+ * שלושה תנאים יחד, ולא רק אחד:
+ *   1. הטקסט לא השתנה במשך settleMs
+ *   2. כפתור העצירה לא מוצג — כלומר המנוע לא עדיין מייצר
+ *   3. הטקסט אינו הודעת ביניים
+ *
+ * מחזיר { settled, text }.
+ */
+async function waitForSettle(page, answerSelectors, settleMs, maxWaitMs, stopSelectors) {
+  const start = Date.now();
+  let last = null, stableSince = Date.now();
+
+  while (Date.now() - start < maxWaitMs) {
+    const text = await readAnswer(page, answerSelectors);
+    const busy = await anyVisible(page, stopSelectors);
+
+    if (text !== last) { last = text; stableSince = Date.now(); }
+    if (busy) stableSince = Date.now();
+
+    if (!busy && text && !looksLikeWorking(text) && Date.now() - stableSince > settleMs) {
+      return { settled: true, text };
+    }
+    await page.waitForTimeout(700);
+  }
+  return { settled: false, text: last || '' };
 }
 
 /** הקלדה בקצב אנושי */
@@ -94,4 +146,5 @@ async function collectLinks(page, containerSelectors, linkSelector) {
   return urls;
 }
 
-module.exports = { firstVisible, dismissAll, waitForSettle, humanType, pause, shotPath, collectLinks, ROOT };
+module.exports = { firstVisible, dismissAll, waitForSettle, readAnswer, anyVisible,
+                   looksLikeWorking, humanType, pause, shotPath, collectLinks, ROOT, WORKING_HINTS };

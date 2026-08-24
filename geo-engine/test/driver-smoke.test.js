@@ -40,6 +40,32 @@ const ANSWER = 'הנה ההמלצות:\n1. בית הקרפיון — מאה שע
 const CLIENT = { name: 'גולד פיש', variants: ['גולדפיש'] };
 const RIVALS = [{ name: 'בית הקרפיון', variants: [] }, { name: 'דגי הבירה', variants: [] }];
 
+/**
+ * מדמה בדיוק את מה ש-Gemini עשה בריצה אמיתית: מציג "מחפש באינטרנט"
+ * ומשאיר אותו יציב על המסך, ורק אחר כך מתחיל להזרים את התשובה.
+ * המתנה שמסתמכת רק על "הטקסט הפסיק להשתנות" תשמור את הודעת הטעינה.
+ */
+function slowScript(containerJs) {
+  return '<script>\n'
+    + 'var FULL = ' + JSON.stringify(ANSWER) + ';\n'
+    + 'function emit(){\n'
+    + '  var d = ' + containerJs + ';\n'
+    + '  var stop = document.createElement("button");\n'
+    + '  stop.setAttribute("data-testid","stop-button");\n'
+    + '  stop.setAttribute("aria-label","Stop");\n'
+    + '  stop.textContent = "עצור"; document.body.appendChild(stop);\n'
+    + '  d.textContent = "מחפש באינטרנט";\n'
+    + '  setTimeout(function(){\n'
+    + '    var i = 0;\n'
+    + '    var iv = setInterval(function(){\n'
+    + '      i += 12; d.textContent = FULL.slice(0, i);\n'
+    + '      if (i >= FULL.length) { clearInterval(iv); stop.remove(); }\n'
+    + '    }, 150);\n'
+    + '  }, 5200);\n'
+    + '}\n'
+    + '</script>';
+}
+
 /** סקריפט הזרמה משותף — התשובה גדלה בהדרגה, כמו במנוע אמיתי */
 function streamScript(containerJs) {
   return '<script>\n'
@@ -78,6 +104,16 @@ function page(engine, mode) {
         + 'd.setAttribute("data-message-author-role","assistant");'
         + 'document.getElementById("out").appendChild(d);return d;})()')
       + '<script>document.querySelector("[data-testid=send-button]").addEventListener("click",emit);</script>'
+      + '</body></html>';
+  }
+
+  if (engine === 'gemini-slow') {
+    return '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>'
+      + '<div class="ql-editor" contenteditable="true"></div>'
+      + '<button aria-label="Send">שלח</button><div id="out"></div>'
+      + slowScript('(function(){var d=document.createElement("model-response");'
+        + 'document.getElementById("out").appendChild(d);return d;})()')
+      + '<script>document.querySelector("button[aria-label=Send]").addEventListener("click",emit);</script>'
       + '</body></html>';
   }
 
@@ -123,8 +159,9 @@ function serve(engine, mode) {
 
 async function drive(browser, engine, mode, shot) {
   const served = await serve(engine, mode);
+  const cfgKey = engine === 'gemini-slow' ? 'gemini' : engine;
   try {
-    const cfg = JSON.parse(JSON.stringify(CFG[engine]));
+    const cfg = JSON.parse(JSON.stringify(CFG[cfgKey]));
     cfg.url = engine === 'google_aio'
       ? 'http://127.0.0.1:' + served.port + '/?q={QUERY}'
       : 'http://127.0.0.1:' + served.port + '/';
@@ -136,7 +173,7 @@ async function drive(browser, engine, mode, shot) {
 
     const ctx = await browser.newContext({ locale: 'he-IL', timezoneId: 'Asia/Jerusalem' });
     try {
-      return await DRIVERS[engine].ask(ctx, cfg, 'מי הכי מומלץ לקניית דגים טריים בביתר עילית?', shot);
+      return await DRIVERS[cfgKey].ask(ctx, cfg, 'מי הכי מומלץ לקניית דגים טריים בביתר עילית?', shot);
     } finally { await ctx.close(); }
   } finally { served.server.close(); }
 }
@@ -186,6 +223,32 @@ async function drive(browser, engine, mode, shot) {
       ok('השגיאה מפנה לקובץ הקונפיג', !!r3.error && r3.error.indexOf('config/engines.json') !== -1);
       ok('צילום מסך נשמר גם בכשל', fs.existsSync(shotBad) && fs.statSync(shotBad).size > 1000);
     }
+
+    // הבאג שהתגלה בריצה אמיתית מול Gemini: הודעת טעינה נשמרה כתשובה,
+    // והתא נרשם כ"לא מופיע" במקום "לא נמדד".
+    console.log('\n— Gemini · הודעת טעינה לפני התשובה —');
+    const slow = await drive(browser, 'gemini-slow', 'ok', path.join(dir, 'slow.png'));
+    ok('לא נשמרה הודעת הטעינה כתשובה', (slow.text || '').indexOf('מחפש באינטרנט') === -1,
+       JSON.stringify((slow.text || '').slice(0, 40)));
+    ok('התשובה האמיתית נקלטה', (slow.text || '').indexOf('גולד פיש') !== -1,
+       JSON.stringify((slow.text || '').slice(0, 60)));
+    ok('אין שגיאה כשהתשובה כן הגיעה', slow.error === null, String(slow.error));
+
+    // וכשהתשובה באמת לא מגיעה — חייב לצאת כלא-נמדד, לא כאפס
+    console.log('— Gemini · התשובה לא הגיעה בזמן —');
+    const served2 = await serve('gemini-slow', 'ok');
+    const cfg2 = JSON.parse(JSON.stringify(CFG.gemini));
+    cfg2.url = 'http://127.0.0.1:' + served2.port + '/';
+    cfg2.waitAfterSubmitMs = 500; cfg2.settleMs = 500; cfg2.maxWaitMs = 3000;
+    const ctx2 = await browser.newContext({ locale: 'he-IL' });
+    const shot2 = path.join(dir, 'timeout.png');
+    const to = await DRIVERS.gemini.ask(ctx2, cfg2, 'שאלה', shot2);
+    await ctx2.close(); served2.server.close();
+    ok('מוחזרת שגיאה ולא טקסט חלקי', !!to.error, JSON.stringify(to.text));
+    ok('השגיאה אומרת שזה לא נמדד', !!to.error && to.error.indexOf('לא-נמדד') !== -1, String(to.error));
+    const aTo = A.analyzeCell(to.text, CLIENT, RIVALS);
+    ok('הניתוח מחזיר null ולא 0', aTo.status === null, JSON.stringify(aTo));
+    ok('צילום מסך נשמר', fs.existsSync(shot2) && fs.statSync(shot2).size > 1000);
 
     console.log('\n— ' + CFG.google_aio.label + ' · יש בלוק AI —');
     const g1 = await drive(browser, 'google_aio', 'ok', path.join(dir, 'g-ok.png'));

@@ -29,12 +29,19 @@ async function ask(context, cfg, question, shotFile) {
     else await input.press('Enter');
 
     await page.waitForTimeout(cfg.waitAfterSubmitMs);
-    await B.waitForSettle(page, cfg.selectors.answer, cfg.settleMs, cfg.maxWaitMs);
+    const settle = await B.waitForSettle(page, cfg.selectors.answer, cfg.settleMs,
+                                         cfg.maxWaitMs, cfg.selectors.stopButton);
 
-    let text = '';
-    for (const sel of cfg.selectors.answer) {
-      const loc = page.locator(sel);
-      if (await loc.count() > 0) { text = await loc.last().innerText(); break; }
+    let text = settle.text || await B.readAnswer(page, cfg.selectors.answer);
+
+    // תפסנו הודעת ביניים ולא תשובה. זה "לא נמדד" — ובשום אופן לא "לא מופיע",
+    // כי לא ראינו את התשובה בכלל.
+    if (B.looksLikeWorking(text)) {
+      await page.screenshot({ path: shotFile, fullPage: true });
+      return {
+        text: '', urls: [],
+        error: 'התשובה לא הסתיימה בזמן שהוקצב — נרשם כלא-נמדד'
+      };
     }
 
     const urls = await B.collectLinks(page, cfg.selectors.answer, cfg.selectors.citations[0]);

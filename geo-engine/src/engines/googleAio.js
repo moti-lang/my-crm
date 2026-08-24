@@ -33,8 +33,12 @@ async function ask(context, cfg, question, shotFile) {
       return { text: '', urls: [], absent: true, error: null };
     }
 
-    await B.waitForSettle(page, cfg.selectors.aiBlock, cfg.settleMs, cfg.maxWaitMs);
-    const text = await block.innerText();
+    const settle = await B.waitForSettle(page, cfg.selectors.aiBlock, cfg.settleMs, cfg.maxWaitMs, null);
+    const text = settle.text || await block.innerText();
+    if (B.looksLikeWorking(text)) {
+      await page.screenshot({ path: shotFile, fullPage: true });
+      return { text: '', urls: [], absent: false, error: 'בלוק ה-AI לא הסתיים בזמן שהוקצב — נרשם כלא-נמדד' };
+    }
     const urls = await B.collectLinks(page, cfg.selectors.aiBlock, cfg.selectors.citations[0]);
     await page.screenshot({ path: shotFile, fullPage: true });
 
