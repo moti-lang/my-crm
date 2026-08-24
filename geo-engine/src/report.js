@@ -130,10 +130,22 @@ li{margin-top:4px}
     h += `</table>`;
   }
 
-  if (s.sourceTally.length) {
-    h += `<h2>מאיפה המודלים שואבים מידע בתחום הזה</h2><table><tr><th>מקור</th><th>ציטוטים</th></tr>`;
-    for (const [d, n] of s.sourceTally.slice(0, 12)) h += `<tr><td>${esc(d)}</td><td>${n}</td></tr>`;
-    h += `</table><div class="muted" style="margin-top:6px">אלה המקומות שצריך להיות בהם. נוכחות שם משפיעה יותר מכל שינוי באתר.</div>`;
+  // האתר של הלקוח עצמו חייב להיות מופרד משאר המקורות. אחרת הוא יושב בראש
+  // טבלה שכתוב מתחתיה "אלה המקומות שצריך להיות בהם" — סתירה גלויה, ועוד
+  // כזאת שמבזבזת ממצא טוב: ציטוט חוזר של האתר הוא הישג, לא משימה.
+  const own = String(client.domain || '').replace(/^www\./, '').toLowerCase();
+  const isOwn = (d) => own && (d === own || d.endsWith('.' + own));
+  const ownCites = s.sourceTally.filter(([d]) => isOwn(d)).reduce((a, x) => a + x[1], 0);
+  const thirdParty = s.sourceTally.filter(([d]) => !isOwn(d));
+
+  if (ownCites > 0) {
+    h += `<h2>האתר שלך כמקור</h2><div class="note">המודלים ציטטו את <b>${esc(own)}</b> ${count(ownCites, 'פעם אחת', 'פעמים')} בתשובות שנבדקו. משמעות הדבר שהאתר עצמו נקרא ומשמש מקור מידע — וזו נקודת פתיחה טובה. ${thirdParty.length ? 'הטבלה שלמטה היא המקורות החיצוניים, ושם נמצאת העבודה.' : ''}</div>`;
+  }
+
+  if (thirdParty.length) {
+    h += `<h2>מאיפה עוד המודלים שואבים מידע בתחום הזה</h2><table><tr><th>מקור</th><th>ציטוטים</th></tr>`;
+    for (const [d, n] of thirdParty.slice(0, 12)) h += `<tr><td>${esc(d)}</td><td>${n}</td></tr>`;
+    h += `</table><div class="muted" style="margin-top:6px">אלה מקומות שאינם בשליטתך, והמודלים חוזרים אליהם. נוכחות מדויקת ומעודכנת שם משפיעה על התשובות יותר מכל שינוי באתר.</div>`;
   }
 
   h += `<h2>פירוט לפי שאלה</h2><table><tr><th>שאלה</th>`;

@@ -292,6 +292,26 @@ eq('כותרת של כמה ריצות מציגה טווח תאריכים',
    REPORT.runsLabel([{ id: 1, started_at: '2026-08-01' }, { id: 2, started_at: '2026-08-24' }]),
    '2026-08-01 עד 2026-08-24');
 
+// האתר של הלקוח בראש טבלת "המקומות שצריך להיות בהם" הוא סתירה גלויה
+function htmlWithDomain(rows, domain) {
+  return REPORT.buildHtml({ name: 'גולד פיש', trade: 'דגים', city: 'ביתר', domain: domain, competitors: [] },
+                          [{ id: 1, started_at: '2026-08-24' }], rows, A.score(rows));
+}
+const srcRows = [
+  { engine: 'chatgpt', questionText: 'ש1', status: 2, rivals: [],
+    sources: ['goldfishbeitar.co.il', 'goldfishbeitar.co.il', 'b144.co.il'] },
+  { engine: 'chatgpt', questionText: 'ש2', status: 2, rivals: [], sources: ['b144.co.il'] }
+];
+const sh = htmlWithDomain(srcRows, 'goldfishbeitar.co.il');
+ok('האתר של הלקוח מוצג בנפרד כהישג', sh.indexOf('האתר שלך כמקור') !== -1);
+ok('האתר של הלקוח אינו בטבלת המקורות החיצוניים',
+   sh.indexOf('מאיפה עוד') !== -1
+   && sh.slice(sh.indexOf('מאיפה עוד')).indexOf('goldfishbeitar') === -1);
+ok('מקור חיצוני כן מופיע בטבלה',
+   sh.slice(sh.indexOf('מאיפה עוד')).indexOf('b144.co.il') !== -1);
+ok('בלי דומיין מוגדר הכל נשאר בטבלה אחת',
+   htmlWithDomain(srcRows, '').indexOf('האתר שלך כמקור') === -1);
+
 console.log('\n— דומיינים —');
 eq('סינון דומיינים של המנועים עצמם',
    N.domainsOf(['https://www.b144.co.il/x', 'https://chatgpt.com/y', 'https://zap.co.il/z']),
