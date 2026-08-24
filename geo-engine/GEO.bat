@@ -23,13 +23,13 @@ if not exist "node_modules\better-sqlite3" (
 )
 
 echo.
-echo   פותח את הממשק...
-echo   אל תסגור את החלון הזה כל עוד אתה עובד.
+echo   פותח את התוכנה עם חלון מעקב.
+echo   לשימוש רגיל השתמש בקיצור שבשולחן העבודה — הוא פותח בלי החלון הזה.
 echo.
 
 node src\app.js
 
 echo.
-echo   הממשק נסגר.
+echo   התוכנה נסגרה.
 echo.
 pause

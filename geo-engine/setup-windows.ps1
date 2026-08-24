@@ -158,7 +158,9 @@ try {
   # ---------- 9. קיצור דרך ----------
   # מכאן והלאה הכל נעשה מהממשק, ולכן צריך דבר אחד ללחוץ עליו.
   Step 9 'יוצר קיצור דרך על שולחן העבודה'
-  $Launcher = Join-Path $Proj 'GEO.bat'
+  # GEO.vbs פותח את התוכנה בלי חלון שחור. GEO.bat נשאר לאבחון תקלות.
+  $Launcher = Join-Path $Proj 'GEO.vbs'
+  if (-not (Test-Path $Launcher)) { $Launcher = Join-Path $Proj 'GEO.bat' }
   if (Test-Path $Launcher) {
     try {
       $Link = Join-Path ([Environment]::GetFolderPath('Desktop')) 'מנוע בדיקת נראות.lnk'
@@ -167,26 +169,29 @@ try {
       $sc.TargetPath       = $Launcher
       $sc.WorkingDirectory = $Proj
       $sc.Description      = 'בדיקת נראות עסקים במנועי AI'
+      # אייקון של תוכנה ולא של סקריפט
+      $sc.IconLocation     = "$env:SystemRoot\System32\shell32.dll,13"
       $sc.Save()
       Good 'נוצר: מנוע בדיקת נראות'
     } catch {
-      Info 'לא הצלחתי ליצור קיצור. אפשר לפתוח ידנית את GEO.bat בתיקיית הפרויקט.'
+      Info 'לא הצלחתי ליצור קיצור. אפשר לפתוח ידנית את GEO.vbs בתיקיית הפרויקט.'
     }
   } else {
-    Info 'GEO.bat לא נמצא בפרויקט.'
+    Info 'המשגר לא נמצא בפרויקט.'
   }
 
   # ---------- 10. פתיחת הממשק ----------
   Write-Host ''
   Write-Host '════════════════════════════════════════' -ForegroundColor Green
-  Write-Host ' ההתקנה הסתיימה. הממשק נפתח עכשיו.' -ForegroundColor Green
+  Write-Host ' ההתקנה הסתיימה. התוכנה נפתחת עכשיו.' -ForegroundColor Green
   Write-Host ' מכאן והלאה — לחיצה כפולה על' -ForegroundColor Green
   Write-Host ' "מנוע בדיקת נראות" בשולחן העבודה.' -ForegroundColor Green
+  Write-Host ' בלי חלון שחור. לסגירה — כפתור בפינת המסך.' -ForegroundColor Green
   Write-Host '════════════════════════════════════════' -ForegroundColor Green
   Read-Host ' Enter כדי לפתוח'
 
   try { Start-Process -FilePath $Launcher -WorkingDirectory $Proj } catch {
-    Info 'פתח ידנית את GEO.bat בתיקיית הפרויקט.'
+    Info 'פתח ידנית את GEO.vbs בתיקיית הפרויקט.'
     try { Start-Process explorer.exe -ArgumentList $Proj } catch {}
   }
 

@@ -25,6 +25,26 @@ const ROOT = path.join(__dirname, '..');
 const CONFIG = process.env.GEO_CONFIG ? path.resolve(process.env.GEO_CONFIG) : path.join(ROOT, 'config');
 const PORT = 7317;
 
+/* ---------- סימני חיים ---------- */
+
+/**
+ * המשגר ב-Windows מריץ את התוכנה בלי חלון, ולכן אין לו דרך לראות אם היא עלתה.
+ * שני הקבצים האלה הם התשובה: כתובת = הצליח, שגיאה = נפל ויש מה להראות.
+ */
+const SIGNAL_DIR = path.join(ROOT, 'data');
+const URL_FILE = path.join(SIGNAL_DIR, 'app-url.txt');
+const ERR_FILE = path.join(SIGNAL_DIR, 'app-error.txt');
+
+function signal(file, text) {
+  try {
+    fs.mkdirSync(SIGNAL_DIR, { recursive: true });
+    fs.writeFileSync(file, String(text), 'utf8');
+  } catch (e) { /* חוסר הרשאה לא אמור להפיל את התוכנה */ }
+}
+function clearSignals() {
+  for (const f of [URL_FILE, ERR_FILE]) { try { fs.unlinkSync(f); } catch (e) {} }
+}
+
 /* ---------- הרצת פקודות ---------- */
 
 // כל ריצה פעילה, כדי שהעמוד יוכל למשוך את הפלט שלה
@@ -98,6 +118,74 @@ function readState() {
     branded: fs.existsSync(path.join(CONFIG, 'brand.json')),
     engines: Object.keys(ENGINE_LABEL).map(k => ({ key: k, label: ENGINE_LABEL[k] }))
   };
+}
+
+/* ---------- לקוחות ---------- */
+
+/**
+ * הלקוח כפי שהטופס צריך אותו.
+ * השאלות מוחזרות רק כטקסט — המזהים שלהן פנימיים, והממשק לא אמור לגעת בהם.
+ */
+function readClient(slug) {
+  const db = DB.open();
+  const c = DB.getClient(db, slug);
+  db.close();
+  if (!c) throw new Error('לקוח לא נמצא: ' + slug);
+  return {
+    slug: c.slug, name: c.name, nameVariants: c.nameVariants || [],
+    trade: c.trade || '', city: c.city || '', city2: c.city2 || '',
+    extra: c.extra || '', domain: c.domain || '',
+    competitors: c.competitors || [],
+    questions: (c.questions || []).map(q => q.text)
+  };
+}
+
+/** מזהה פנוי ללקוח חדש. הוא מופיע בשם קובץ הדוח, ולכן הוא באנגלית */
+function nextSlug() {
+  const db = DB.open();
+  const taken = {};
+  for (const r of db.prepare('SELECT slug FROM clients').all()) taken[r.slug] = true;
+  db.close();
+  let n = 2;
+  while (taken['client' + n]) n++;
+  return 'client' + n;
+}
+
+function saveClient(b) {
+  const slug = String((b && b.slug) || '').trim().toLowerCase();
+  if (!SLUG_RE.test(slug)) throw new Error('המזהה חייב להיות באותיות אנגליות או ספרות, בלי רווחים');
+
+  const name = String((b && b.name) || '').trim();
+  if (!name) throw new Error('חסר שם העסק');
+  if (name.length > 120) throw new Error('שם העסק ארוך מדי');
+
+  const questions = (Array.isArray(b.questions) ? b.questions : [])
+    .map(q => String(q).trim()).filter(Boolean);
+  if (!questions.length) throw new Error('צריך לפחות שאלה אחת');
+  if (questions.length > 60) throw new Error('יותר מ-60 שאלות — זו ריצה של שעות. צמצם.');
+  if (questions.some(q => q.length > 400)) throw new Error('אחת השאלות ארוכה מדי');
+
+  const competitors = (Array.isArray(b.competitors) ? b.competitors : [])
+    .map(r => ({ name: String((r && r.name) || '').trim(),
+                 variants: (Array.isArray(r && r.variants) ? r.variants : [])
+                   .map(v => String(v).trim()).filter(Boolean) }))
+    .filter(r => r.name);
+  if (competitors.length > 100) throw new Error('יותר מ-100 מתחרים');
+
+  const db = DB.open();
+  const exists = !!db.prepare('SELECT id FROM clients WHERE slug = ?').get(slug);
+  if (b.isNew && exists) { db.close(); throw new Error('כבר קיים לקוח עם המזהה "' + slug + '"'); }
+
+  const txt = v => { const t = String(v || '').trim(); return t.length > 200 ? t.slice(0, 200) : t; };
+  DB.upsertClient(db, {
+    slug, name, questions, competitors,
+    nameVariants: (Array.isArray(b.nameVariants) ? b.nameVariants : [])
+      .map(v => String(v).trim()).filter(Boolean),
+    trade: txt(b.trade), city: txt(b.city), city2: txt(b.city2),
+    extra: txt(b.extra), domain: txt(b.domain)
+  });
+  db.close();
+  return readClient(slug);
 }
 
 /* ---------- מיתוג ---------- */
@@ -175,9 +263,7 @@ function writeBrand(b) {
 function openLocal(file) {
   const full = path.join(ROOT, 'reports', path.basename(file));
   if (!fs.existsSync(full)) throw new Error('הקובץ לא נמצא: ' + path.basename(file));
-  const cmd = process.platform === 'win32' ? 'explorer'
-            : process.platform === 'darwin' ? 'open' : 'xdg-open';
-  try { spawn(cmd, [full], { detached: true, stdio: 'ignore' }).unref(); } catch (e) { /* לא קריטי */ }
+  openDefault(full);
   return full;
 }
 
@@ -224,6 +310,15 @@ function handle(req, res, body) {
   }
 
   if (p === '/api/state') return json(res, 200, readState());
+
+  if (p === '/api/client' && req.method === 'GET') {
+    try { return json(res, 200, readClient(String(url.searchParams.get('slug') || ''))); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
+
+  if (p === '/api/client-new' && req.method === 'GET') {
+    return json(res, 200, { slug: nextSlug() });
+  }
 
   if (p === '/api/brand' && req.method === 'GET') {
     try { return json(res, 200, readBrand()); }
@@ -276,6 +371,8 @@ function handle(req, res, body) {
 
 
 
+    if (p === '/api/client-save') return json(res, 200, saveClient(b));
+
     if (p === '/api/brand') return json(res, 200, writeBrand(b));
 
     if (p === '/api/report') {
@@ -289,6 +386,13 @@ function handle(req, res, body) {
 
     if (p === '/api/open') return json(res, 200, { opened: path.basename(openLocal(String(b.file || ''))) });
 
+    if (p === '/api/quit') {
+      json(res, 200, { closing: true });
+      // מרווח קצר כדי שהתשובה תספיק לצאת לפני שהתהליך נסגר
+      setTimeout(() => { clearSignals(); process.exit(0); }, 200);
+      return;
+    }
+
     if (p === '/api/stop') {
       const j = jobs[String(b.job || '')];
       if (j && j.child && !j.done) { try { j.child.kill(); } catch (e) {} }
@@ -301,11 +405,57 @@ function handle(req, res, body) {
   return json(res, 404, { error: 'לא נמצא' });
 }
 
-/** פותח כתובת בדפדפן ברירת המחדל של המשתמש */
-function openUrl(url) {
+// דפדפנים שיודעים לפתוח חלון בלי סרגל כתובות, לפי סדר עדיפות.
+// Edge קודם: הוא תמיד קיים ב-Windows 11, וכרום שמור לריצות דרך הדפדפן שלך.
+function appBrowsers() {
+  const env = process.env;
+  const dirs = [env['ProgramFiles(x86)'], env.ProgramFiles, env.LOCALAPPDATA].filter(Boolean);
+  const rel = [
+    ['Microsoft', 'Edge', 'Application', 'msedge.exe'],
+    ['Google', 'Chrome', 'Application', 'chrome.exe']
+  ];
+  const out = [];
+  for (const r of rel) for (const d of dirs) out.push(path.join(d, ...r));
+  return out;
+}
+
+/**
+ * מפעיל תוכנה חיצונית בלי להסתכן בהפלת התוכנה.
+ *
+ * spawn לא זורק כשהקובץ לא קיים — הוא פולט אירוע error מאוחר יותר,
+ * ואירוע error בלי מאזין מפיל את התהליך כולו. לכן המאזין כאן חובה,
+ * והוא גם מה שמאפשר לנסות את המועמד הבא.
+ */
+function launch(cmd, args, onFail) {
+  let failed = false;
+  const fail = () => { if (!failed) { failed = true; if (onFail) onFail(); } };
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+    child.on('error', fail);
+    child.unref();
+  } catch (e) { fail(); }
+}
+
+/** פותח בכלי ברירת המחדל של מערכת ההפעלה */
+function openDefault(target) {
   const cmd = process.platform === 'win32' ? 'explorer'
             : process.platform === 'darwin' ? 'open' : 'xdg-open';
-  try { spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref(); } catch (e) { /* לא קריטי */ }
+  launch(cmd, [target], () => { /* אין דרך נוספת; המשתמש יקבל את הכתובת בטקסט */ });
+}
+
+/**
+ * פותח את הממשק. ב-Windows מנסה קודם חלון תוכנה — בלי סרגל כתובות
+ * ובלי לשוניות — כדי שזה ייראה כמו תוכנה ולא כמו אתר.
+ */
+function openUrl(url) {
+  const candidates = process.platform === 'win32'
+    ? appBrowsers().filter(exe => fs.existsSync(exe)) : [];
+
+  const next = (i) => {
+    if (i >= candidates.length) return openDefault(url);
+    launch(candidates[i], ['--app=' + url, '--window-size=1200,900'], () => next(i + 1));
+  };
+  next(0);
 }
 
 /**
@@ -354,29 +504,38 @@ function start(opts) {
   });
 }
 
-module.exports = { start, readState, handle, openUrl, alreadyMine, readBrand, writeBrand, PORT };
+module.exports = { start, readState, handle, openUrl, alreadyMine,
+                   readBrand, writeBrand, readClient, saveClient, nextSlug, PORT };
 
 if (require.main === module) {
+  clearSignals();
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    process.on(sig, () => { clearSignals(); process.exit(0); });
+  }
   start({}).then(({ url }) => {
+    signal(URL_FILE, url);
     console.log('');
     console.log('  מנוע בדיקת נראות — הממשק פתוח בכתובת:');
     console.log('  ' + url);
     console.log('');
-    console.log('  אם הדפדפן לא נפתח לבד, העתק את הכתובת לשם.');
-    console.log('  לסגירה: סגור את החלון הזה.');
+    console.log('  אם החלון לא נפתח לבד, העתק את הכתובת לדפדפן.');
+    console.log('  לסגירה: "סגור את התוכנה" בפינת המסך.');
     console.log('');
   }).catch(async (e) => {
     if (e.code === 'EADDRINUSE' && await alreadyMine(PORT)) {
       const url = 'http://127.0.0.1:' + PORT + '/';
+      // המשגר מחכה לקובץ הזה, וכאן זו הצלחה ולא כשל
+      signal(URL_FILE, url);
       openUrl(url);
       console.log('\n  הממשק כבר פתוח. מחזיר אותך אליו:');
       console.log('  ' + url + '\n');
       return;
     }
-    console.error('\nלא הצלחתי לפתוח את הממשק: ' + e.message);
-    if (e.code === 'EADDRINUSE') {
-      console.error('הפורט ' + PORT + ' תפוס על ידי תוכנה אחרת.');
-    }
+    const why = e.code === 'EADDRINUSE'
+      ? 'הפורט ' + PORT + ' תפוס על ידי תוכנה אחרת.'
+      : e.message;
+    console.error('\nלא הצלחתי לפתוח את הממשק: ' + why);
+    signal(ERR_FILE, why);
     process.exit(1);
   });
 }

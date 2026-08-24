@@ -26,6 +26,7 @@ header .wrap{padding-bottom:0;display:flex;align-items:center;gap:12px;flex-wrap
 header h1{font-size:19px;font-weight:800;color:var(--teal)}
 header .sub{font-size:13px;color:#8E9AB4}
 header .spacer{flex:1}
+header .btn{padding:5px 12px;font-size:13px}
 .badge{font-size:12px;background:rgba(255,255,255,.1);border:1px solid #2A3252;border-radius:99px;padding:3px 11px;color:#D5DCE6}
 .badge.warn{background:#3A2A15;border-color:#5C4326;color:#F0B87A}
 
@@ -35,6 +36,13 @@ header .spacer{flex:1}
 summary{font-size:19px;font-weight:800;cursor:pointer}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
 @media (max-width:640px){.grid2{grid-template-columns:1fr}}
+textarea{
+  width:100%;font:inherit;font-size:15.5px;padding:10px 12px;line-height:1.7;
+  border:1.5px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);resize:vertical;
+}
+textarea:focus{outline:3px solid rgba(0,168,145,.28);border-color:var(--teal)}
+.mini{font-size:12.5px;font-weight:600;color:var(--teal);text-decoration:none;margin-right:8px}
+a.mini:hover{text-decoration:underline}
 .hidefile{position:absolute;opacity:0;width:0;height:0}
 .filerow{display:flex;align-items:center;gap:10px;margin-top:6px}
 .logoprev{display:flex;align-items:center;gap:14px;margin-top:16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
@@ -104,6 +112,7 @@ td.acts{white-space:nowrap}
     <span class="sub">רץ מקומית במחשב שלך</span>
     <span class="spacer"></span>
     <span class="badge" id="brandBadge"></span>
+    <button class="btn ghost sm" id="quitBtn" title="סוגר את התוכנה">סגור את התוכנה</button>
   </div>
 </header>
 
@@ -113,7 +122,7 @@ td.acts{white-space:nowrap}
     <h2>בדיקה חדשה</h2>
     <div class="hint">בוחר לקוח, בוחר מנועים, לוחץ. 10 עד 15 דקות לכל מנוע.</div>
 
-    <label for="client">לקוח</label>
+    <label for="client">לקוח <a href="#clientCard" class="mini" id="toClient">ערוך פרטים · הוסף לקוח</a></label>
     <select id="client"></select>
 
     <label>מנועים</label>
@@ -209,11 +218,68 @@ td.acts{white-space:nowrap}
     </details>
   </div>
 
-  <div class="card">
-    <h2>לקוחות</h2>
-    <div class="hint">טעינת לקוח מקובץ בתיקיית <code>clients/</code>.</div>
-    <select id="clientFile"></select>
-    <div class="row"><button class="btn ghost" id="addClientBtn">טען לקוח</button></div>
+  <div class="card" id="clientCard">
+    <h2>פרטי הלקוח והשאלות</h2>
+    <div class="hint">מה שכתוב כאן קובע מה המנוע מחפש בתשובות ומה הוא שואל.</div>
+
+    <label for="cPick">לקוח</label>
+    <select id="cPick"></select>
+
+    <div class="grid2">
+      <div>
+        <label for="cName">שם העסק</label>
+        <input type="text" id="cName" maxlength="120" placeholder="גולד פיש">
+      </div>
+      <div>
+        <label for="cVariants">איך עוד כותבים את השם</label>
+        <input type="text" id="cVariants" placeholder="גולדפיש, גולד-פיש, Gold Fish">
+      </div>
+      <div>
+        <label for="cTrade">התחום — מה העסק עושה</label>
+        <input type="text" id="cTrade" maxlength="200" placeholder="קניית דגים טריים">
+      </div>
+      <div>
+        <label for="cCity">עיר</label>
+        <input type="text" id="cCity" maxlength="200" placeholder="ביתר עילית">
+      </div>
+      <div>
+        <label for="cCity2">עיר נוספת</label>
+        <input type="text" id="cCity2" maxlength="200" placeholder="ירושלים">
+      </div>
+      <div>
+        <label for="cDomain">האתר של העסק</label>
+        <input type="text" id="cDomain" maxlength="200" placeholder="goldfishbeitar.co.il">
+      </div>
+    </div>
+
+    <label for="cExtra">מה מייחד אותו</label>
+    <input type="text" id="cExtra" maxlength="200" placeholder="כשר למהדרין עם משלוחים">
+
+    <label for="cQuestions">השאלות שהמנוע ישאל <span class="mini" id="qCount"></span></label>
+    <div class="hint" style="margin:0 0 6px">שאלה בכל שורה. אלה השאלות שלקוח פוטנציאלי היה שואל.</div>
+    <textarea id="cQuestions" rows="10" placeholder="מי הכי מומלץ לקניית דגים טריים בביתר עילית?"></textarea>
+
+    <label for="cRivals">מתחרים <span class="mini" id="rCount"></span></label>
+    <div class="hint" style="margin:0 0 6px">מתחרה בכל שורה. אם כותבים אותו בכמה צורות — קו אנכי ואז הצורות, מופרדות בפסיק.</div>
+    <textarea id="cRivals" rows="6" placeholder="בית הקרפיון | הקרפיון, בית הקרפיון מאה שערים"></textarea>
+
+    <div id="slugRow" style="display:none">
+      <label for="cSlug">מזהה באנגלית</label>
+      <div class="hint" style="margin:0 0 6px">מופיע בשם קובץ הדוח. אפשר להשאיר כמו שהוא.</div>
+      <input type="text" id="cSlug" maxlength="41">
+    </div>
+
+    <div class="row">
+      <button class="btn go" id="cSave">שמור לקוח</button>
+      <span class="st" id="cSt"></span>
+    </div>
+
+    <details style="margin-top:22px">
+      <summary style="font-size:15px">טעינה מקובץ</summary>
+      <div class="hint" style="margin-top:12px">מסלול ישן — טעינת לקוח מקובץ JSON בתיקיית <code>clients/</code>.</div>
+      <select id="clientFile"></select>
+      <div class="row"><button class="btn ghost" id="addClientBtn">טען לקוח</button></div>
+    </details>
   </div>
 
 </main>
@@ -246,15 +312,18 @@ function load(){
     el('brandBadge').textContent = st.branded ? 'מיתוג פעיל' : 'אין מיתוג — הדוח ייצא בלי לוגו';
     el('brandBadge').className = st.branded ? 'badge' : 'badge warn';
 
-    var c = el('client');
+    // הבחירה נשמרת: כל רענון מצב בנה מחדש את הרשימה והחזיר אותה ללקוח הראשון
+    var c = el('client'), cWas = c.value;
     c.innerHTML = st.clients.length
-      ? st.clients.map(function(x){ return '<option value="'+esc(x.slug)+'">'+esc(x.name)+' — '+esc(x.trade||'')+'</option>'; }).join('')
-      : '<option value="">אין לקוחות. טען אחד למטה</option>';
+      ? st.clients.map(function(x){ return '<option value="'+esc(x.slug)+'">'+esc(x.name)+(x.trade?' — '+esc(x.trade):'')+'</option>'; }).join('')
+      : '<option value="">אין לקוחות. הוסף אחד למטה</option>';
+    if (cWas && st.clients.some(function(x){ return x.slug === cWas; })) c.value = cWas;
 
-    var cf = el('clientFile');
+    var cf = el('clientFile'), fWas = cf.value;
     cf.innerHTML = st.clientFiles.length
       ? st.clientFiles.map(function(f){ return '<option>'+esc(f)+'</option>'; }).join('')
       : '<option value="">אין קבצים בתיקיית clients</option>';
+    if (fWas && st.clientFiles.indexOf(fWas) !== -1) cf.value = fWas;
 
     if (!el('engines').dataset.built) {
       el('engines').innerHTML = st.engines.map(function(e){
@@ -264,7 +333,7 @@ function load(){
       el('engines').addEventListener('change', syncEngines);
       syncEngines();
     }
-    drawRuns(); drawReports();
+    drawRuns(); drawReports(); drawClientPicker();
   }).catch(function(e){ alert('לא הצלחתי לקרוא את המצב: ' + e.message); });
 }
 
@@ -397,6 +466,118 @@ el('reportBtn').addEventListener('click', function(){
 });
 el('clearSel').addEventListener('click', function(){ S.sel = {}; drawRuns(); });
 
+/* ---------- עורך הלקוח ---------- */
+
+var NEW = '__new__';
+
+function rivalsToText(list){
+  return (list || []).map(function(r){
+    return r.variants && r.variants.length ? r.name + ' | ' + r.variants.join(', ') : r.name;
+  }).join('\n');
+}
+
+// "בית הקרפיון | הקרפיון, מאה שערים" → {name, variants}
+function rivalsFromText(t){
+  return String(t || '').split('\n').map(function(line){
+    var parts = line.split('|');
+    return { name: (parts[0] || '').trim(),
+             variants: (parts[1] || '').split(',').map(function(v){ return v.trim(); }).filter(Boolean) };
+  }).filter(function(r){ return r.name; });
+}
+
+function lines(t){
+  return String(t || '').split('\n').map(function(x){ return x.trim(); }).filter(Boolean);
+}
+
+function counts(){
+  var q = lines(el('cQuestions').value).length;
+  var r = rivalsFromText(el('cRivals').value).length;
+  el('qCount').textContent = q ? '(' + q + ')' : '';
+  el('rCount').textContent = r ? '(' + r + ')' : '';
+}
+el('cQuestions').addEventListener('input', counts);
+el('cRivals').addEventListener('input', counts);
+
+function fillClient(c){
+  el('cName').value = c.name || '';
+  el('cVariants').value = (c.nameVariants || []).join(', ');
+  el('cTrade').value = c.trade || '';
+  el('cCity').value = c.city || '';
+  el('cCity2').value = c.city2 || '';
+  el('cDomain').value = c.domain || '';
+  el('cExtra').value = c.extra || '';
+  el('cQuestions').value = (c.questions || []).join('\n');
+  el('cRivals').value = rivalsToText(c.competitors);
+  el('cSlug').value = c.slug || '';
+  counts();
+}
+
+function pickClient(slug){
+  el('cSt').textContent = '';
+  if (slug === NEW) {
+    // מרוקן מיד, אחרת נראה לרגע כאילו פרטי הלקוח הקודם הם של החדש
+    fillClient({});
+    el('slugRow').style.display = 'block';
+    return fetch('/api/client-new').then(function(r){ return r.json(); }).then(function(o){
+      el('cSlug').value = o.slug;
+      el('cName').focus();
+    });
+  }
+  el('slugRow').style.display = 'none';
+  return fetch('/api/client?slug=' + encodeURIComponent(slug))
+    .then(function(r){ return r.json(); })
+    .then(function(c){ if (c.error) throw new Error(c.error); fillClient(c); })
+    .catch(function(e){ el('cSt').textContent = 'לא הצלחתי לטעון: ' + e.message; });
+}
+
+function drawClientPicker(){
+  var sel = el('cPick'), cur = sel.value;
+  var opts = S.state.clients.map(function(c){
+    return '<option value="' + esc(c.slug) + '">' + esc(c.name) + (c.trade ? ' — ' + esc(c.trade) : '') + '</option>';
+  });
+  opts.push('<option value="' + NEW + '">+ לקוח חדש</option>');
+  sel.innerHTML = opts.join('');
+  if (cur && (cur === NEW || S.state.clients.some(function(c){ return c.slug === cur; }))) sel.value = cur;
+  return sel.value;
+}
+
+el('cPick').addEventListener('change', function(){ pickClient(this.value); });
+
+el('toClient').addEventListener('click', function(){
+  // בוחר בעורך את הלקוח שנבחר למעלה, כדי שהקישור יוביל למקום הנכון
+  var slug = el('client').value;
+  if (slug && el('cPick').value !== slug) { el('cPick').value = slug; pickClient(slug); }
+});
+
+el('cSave').addEventListener('click', function(){
+  var b = this, isNew = el('cPick').value === NEW;
+  var body = {
+    slug: el('cSlug').value.trim(),
+    isNew: isNew,
+    name: el('cName').value,
+    nameVariants: el('cVariants').value.split(',').map(function(v){ return v.trim(); }).filter(Boolean),
+    trade: el('cTrade').value, city: el('cCity').value, city2: el('cCity2').value,
+    domain: el('cDomain').value, extra: el('cExtra').value,
+    questions: lines(el('cQuestions').value),
+    competitors: rivalsFromText(el('cRivals').value)
+  };
+  b.disabled = true;
+  el('cSt').textContent = 'שומר…';
+  api('/api/client-save', body).then(function(c){
+    return load().then(function(){
+      el('cPick').value = c.slug;
+      el('client').value = c.slug;
+      el('slugRow').style.display = 'none';
+      fillClient(c);
+      b.disabled = false;
+      el('cSt').textContent = 'נשמר. ' + c.questions.length + ' שאלות, ' + c.competitors.length + ' מתחרים.';
+    });
+  }).catch(function(e){
+    b.disabled = false;
+    el('cSt').textContent = 'לא נשמר: ' + e.message;
+  });
+});
+
 /* ---------- מיתוג ---------- */
 
 // null = לא נבחר לוגו חדש בטופס הזה; המצב הקיים נשמר דרך keepLogo
@@ -489,6 +670,17 @@ el('addClientBtn').addEventListener('click', function(){
     .catch(function(e){ alert(e.message); });
 });
 
+el('quitBtn').addEventListener('click', function(){
+  if (!confirm('לסגור את התוכנה? בדיקה שרצה עכשיו תיעצר.')) return;
+  // הבקשה נסגרת יחד עם השרת, ולכן כישלון רשת כאן הוא בעצם הצלחה
+  api('/api/quit', {}).catch(function(){}).then(function(){
+    document.body.innerHTML =
+      '<div style="max-width:520px;margin:22vh auto;text-align:center;font-size:17px;line-height:1.7">'
+      + '<b style="display:block;font-size:21px;margin-bottom:10px">התוכנה נסגרה.</b>'
+      + 'אפשר לסגור את החלון הזה.<br>לפתיחה מחדש — לחיצה כפולה על הקיצור בשולחן העבודה.</div>';
+  });
+});
+
 el('termClose').addEventListener('click', function(){
   el('term').style.display='none';
   document.body.classList.remove('term-open');
@@ -501,7 +693,7 @@ el('termStop').addEventListener('click', function(){
   api('/api/stop', {job:S.job}).catch(function(){});
 });
 
-load();
+load().then(function(){ pickClient(el('cPick').value); });
 loadBrand();
 </script>
 </body>

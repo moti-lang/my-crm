@@ -156,6 +156,61 @@ function req(method, p, body) {
   ok('"לא נמדד" נשמר כ-null ולא כאפס', rows[1].status === null, JSON.stringify(rows[1]));
   ok('שתי התוצאות מסומנות כמאומתות', rows.every(x => x.verified_by_human === 1));
 
+  console.log('\n— עורך הלקוח —');
+
+  r = await req('GET', '/api/client?slug=testco');
+  ok('הלקוח נטען לעריכה', r.code === 200 && r.json.name === 'גולד פיש', r.text);
+  ok('התחום חוזר', r.json.trade === 'חנות דגים');
+  ok('השאלות חוזרות כטקסט', Array.isArray(r.json.questions) && r.json.questions.length === 2,
+     JSON.stringify(r.json.questions));
+  ok('המתחרים חוזרים עם הצורות', r.json.competitors[0].variants[0] === 'הקרפיון',
+     JSON.stringify(r.json.competitors));
+
+  r = await req('GET', '/api/client?slug=' + encodeURIComponent('אין-כזה'));
+  ok('לקוח שלא קיים נדחה', r.code === 400);
+
+  r = await req('GET', '/api/client-new');
+  ok('מוצע מזהה פנוי ללקוח חדש', /^client\d+$/.test(r.json.slug || ''), JSON.stringify(r.json));
+
+  // עריכה של לקוח קיים: השאלה הראשונה נשארת, נוספת שאלה חדשה
+  const edited = {
+    slug: 'testco', name: 'גולד פיש', trade: 'חנות דגים וסלטים', city: 'ביתר עילית',
+    nameVariants: ['גולדפיש'],
+    questions: ['חנות דגים מומלצת בביתר עילית', 'איפה קונים דגי נוי', 'איפה קונים סלטים'],
+    competitors: [{ name: 'בית הקרפיון', variants: ['הקרפיון'] }, { name: 'מוקיר שבת', variants: [] }]
+  };
+  r = await req('POST', '/api/client-save', edited);
+  ok('עריכה נשמרת', r.code === 200 && r.json.trade === 'חנות דגים וסלטים', r.text);
+  ok('השאלה החדשה נוספה', r.json.questions.length === 3);
+
+  const d2 = DB.open();
+  const kept = d2.prepare('SELECT COUNT(*) AS n FROM results WHERE run_id = ?').get(SEED.runId);
+  d2.close();
+  ok('תוצאות של ריצה קודמת שרדו את העריכה', kept.n === 2, JSON.stringify(kept));
+
+  r = await req('POST', '/api/client-save', { slug: 'testco', isNew: true, name: 'x', questions: ['ש'] });
+  ok('לקוח חדש עם מזהה תפוס נדחה', r.code === 400, r.text);
+  r = await req('POST', '/api/client-save', { slug: 'ok2', name: '', questions: ['ש'] });
+  ok('לקוח בלי שם נדחה', r.code === 400);
+  r = await req('POST', '/api/client-save', { slug: 'ok2', name: 'עסק', questions: [] });
+  ok('לקוח בלי שאלות נדחה', r.code === 400);
+  r = await req('POST', '/api/client-save', { slug: 'לא באנגלית', name: 'עסק', questions: ['ש'] });
+  ok('מזהה שאינו באנגלית נדחה', r.code === 400);
+  r = await req('POST', '/api/client-save',
+                { slug: 'ok2', name: 'עסק', questions: new Array(61).fill('ש') });
+  ok('יותר מ-60 שאלות נדחה', r.code === 400);
+
+  r = await req('POST', '/api/client-save', {
+    slug: 'pizza', isNew: true, name: 'פיצה יוסי', trade: 'פיצה', city: 'ירושלים',
+    questions: ['איפה הפיצה הכי טובה בירושלים?'],
+    competitors: [{ name: 'פיצה חנן', variants: ['חנן'] }, { name: '', variants: [] }]
+  });
+  ok('לקוח חדש נשמר', r.code === 200 && r.json.slug === 'pizza', r.text);
+  ok('מתחרה בלי שם מסונן', r.json.competitors.length === 1, JSON.stringify(r.json.competitors));
+
+  r = await req('GET', '/api/state');
+  ok('הלקוח החדש מופיע ברשימה', r.json.clients.some(c => c.slug === 'pizza'));
+
   console.log('\n— מיתוג —');
 
   // PNG אמיתי, 1x1, כדי שהנתיב יהיה זהה לזה של לוגו שהמשתמש בוחר
