@@ -180,7 +180,10 @@ async function main() {
         if (flags.set) applySet(parseInt(args[0], 10), flags.set);
         else await verify(parseInt(args[0], 10));
         break;
-      case 'report':     await REPORT.generate(parseInt(args[0], 10), { pdf: flags.pdf !== 'false' }); break;
+      case 'report':
+        await REPORT.generate(String(args[0] || '').split(',').map(x => parseInt(x, 10)),
+                              { pdf: flags.pdf !== 'false' });
+        break;
       case 'export':     exportJson(parseInt(args[0], 10)); break;
       case 'runs':       runs(args[0]); break;
       default:
@@ -198,6 +201,7 @@ async function main() {
   node src/cli.js verify <run-id>       מעבר ידני בטרמינל
   node src/cli.js verify <run-id> --set=12:2,13:n   החלת הסימונים מדף האימות
   node src/cli.js report <run-id>       יצירת דוח HTML + PDF
+  node src/cli.js report 1,5,7          דוח אחד שמאחד כמה ריצות
   node src/cli.js export <run-id>       ייצוא JSON לכלי הידני
   node src/cli.js runs [slug]           רשימת ריצות
 `);

@@ -8,6 +8,7 @@
 const N = require('../src/normalize');
 const A = require('../src/analyze');
 const E = require('../src/exportJson');
+const REPORT = require('../src/report');
 
 let pass = 0, fail = 0;
 function ok(name, cond) {
@@ -248,6 +249,49 @@ threw = false;
 try { RV.parseSet(''); } catch (e) { threw = true; }
 ok('--set ריק נדחה', threw);
 
+console.log('\n— הדוח ללקוח —');
+
+function rowsFor(engine, statuses) {
+  return statuses.map(function (st, i) {
+    return { engine: engine, questionText: 'ש' + (i + 1), status: st,
+             rivals: st === null ? [] : ['מתחרה'], sources: ['b144.co.il'] };
+  });
+}
+function html(rows) {
+  return REPORT.buildHtml({ name: 'גולד פיש', trade: 'דגים', city: 'ביתר', competitors: [] },
+                          [{ id: 1, started_at: '2026-08-24' }], rows, A.score(rows));
+}
+
+// משפט השיפוט הוא הדבר הראשון שהלקוח קורא. ציון בטווח הבינוני עם הופעה
+// גבוהה תואר קודם כ"מפסיד את רוב השאלות" — סתירה גלויה למספר שמעליו.
+const wide = html(rowsFor('chatgpt', [2, 2, 2, 2, 2, 2, 2, 2, 0, 1]));
+ok('הופעה גבוהה אינה מתוארת כהפסד לרוב השאלות',
+   wide.indexOf('מפסיד את רוב השאלות') === -1);
+ok('מתואר הפער האמיתי — נוכחות בלי המלצה',
+   wide.indexOf('המלצה נדירה') !== -1);
+
+const weak = html(rowsFor('chatgpt', [0, 0, 0, 0, 0, 0, 0, 1, 0, 0]));
+ok('נראות נמוכה עדיין מתוארת ככזאת', weak.indexOf('נראות נמוכה') !== -1);
+
+const strong = html(rowsFor('chatgpt', [3, 3, 3, 3, 2, 2, 2, 2, 3, 3]));
+ok('נראות חזקה מתוארת ככזאת', strong.indexOf('נראות חזקה') !== -1);
+
+// דוח על כמה מנועים שנותן ציון אחד מסתיר את כל הסיפור
+const multi = rowsFor('chatgpt', [2, 2, 0, 0, 0, 0, 0, 0, 0, 0])
+  .concat(rowsFor('google_aio', [3, 3, 2, 2, 2, 2, 2, 2, 2, 2]));
+const mh = html(multi);
+ok('דוח רב-מנועי כולל פירוט לפי מנוע', mh.indexOf('לפי מנוע') !== -1);
+ok('שני המנועים מופיעים בטבלה',
+   mh.indexOf('ChatGPT') !== -1 && mh.indexOf('תשובות AI בגוגל') !== -1);
+ok('דוח על מנוע אחד לא מוסיף את הטבלה',
+   html(rowsFor('chatgpt', [2, 2, 2])).indexOf('לפי מנוע') === -1);
+
+eq('כותרת של ריצה אחת כוללת את המזהה',
+   REPORT.runsLabel([{ id: 7, started_at: '2026-08-24' }]).indexOf('ריצה #7') === 0, true);
+eq('כותרת של כמה ריצות מציגה טווח תאריכים',
+   REPORT.runsLabel([{ id: 1, started_at: '2026-08-01' }, { id: 2, started_at: '2026-08-24' }]),
+   '2026-08-01 עד 2026-08-24');
+
 console.log('\n— דומיינים —');
 eq('סינון דומיינים של המנועים עצמם',
    N.domainsOf(['https://www.b144.co.il/x', 'https://chatgpt.com/y', 'https://zap.co.il/z']),
@@ -269,7 +313,6 @@ const sInfra = A.score([
 eq('מקורות תשתית שכבר נשמרו מסוננים בדוח', sInfra.sourceTally.map(x => x[0]), ['b144.co.il']);
 
 console.log('\n— כיתוב המכפיל בדוח —');
-const REPORT = require('../src/report');
 function multLabel(rows) {
   const s = A.score(rows);
   const h = REPORT.buildHtml({ name: 'ע', trade: 'ת', city: 'ע', competitors: [] },
