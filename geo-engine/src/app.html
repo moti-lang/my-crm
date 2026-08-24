@@ -177,6 +177,7 @@ code{font-family:Consolas,ui-monospace,monospace;font-size:.92em;background:var(
 
     <div class="row">
       <button class="btn btn-teal" id="suggestQ">צור את 10 השאלות</button>
+      <span class="st" id="qSt"></span>
     </div>
 
     <label for="cQuestions">השאלות שהמנוע ישאל <span class="mini" id="qCount"></span></label>
@@ -623,22 +624,47 @@ el('toClient').addEventListener('click', function(e){
   show('setup');
 });
 
+/**
+ * ההודעה יושבת ליד הכפתור ולא בתחתית הטופס.
+ * כשהיא הייתה למטה, כפתור שלא עשה כלום נראה כמו כפתור שבור.
+ */
+function qSay(t, bad) {
+  var s = el('qSt');
+  s.textContent = t;
+  s.style.color = bad ? '#B4531A' : '';
+}
+
 el('suggestQ').addEventListener('click', function(){
   var trade = el('cTrade').value.trim(), city = el('cCity').value.trim();
-  if (!trade || !city) { el('cSt').textContent = 'מלא קודם את התחום ואת העיר — מהם נבנות השאלות.'; return; }
+  if (!trade || !city) {
+    // מסמן את השדה החסר, אחרת ההודעה לבדה משאירה אותו לחפש מה חסר
+    var miss = el(trade ? 'cCity' : 'cTrade');
+    qSay(trade ? 'חסרה העיר — ממנה נבנות השאלות.' : 'חסר התחום — ממנו נבנות השאלות.', true);
+    miss.focus();
+    miss.scrollIntoView({ block: 'center' });
+    return;
+  }
 
   var had = lines(el('cQuestions').value).length;
   if (had && !confirm('להחליף את ' + had + ' השאלות הקיימות בהצעה חדשה?')) return;
 
-  el('cSt').textContent = 'בונה…';
+  qSay('בונה…');
   api('/api/suggest-questions', {
     trade: trade, city: city, city2: el('cCity2').value.trim(), extra: el('cExtra').value.trim()
   }).then(function(o){
-    if (!o.questions.length) { el('cSt').textContent = 'לא הצלחתי לבנות שאלות מהפרטים האלה.'; return; }
+    if (!o.questions || !o.questions.length) {
+      qSay('לא הצלחתי לבנות שאלות מהפרטים האלה.', true); return;
+    }
     el('cQuestions').value = o.questions.join('\n');
     counts();
-    el('cSt').textContent = o.questions.length + ' שאלות נוצרו. עבור עליהן ותקן ניסוח שלא מתאים.';
-  }).catch(function(err){ el('cSt').textContent = 'לא נבנה: ' + err.message; });
+    qSay(o.questions.length + ' שאלות נוצרו. עבור עליהן ותקן ניסוח שלא מתאים.');
+    el('cQuestions').scrollIntoView({ block: 'center' });
+  }).catch(function(err){
+    // 404 כאן פירושו גרסה ישנה של התוכנה, וכדאי שזה ייאמר במפורש
+    qSay(/לא נמצא|404/.test(err.message)
+      ? 'הגרסה הזאת לא יודעת לבנות שאלות. לחץ "עדכן" בפינה, ואז סגור ופתח מחדש.'
+      : 'לא נבנה: ' + err.message, true);
+  });
 });
 
 el('cSave').addEventListener('click', function(){
