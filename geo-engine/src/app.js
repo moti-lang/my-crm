@@ -120,6 +120,75 @@ function readState() {
   };
 }
 
+/* ---------- עדכון ---------- */
+
+// הענף שממנו התוכנה מתעדכנת. משתנה סביבה גובר עליו, לבדיקות ולעבודה על ענף אחר.
+const BRANCH = process.env.GEO_BRANCH || 'claude/already-sending-continued-np8pr6';
+
+/**
+ * מריץ את שלבי העדכון בזה אחר זה ומדווח כמו כל ריצה אחרת.
+ *
+ * למה זה כאן ולא רק בסקריפט ההתקנה: עדכון דרש למצוא תיקייה בסייר, למצוא בה
+ * קובץ ולהריץ אותו. שלושה שלבים טכניים בשביל פעולה שהתוכנה יכולה לעשות לבד,
+ * והם הסיבה שהיא נשארה בגרסה ישנה.
+ */
+function startUpdate() {
+  const id = String(++jobSeq);
+  const job = { id, label: 'עדכון', args: [], lines: [], done: false, code: null, started: Date.now() };
+  jobs[id] = job;
+
+  const say = (t) => {
+    job.lines.push(t);
+    if (job.lines.length > 500) job.lines.splice(0, job.lines.length - 500);
+  };
+
+  const run = (cmd, args) => new Promise((resolve) => {
+    say('› ' + cmd + ' ' + args.join(' '));
+    // shell ב-Windows כי git ו-npm שם הם קובצי .cmd ולא הרצות ישירות
+    const child = spawn(cmd, args, { cwd: ROOT, shell: process.platform === 'win32' });
+    const take = (buf) => {
+      for (const line of String(buf).split(/\r?\n/)) if (line.trim()) say(line.trim());
+    };
+    child.stdout.on('data', take);
+    child.stderr.on('data', take);
+    child.on('error', (e) => { say('שגיאה: ' + e.message); resolve(1); });
+    child.on('close', (code) => resolve(code));
+    job.child = child;
+  });
+
+  (async () => {
+    try {
+      say('מוריד את הגרסה האחרונה…');
+      if (await run('git', ['fetch', 'origin', BRANCH])) {
+        throw new Error('ההורדה נכשלה. בדוק חיבור לאינטרנט.');
+      }
+
+      // הנתונים שלך אינם בגיט — מסד הנתונים, הדוחות והמיתוג — ולכן זה בטוח
+      if (await run('git', ['reset', '--hard', 'origin/' + BRANCH])) {
+        throw new Error('עדכון הקבצים נכשל.');
+      }
+
+      say('');
+      say('מתקין ספריות — דקה או שתיים…');
+      if (await run('npm', ['install', '--no-audit', '--no-fund'])) {
+        throw new Error('התקנת הספריות נכשלה.');
+      }
+
+      say('');
+      say('העדכון הותקן.');
+      say('סגור את התוכנה ופתח אותה שוב כדי שהוא ייכנס לתוקף.');
+      job.code = 0;
+    } catch (e) {
+      say('');
+      say('העדכון לא הושלם: ' + e.message);
+      job.code = 1;
+    }
+    job.done = true;
+  })();
+
+  return job;
+}
+
 /* ---------- לקוחות ---------- */
 
 /**
@@ -359,6 +428,8 @@ function handle(req, res, body) {
     if (p === '/api/browser') {
       return json(res, 200, { job: startJob(['browser'], 'פתיחת הדפדפן').id });
     }
+
+    if (p === '/api/update') return json(res, 200, { job: startUpdate().id });
 
     if (p === '/api/verify' && b.run && b.set) {
       const id = ids(b.run)[0];

@@ -113,6 +113,7 @@ code{font-family:Consolas,ui-monospace,monospace;font-size:.92em;background:var(
     <div class="brand">אוטומציה ו-AI<small>מנוע בדיקת נראות במנועי AI</small></div>
     <span class="spacer"></span>
     <span class="badge" id="brandBadge"></span>
+    <button class="btn btn-ghost" id="updateBtn" title="מוריד ומתקין את הגרסה האחרונה">עדכן</button>
     <button class="btn btn-ghost" id="quitBtn">סגור את התוכנה</button>
   </div>
 </header>
@@ -744,7 +745,13 @@ el('brandSave').addEventListener('click', function(){
   });
 });
 
-/* ---------- סגירה ---------- */
+/* ---------- עדכון וסגירה ---------- */
+el('updateBtn').addEventListener('click', function(){
+  if (!confirm('לעדכן לגרסה האחרונה? זה לוקח דקה או שתיים, והנתונים שלך לא נוגעים.')) return;
+  api('/api/update', {}).then(function(o){ watch(o.job, 'מעדכן את התוכנה'); })
+    .catch(function(e){ alert(e.message); });
+});
+
 el('quitBtn').addEventListener('click', function(){
   if (!confirm('לסגור את התוכנה? בדיקה שרצה עכשיו תיעצר.')) return;
   // הבקשה נסגרת יחד עם השרת, ולכן כישלון רשת כאן הוא בעצם הצלחה
