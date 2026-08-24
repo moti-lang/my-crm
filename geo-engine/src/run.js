@@ -25,19 +25,28 @@ const ORDER = ['chatgpt', 'gemini', 'google_aio'];
  */
 const CHANNELS = ['chrome', 'msedge', null];
 
-async function launch(opts, persistentDir) {
-  let last = null;
+/**
+ * בודק איזה דפדפן זמין בפועל, בהרצה קצרה ומוסתרת.
+ * חייב להיות נפרד מהפתיחה האמיתית: ניסיון שנכשל על תיקיית פרופיל
+ * עלול לנעול אותה ולהפיל גם את הניסיונות הבאים על אותה תיקייה.
+ */
+async function pickChannel() {
+  const tried = [];
   for (const ch of CHANNELS) {
-    const o = Object.assign({}, opts);
+    const o = { headless: true };
     if (ch) o.channel = ch;
     try {
-      const h = persistentDir
-        ? await chromium.launchPersistentContext(persistentDir, o)
-        : await chromium.launch(o);
-      return { handle: h, channel: ch || 'chromium' };
-    } catch (e) { last = e; }
+      const b = await chromium.launch(o);
+      await b.close();
+      return { channel: ch, label: ch || 'chromium', tried };
+    } catch (e) {
+      tried.push((ch || 'chromium') + ': ' + String(e.message).split('\n')[0]);
+    }
   }
-  throw last;
+  const err = new Error('לא נמצא דפדפן שאפשר להפעיל.\n  ' + tried.join('\n  ')
+    + '\n\nהרץ: npx playwright install chromium');
+  err.noBrowser = true;
+  throw err;
 }
 
 const CONTEXT_OPTS = {
@@ -71,14 +80,25 @@ async function login(engineKey) {
   const profileDir = path.join(B.ROOT, 'data', 'profile-' + engineKey);
   fs.mkdirSync(profileDir, { recursive: true });
 
-  const opened = await launch(Object.assign({ headless: false }, CONTEXT_OPTS), profileDir);
-  const ctx = opened.handle;
+  const picked = await pickChannel();
+  const opts = Object.assign({ headless: false }, CONTEXT_OPTS);
+  if (picked.channel) opts.channel = picked.channel;
+
+  let ctx;
+  try {
+    ctx = await chromium.launchPersistentContext(profileDir, opts);
+  } catch (e) {
+    throw new Error('לא הצלחתי לפתוח דפדפן להתחברות (' + picked.label + '):\n  '
+      + String(e.message).split('\n')[0]
+      + '\n\nאם התיקייה נעולה מריצה קודמת — סגור חלונות דפדפן פתוחים,'
+      + '\nאו מחק את התיקייה ' + profileDir + ' והרץ שוב.');
+  }
   const page = ctx.pages()[0] || await ctx.newPage();
   await page.goto(cfg.url, { waitUntil: 'domcontentloaded' });
 
   console.log('\n──────────────────────────────────────────');
   console.log(`התחבר ל-${cfg.label} בחלון שנפתח.`);
-  console.log(`הדפדפן שנפתח: ${opened.channel}`);
+  console.log(`הדפדפן שנפתח: ${picked.label}`);
   console.log('השתמש בחשבון ייעודי לבדיקות — לא בחשבון האישי או העסקי.');
   console.log('');
   console.log('אם גוגל אומרת "הדפדפן הזה אולי אינו מאובטח" —');
@@ -119,9 +139,11 @@ async function run(slug, opts) {
   const runId = DB.newRun(db, client.id, opts.notes);
   console.log(`\n▶ ריצה #${runId} · ${client.name} · ${client.questions.length} שאלות × ${engines.length} מנועים\n`);
 
-  const opened = await launch({ headless: opts.headless === true });
-  const browser = opened.handle;
-  console.log(`  דפדפן: ${opened.channel}\n`);
+  const picked = await pickChannel();
+  const launchOpts = { headless: opts.headless === true };
+  if (picked.channel) launchOpts.channel = picked.channel;
+  const browser = await chromium.launch(launchOpts);
+  console.log(`  דפדפן: ${picked.label}\n`);
 
   let done = 0;
   const totalCells = client.questions.length * engines.length;
