@@ -11,8 +11,16 @@ const N = require('./normalize');
 const RECOMMEND_HINTS = [
   'הכי מומלץ', 'המומלץ ביותר', 'ההמלצה שלי', 'הייתי ממליץ',
   'הבחירה הטובה ביותר', 'האפשרות הבולטת', 'הכי בולט', 'המוביל',
+  // ניסוחים שנאספו מריצה אמיתית מול ChatGPT. הרשימה הקודמת החמיצה
+  // ארבע מתוך ארבע המלצות מפורשות, כי המודל כמעט לא משתמש ב"הכי מומלץ".
+  'הבחירה שלי', 'הבחירה הכי ברורה', 'הייתי שם את', 'הייתי בוחר',
+  'הייתי מתחיל עם', 'הייתי מתחיל מ', 'הייתי הולך על', 'במקום הראשון',
   'top recommendation', 'best choice', 'i recommend'
 ];
+
+// כמה מילים אחרי שם הלקוח עוד נחשבות לאותה נשימה.
+// "הייתי מתחיל מגולד פיש או בית הקרפיון" היא המלצה משותפת, לא בלעדית.
+const SHARED_WINDOW_WORDS = 4;
 
 // כמה מילים מותר שיפרידו בין ניסוח ההמלצה לשם הלקוח.
 // מעבר לזה — ההמלצה כנראה מתייחסת למישהו אחר.
@@ -76,10 +84,10 @@ function recommendsClient(text, clientForms, rivalForms) {
       if (hi === -1) continue;
 
       const after = n.slice(hi + hn.length);
-      let ci = -1;
+      let ci = -1, clen = 0;
       for (const f of clientForms) {
         const i = after.indexOf(f);
-        if (i !== -1 && (ci === -1 || i < ci)) ci = i;
+        if (i !== -1 && (ci === -1 || i < ci)) { ci = i; clen = f.length; }
       }
       if (ci === -1) continue;
 
@@ -87,6 +95,11 @@ function recommendsClient(text, clientForms, rivalForms) {
       const words = between ? between.split(/\s+/).length : 0;
       if (words > MAX_WORDS_BETWEEN) continue;
       if (rivalForms.some(f => between.includes(f))) continue;
+
+      // מתחרה צמוד אחרי הלקוח הופך את ההמלצה למשותפת ולא לבלעדית
+      const tail = after.slice(ci + clen).trim();
+      const near = tail ? tail.split(/\s+/).slice(0, SHARED_WINDOW_WORDS).join(' ') : '';
+      if (near && rivalForms.some(f => near.indexOf(f) !== -1)) continue;
 
       return true;
     }
@@ -206,4 +219,4 @@ function score(results) {
   };
 }
 
-module.exports = { analyzeCell, score, listItems, sentences, RECOMMEND_HINTS };
+module.exports = { analyzeCell, score, listItems, sentences, RECOMMEND_HINTS, SHARED_WINDOW_WORDS };
