@@ -498,7 +498,10 @@ function start(opts) {
 
   return new Promise((resolve, reject) => {
     // רק מקומי. השרת הזה לא אמור להיות נגיש מהרשת בשום מצב.
-    server.listen(opts.port || PORT, '127.0.0.1', () => {
+    // port: 0 פירושו "פורט פנוי כלשהו", ולכן חייבים להבדיל בינו לבין חוסר ערך —
+    // ‏|| היה מתרגם אותו לפורט הקבוע, וכל בדיקה הייתה מתנגשת בתוכנה שרצה.
+    const wanted = opts.port === undefined || opts.port === null ? PORT : opts.port;
+    server.listen(wanted, '127.0.0.1', () => {
       const port = server.address().port;
       const url = 'http://127.0.0.1:' + port + '/';
       if (opts.open !== false) openUrl(url);

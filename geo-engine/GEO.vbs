@@ -61,10 +61,27 @@ For i = 1 To 120
   WScript.Sleep 250
 Next
 
+' Showing the log itself, not its path: a message box that only names a file
+' leaves the person with one more thing to find before anyone can help.
 MsgBox "The program did not respond within 30 seconds." & vbCrLf & vbCrLf & _
-       "What happened is written in:" & vbCrLf & logFile & vbCrLf & vbCrLf & _
-       "You can also run GEO.bat to watch it start.", 48, title
+       "--- " & logFile & " ---" & vbCrLf & _
+       Tail(logFile, 1200) & vbCrLf & _
+       "--- end ---" & vbCrLf & vbCrLf & _
+       "Run GEO.bat to watch it start in a visible window.", 48, title
 WScript.Quit 1
+
+' Last N characters of a file, so a long npm log does not overflow the box.
+Function Tail(p, n)
+  Dim t
+  t = ReadAllSafe(p)
+  If Len(t) = 0 Then
+    Tail = "(the log is empty - node did not start at all)"
+  ElseIf Len(t) > n Then
+    Tail = "..." & Right(t, n)
+  Else
+    Tail = t
+  End If
+End Function
 
 Function ReadAllSafe(p)
   Dim f, t

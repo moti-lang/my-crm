@@ -267,6 +267,10 @@ function req(method, p, body) {
   ok('הממשק מזהה את עצמו בפורט', await APP.alreadyMine(PORT));
   ok('פורט ריק אינו מזוהה כממשק', !(await APP.alreadyMine(PORT + 1)));
 
+  // הבדיקות עצמן רצות על פורט אקראי. כש-0 תורגם לפורט הקבוע הן התנגשו
+  // בתוכנה שרצה על המחשב, וכל הרצת בדיקות אחרי פתיחת התוכנה נפלה.
+  ok('בקשת פורט 0 מקבלת פורט פנוי ולא את הקבוע', PORT !== APP.PORT, 'קיבלנו ' + PORT);
+
   started.server.close();
   fs.rmSync(TMP, { recursive: true, force: true });
 
