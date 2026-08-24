@@ -14,6 +14,9 @@ function esc(s) {
 }
 function pct(x) { return Math.round(x * 100) + '%'; }
 
+/** ניסוח כמות בעברית תקינה: "מנוע אחד" ולא "1 מנועים" */
+function count(n, one, many) { return n === 1 ? one : n + ' ' + many; }
+
 function buildHtml(client, run, rows, s) {
   const verdict = s.score >= 70
     ? 'נראות טובה. המיקוד הוא שמירה על המצב והרחבה לשאלות נוספות.'
@@ -83,7 +86,8 @@ li{margin-top:4px}
   }
   h += `</div>`;
 
-  h += `<div class="note">הבדיקה כללה ${Object.keys(byQ).length} שאלות על ${engines.length} מנועים. נמדדו בפועל ${s.measured} תאים${rows.length - s.measured > 0 ? ` (${rows.length - s.measured} לא נמדדו — לא הוצג בלוק AI או אירעה שגיאה, ואינם נספרים בציון)` : ''}. חישוב הציון: 40% הופעה, 30% מיקום בשלושת הראשונים, 30% המלצה ישירה.</div>`;
+  const skipped = rows.length - s.measured;
+  h += `<div class="note">הבדיקה כללה ${count(Object.keys(byQ).length, 'שאלה אחת', 'שאלות')} על ${count(engines.length, 'מנוע אחד', 'מנועים')}. נמדדו בפועל ${count(s.measured, 'תא אחד', 'תאים')}${skipped > 0 ? ` (${count(skipped, 'תא אחד לא נמדד', 'תאים לא נמדדו')} — לא הוצג בלוק AI או אירעה שגיאה, ואינם נספרים בציון)` : ''}. חישוב הציון: 40% הופעה, 30% מיקום בשלושת הראשונים, 30% המלצה ישירה.</div>`;
 
   if (s.rivalTally.length) {
     h += `<h2>מי תופס את המקום שלך</h2><table><tr><th>מתחרה</th><th>הופעות</th></tr>`;
@@ -161,4 +165,4 @@ async function generate(runId, opts) {
   return { htmlPath, pdfPath, score: s };
 }
 
-module.exports = { generate, buildHtml };
+module.exports = { generate, buildHtml, count };

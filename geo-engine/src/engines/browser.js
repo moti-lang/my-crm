@@ -127,14 +127,24 @@ function shotPath(runId, engine, qIndex) {
   return path.join(dir, `${engine}-q${String(qIndex + 1).padStart(2, '0')}.png`);
 }
 
-/** אוסף את כל הקישורים היוצאים בתוך אזור התשובה */
+/**
+ * אוסף את הקישורים היוצאים.
+ *
+ * קודם בתוך אזור התשובה, וזה הנכון כשהמנוע שם אותם שם.
+ * Gemini לא: הוא מציג את המקורות מחוץ לאלמנט התשובה, ולכן סריקה של
+ * האזור בלבד החזירה אפס קישורים וטבלת המקורות בדוח נעלמה לגמרי.
+ * כשהאזור ריק — סורקים את כל הדף. דומייני התשתית מסוננים ממילא
+ * בשלב הניתוח, אז רשת רחבה כאן לא מזהמת את התוצאה.
+ */
 async function collectLinks(page, containerSelectors, linkSelector) {
+  const sel = linkSelector || "a[href^='http']";
   const urls = [];
-  for (const sel of containerSelectors) {
+
+  for (const c of containerSelectors || []) {
     try {
-      const c = page.locator(sel).last();
-      if (await c.count() === 0) continue;
-      const links = c.locator(linkSelector || "a[href^='http']");
+      const box = page.locator(c).last();
+      if (await box.count() === 0) continue;
+      const links = box.locator(sel);
       const n = await links.count();
       for (let i = 0; i < n && i < 60; i++) {
         const href = await links.nth(i).getAttribute('href');
@@ -143,6 +153,18 @@ async function collectLinks(page, containerSelectors, linkSelector) {
       if (urls.length) break;
     } catch (e) { /* ממשיכים */ }
   }
+
+  if (!urls.length) {
+    try {
+      const links = page.locator(sel);
+      const n = await links.count();
+      for (let i = 0; i < n && i < 120; i++) {
+        const href = await links.nth(i).getAttribute('href');
+        if (href) urls.push(href);
+      }
+    } catch (e) { /* ממשיכים */ }
+  }
+
   return urls;
 }
 

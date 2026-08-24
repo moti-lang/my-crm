@@ -107,6 +107,26 @@ function page(engine, mode) {
       + '</body></html>';
   }
 
+  if (engine === 'gemini-outside') {
+    // Gemini מציג את המקורות מחוץ ל-model-response. סריקה של אזור התשובה
+    // בלבד מחזירה אפס קישורים, וטבלת המקורות בדוח נעלמת.
+    return '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>'
+      + '<div class="ql-editor" contenteditable="true"></div>'
+      + '<button aria-label="Send">שלח</button><div id="out"></div>'
+      + '<div id="sources"></div>'
+      + '<script>\n'
+      + 'document.querySelector("button[aria-label=Send]").addEventListener("click",function(){\n'
+      + '  var d=document.createElement("model-response");\n'
+      + '  d.textContent=' + JSON.stringify(ANSWER) + ';\n'
+      + '  document.getElementById("out").appendChild(d);\n'
+      + '  var s=document.getElementById("sources");\n'
+      + '  s.innerHTML=\'<a href="https://www.b144.co.il/x">B144</a>\''
+      + ' + \'<a href="https://goldfishbeitar.co.il/">אתר</a>\''
+      + ' + \'<a href="https://www.google.com/maps">מפות</a>\';\n'
+      + '});\n'
+      + '</script></body></html>';
+  }
+
   if (engine === 'gemini-slow') {
     return '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>'
       + '<div class="ql-editor" contenteditable="true"></div>'
@@ -159,7 +179,7 @@ function serve(engine, mode) {
 
 async function drive(browser, engine, mode, shot) {
   const served = await serve(engine, mode);
-  const cfgKey = engine === 'gemini-slow' ? 'gemini' : engine;
+  const cfgKey = (engine === 'gemini-slow' || engine === 'gemini-outside') ? 'gemini' : engine;
   try {
     const cfg = JSON.parse(JSON.stringify(CFG[cfgKey]));
     cfg.url = engine === 'google_aio'
@@ -249,6 +269,16 @@ async function drive(browser, engine, mode, shot) {
     const aTo = A.analyzeCell(to.text, CLIENT, RIVALS);
     ok('הניתוח מחזיר null ולא 0', aTo.status === null, JSON.stringify(aTo));
     ok('צילום מסך נשמר', fs.existsSync(shot2) && fs.statSync(shot2).size > 1000);
+
+    console.log('— Gemini · מקורות מחוץ לאזור התשובה —');
+    const outside = await drive(browser, 'gemini-outside', 'ok', path.join(dir, 'outside.png'));
+    ok('אין שגיאה', outside.error === null, String(outside.error));
+    ok('קישורים נאספו למרות שהם מחוץ לאלמנט', outside.urls.length >= 2,
+       JSON.stringify(outside.urls));
+    const doms = N.domainsOf(outside.urls);
+    ok('המקורות האמיתיים נשמרו', doms.indexOf('b144.co.il') !== -1
+       && doms.indexOf('goldfishbeitar.co.il') !== -1, JSON.stringify(doms));
+    ok('דומיין תשתית סונן', doms.indexOf('google.com') === -1, JSON.stringify(doms));
 
     console.log('\n— ' + CFG.google_aio.label + ' · יש בלוק AI —');
     const g1 = await drive(browser, 'google_aio', 'ok', path.join(dir, 'g-ok.png'));
