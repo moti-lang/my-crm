@@ -8,6 +8,45 @@ const A = require('./analyze');
 const ROOT = path.join(__dirname, '..');
 const ENGINE_LABEL = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_aio: 'תשובות AI בגוגל' };
 
+/**
+ * זהות המשרד לדוח: לוגו, שם ופרטי קשר.
+ * נטען מ-config/brand.json. אם הקובץ לא קיים — הדוח יוצא בדיוק כמו קודם.
+ *
+ * הלוגו מוטמע כ-data URI ולא כנתיב: ה-PDF נבנה מ-HTML בזיכרון, וקישור
+ * לקובץ מקומי לא ייטען בו. גם ה-HTML נשאר עצמאי וניתן לשליחה כמו שהוא.
+ */
+function loadBrand() {
+  const file = path.join(ROOT, 'config', 'brand.json');
+  if (!fs.existsSync(file)) return null;
+
+  let b;
+  try { b = JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (e) { throw new Error('config/brand.json אינו JSON תקין: ' + e.message); }
+
+  if (b.logo) {
+    const lp = path.isAbsolute(b.logo) ? b.logo : path.join(ROOT, b.logo);
+    if (!fs.existsSync(lp)) {
+      console.log('⚠ הלוגו לא נמצא: ' + lp + ' — הדוח ייווצר בלעדיו.');
+    } else {
+      const ext = path.extname(lp).toLowerCase();
+      const mime = ext === '.svg' ? 'image/svg+xml'
+                 : (ext === '.jpg' || ext === '.jpeg') ? 'image/jpeg'
+                 : ext === '.webp' ? 'image/webp' : 'image/png';
+      const bytes = fs.readFileSync(lp);
+      if (bytes.length > 600 * 1024) {
+        console.log('⚠ הלוגו גדול (' + Math.round(bytes.length / 1024) + 'KB) ומנפח את ה-PDF. שווה לכווץ אותו.');
+      }
+      b.logoData = 'data:' + mime + ';base64,' + bytes.toString('base64');
+    }
+  }
+  return b;
+}
+
+/** פרטי הקשר כשורה אחת, רק מה שמולא */
+function brandContact(b) {
+  return [b.phone, b.email, b.site].filter(Boolean).join(' · ');
+}
+
 function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -80,7 +119,7 @@ function runsLabel(runs) {
   return runs.length === 1 ? ('ריצה #' + runs[0].id + ' · ' + when) : when;
 }
 
-function buildHtml(client, runs, rows, s, prev) {
+function buildHtml(client, runs, rows, s, prev, brand) {
   if (!Array.isArray(runs)) runs = [runs];
   // המשפט הזה הוא הדבר הראשון שהלקוח קורא, ולכן הוא חייב לתאר את המספרים
   // שמעליו ולא רק את הטווח שאליו נפל הציון. ציון 66 עם 87% הופעה אינו
@@ -136,7 +175,24 @@ th{font-size:9.5pt;color:#5A6379}
 .note{background:#F4F6F9;border-radius:9px;padding:12px;font-size:10pt;color:#5A6379;margin-top:12px}
 ul{margin-right:18px}
 li{margin-top:4px}
+.brandbar{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.brandbar .logo{max-height:44px;max-width:190px;width:auto;height:auto}
+.brandbar .bname{font-weight:900;font-size:12pt;line-height:1.25}
+.brandbar .bname span{display:block;font-weight:400;font-size:9pt;color:#5A6379;margin-top:1px}
+.brandfoot{margin-top:26px;padding-top:12px;border-top:1px solid #DDE3EC;font-size:9.5pt;color:#5A6379;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.brandfoot b{color:#12172B;font-size:10pt}
 </style></head><body>`;
+
+  if (brand && (brand.logoData || brand.name)) {
+    h += `<div class="brandbar">`;
+    if (brand.logoData) h += `<img class="logo" src="${brand.logoData}" alt="${esc(brand.name || '')}">`;
+    if (brand.name) {
+      h += `<div class="bname">${esc(brand.name)}`
+         + (brand.tagline ? `<span>${esc(brand.tagline)}</span>` : '')
+         + `</div>`;
+    }
+    h += `</div>`;
+  }
 
   h += `<h1>דוח נראות במנועי AI</h1>
 <div class="muted">${esc(client.name)} · ${esc(client.trade)} · ${esc(client.city)}${client.city2 ? ' ו' + esc(client.city2) : ''} · ${esc(runsLabel(runs))}</div>`;
@@ -270,6 +326,13 @@ li{margin-top:4px}
 
   h += `<h2>הערה על השיטה</h2><div class="muted">הבדיקה בוצעה בצ׳אט זמני ובסביבה מבודדת, כדי למנוע הטיה מהיסטוריית שימוש. תשובות של מודלים משתנות מטבען גם ללא שינוי מצד העסק, ולכן המדידה חוזרת אחת לחודש על אותו מערך שאלות. אין דרך להבטיח הופעה או מיקום בתשובות AI — המטרה היא להגדיל את הסיכוי להופעה ולציטוט.</div>`;
 
+  if (brand && (brand.name || brandContact(brand))) {
+    h += `<div class="brandfoot">`
+       + (brand.name ? `<b>${esc(brand.name)}</b>` : '')
+       + (brandContact(brand) ? `<span>${esc(brandContact(brand))}</span>` : '')
+       + `</div>`;
+  }
+
   h += `</body></html>`;
   return h;
 }
@@ -327,7 +390,7 @@ async function generate(runIds, opts) {
   }
 
   const s = A.score(merged);
-  const html = buildHtml(client, runs, merged, s, prev);
+  const html = buildHtml(client, runs, merged, s, prev, loadBrand());
 
   const dir = path.join(ROOT, 'reports');
   fs.mkdirSync(dir, { recursive: true });
@@ -359,4 +422,4 @@ async function generate(runIds, opts) {
   return { htmlPath, pdfPath, score: s };
 }
 
-module.exports = { generate, buildHtml, count, runsLabel };
+module.exports = { generate, buildHtml, count, runsLabel, loadBrand, brandContact };

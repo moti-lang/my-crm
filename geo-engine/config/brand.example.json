@@ -1,0 +1,11 @@
+{
+  "_comment": "העתק את הקובץ הזה ל-config/brand.json ומלא את הפרטים שלך. כל שדה אופציונלי — מה שריק פשוט לא יופיע. הלוגו מוטמע בתוך ה-PDF, אז הקובץ נשאר עצמאי.",
+
+  "name": "אוטומציה ו-AI",
+  "tagline": "בדיקת נראות עסקים במנועי AI",
+  "logo": "config/logo.png",
+
+  "phone": "050-0000000",
+  "email": "you@example.co.il",
+  "site": "example.co.il"
+}

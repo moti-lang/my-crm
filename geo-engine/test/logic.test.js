@@ -292,6 +292,26 @@ eq('כותרת של כמה ריצות מציגה טווח תאריכים',
    REPORT.runsLabel([{ id: 1, started_at: '2026-08-01' }, { id: 2, started_at: '2026-08-24' }]),
    '2026-08-01 עד 2026-08-24');
 
+console.log('\n— מיתוג הדוח —');
+
+const BRAND = { name: 'אוטומציה ו-AI', tagline: 'בדיקת נראות', logoData: 'data:image/png;base64,AAAA',
+                phone: '050-1234567', email: 'a@b.co.il', site: 'b.co.il' };
+function branded(brand) {
+  const rows = [{ engine: 'chatgpt', questionText: 'ש1', status: 2, rivals: [], sources: [] }];
+  return REPORT.buildHtml({ name: 'ע', trade: 't', city: 'c', competitors: [] },
+                          [{ id: 1, started_at: '2026-08-24' }], rows, A.score(rows), null, brand);
+}
+const bh = branded(BRAND);
+ok('שם המשרד בראש הדוח', bh.indexOf('אוטומציה ו-AI') !== -1);
+ok('הלוגו מוטמע ולא מקושר', bh.indexOf('src="data:image/png;base64,') !== -1);
+ok('פרטי הקשר בתחתית', bh.indexOf('050-1234567') !== -1 && bh.indexOf('a@b.co.il') !== -1);
+ok('אין מיתוג — הדוח יוצא כרגיל',
+   branded(null).indexOf('<div class="brandbar">') === -1);
+ok('מיתוג חלקי לא שובר כלום',
+   branded({ name: 'רק שם' }).indexOf('רק שם') !== -1);
+eq('שורת הקשר מדלגת על שדות ריקים',
+   REPORT.brandContact({ phone: '050', email: '', site: 'x.co.il' }), '050 · x.co.il');
+
 console.log('\n— השוואה למדידה קודמת —');
 
 function measure(statuses) {
