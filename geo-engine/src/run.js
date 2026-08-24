@@ -18,6 +18,28 @@ const DRIVERS = {
 
 const ORDER = ['chatgpt', 'gemini', 'google_aio'];
 
+/**
+ * גוגל חוסמת התחברות מדפדפן שמזוהה כאוטומטי ומציגה
+ * "הדפדפן הזה אולי אינו מאובטח". דפדפן אמיתי מותקן עובר את זה הרבה יותר טוב
+ * מהכרומיום המצומצם ש-Playwright מוריד. מנסים לפי הסדר ולוקחים את הראשון שקיים.
+ */
+const CHANNELS = ['chrome', 'msedge', null];
+
+async function launch(opts, persistentDir) {
+  let last = null;
+  for (const ch of CHANNELS) {
+    const o = Object.assign({}, opts);
+    if (ch) o.channel = ch;
+    try {
+      const h = persistentDir
+        ? await chromium.launchPersistentContext(persistentDir, o)
+        : await chromium.launch(o);
+      return { handle: h, channel: ch || 'chromium' };
+    } catch (e) { last = e; }
+  }
+  throw last;
+}
+
 const CONTEXT_OPTS = {
   locale: 'he-IL',
   timezoneId: 'Asia/Jerusalem',
@@ -44,15 +66,25 @@ async function login(engineKey) {
   if (!cfg) throw new Error('מנוע לא מוכר: ' + engineKey);
   if (!cfg.authFile) { console.log(`${cfg.label} לא דורש התחברות.`); return; }
 
-  const browser = await chromium.launch({ headless: false });
-  const ctx = await browser.newContext(CONTEXT_OPTS);
-  const page = await ctx.newPage();
+  // פרופיל קבוע על הדיסק. גוגל סומכת עליו הרבה יותר מחלון חד-פעמי,
+  // והוא גם שומר את ההתחברות בין ריצות.
+  const profileDir = path.join(B.ROOT, 'data', 'profile-' + engineKey);
+  fs.mkdirSync(profileDir, { recursive: true });
+
+  const opened = await launch(Object.assign({ headless: false }, CONTEXT_OPTS), profileDir);
+  const ctx = opened.handle;
+  const page = ctx.pages()[0] || await ctx.newPage();
   await page.goto(cfg.url, { waitUntil: 'domcontentloaded' });
 
   console.log('\n──────────────────────────────────────────');
   console.log(`התחבר ל-${cfg.label} בחלון שנפתח.`);
+  console.log(`הדפדפן שנפתח: ${opened.channel}`);
   console.log('השתמש בחשבון ייעודי לבדיקות — לא בחשבון האישי או העסקי.');
-  console.log('כשסיימת והממשק נטען — חזור לכאן ולחץ Enter.');
+  console.log('');
+  console.log('אם גוגל אומרת "הדפדפן הזה אולי אינו מאובטח" —');
+  console.log('התחבר קודם בדפדפן הרגיל שלך לחשבון הזה, ואז נסה שוב כאן.');
+  console.log('');
+  console.log('כשסיימת והממשק של Gemini נטען — חזור לכאן ולחץ Enter.');
   console.log('──────────────────────────────────────────\n');
 
   await new Promise(res => process.stdin.once('data', res));
@@ -60,8 +92,17 @@ async function login(engineKey) {
   const out = path.join(B.ROOT, cfg.authFile);
   fs.mkdirSync(path.dirname(out), { recursive: true });
   await ctx.storageState({ path: out });
-  console.log('נשמר:', cfg.authFile);
-  await browser.close();
+
+  // בדיקה שההתחברות באמת נתפסה, במקום לגלות את זה רק בעוד 15 דקות
+  const state = JSON.parse(fs.readFileSync(out, 'utf8'));
+  const cookies = (state.cookies || []).filter(c => /google\.com$/.test(String(c.domain).replace(/^\./, '')));
+  if (!cookies.length) {
+    console.log('\n⚠ לא נשמרו עוגיות של גוגל. כנראה ההתחברות לא הושלמה.');
+    console.log('  הרץ שוב את הפקודה, והפעם ודא שממשק Gemini נטען לפני שאתה לוחץ Enter.\n');
+  } else {
+    console.log(`\n✓ נשמר: ${cfg.authFile} (${cookies.length} עוגיות של גוגל)\n`);
+  }
+  await ctx.close();
 }
 
 /** ריצה מלאה */
@@ -78,7 +119,9 @@ async function run(slug, opts) {
   const runId = DB.newRun(db, client.id, opts.notes);
   console.log(`\n▶ ריצה #${runId} · ${client.name} · ${client.questions.length} שאלות × ${engines.length} מנועים\n`);
 
-  const browser = await chromium.launch({ headless: opts.headless === true });
+  const opened = await launch({ headless: opts.headless === true });
+  const browser = opened.handle;
+  console.log(`  דפדפן: ${opened.channel}\n`);
 
   let done = 0;
   const totalCells = client.questions.length * engines.length;

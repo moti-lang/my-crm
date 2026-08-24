@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * בדיקת עשן לדרייבר — דורשת דפדפן, לא רשת.
+ * בדיקת עשן לדרייברים — דורשת דפדפן, לא רשת.
  * הרצה: npm run smoke
  *
- * מפעילה שרת מקומי שמדמה את ה-DOM לפי הסלקטורים שב-config/engines.json,
- * ומריצה מולו את הדרייבר האמיתי של ChatGPT.
+ * מפעילה שרת מקומי שמדמה את ה-DOM של כל מנוע לפי הסלקטורים
+ * שב-config/engines.json, ומריצה מולו את הדרייבר האמיתי.
  *
  * למה זה קיים: כשריצה אמיתית נכשלת, השאלה הראשונה היא תמיד
  * "הקוד נשבר או שהסלקטור התיישן?". אם הבדיקה הזאת עוברת — הקוד תקין,
@@ -20,9 +20,14 @@ const path = require('path');
 const os = require('os');
 
 const CFG = require('../config/engines.json');
-const chatgpt = require('../src/engines/chatgpt');
 const N = require('../src/normalize');
 const A = require('../src/analyze');
+
+const DRIVERS = {
+  chatgpt: require('../src/engines/chatgpt'),
+  gemini: require('../src/engines/gemini'),
+  google_aio: require('../src/engines/googleAio')
+};
 
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {
@@ -32,57 +37,108 @@ function ok(name, cond, extra) {
 
 const ANSWER = 'הנה ההמלצות:\n1. בית הקרפיון — מאה שערים.\n2. גולד פיש — ביתר עילית.\n3. דגי הבירה — ירושלים.';
 
-/** mode: ok = הסלקטור הראשון תופס | fallback = רק השני | broken = אף אחד */
-function page(mode) {
-  const input = mode === 'ok'       ? '<div id="prompt-textarea" contenteditable="true"></div>'
-              : mode === 'fallback' ? '<div contenteditable="true"></div>'
-              :                       '<div class="renamed-by-openai"></div>';
-  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>
-<button aria-label="Close">Close</button>
-${input}
-<button data-testid="send-button" aria-label="Send">שלח</button>
-<div id="out"></div>
-<script>
-var FULL = ${JSON.stringify(ANSWER)};
-document.querySelector('[data-testid=send-button]').addEventListener('click', function(){
-  var d = document.createElement('div');
-  d.setAttribute('data-message-author-role','assistant');
-  document.getElementById('out').appendChild(d);
-  var i = 0;
-  var iv = setInterval(function(){
-    i += 12; d.textContent = FULL.slice(0, i);
-    if (i >= FULL.length) {
-      clearInterval(iv);
-      var a = document.createElement('a');
-      a.href = 'https://www.b144.co.il/x'; a.textContent = 'b144'; d.appendChild(a);
-      var b = document.createElement('a');
-      b.href = 'https://chatgpt.com/self'; b.textContent = 'self'; d.appendChild(b);
-    }
-  }, 200);
-});
-</script></body></html>`;
+const CLIENT = { name: 'גולד פיש', variants: ['גולדפיש'] };
+const RIVALS = [{ name: 'בית הקרפיון', variants: [] }, { name: 'דגי הבירה', variants: [] }];
+
+/** סקריפט הזרמה משותף — התשובה גדלה בהדרגה, כמו במנוע אמיתי */
+function streamScript(containerJs) {
+  return '<script>\n'
+    + 'var FULL = ' + JSON.stringify(ANSWER) + ';\n'
+    + 'function emit(){\n'
+    + '  var d = ' + containerJs + ';\n'
+    + '  var i = 0;\n'
+    + '  var iv = setInterval(function(){\n'
+    + '    i += 12; d.textContent = FULL.slice(0, i);\n'
+    + '    if (i >= FULL.length) {\n'
+    + '      clearInterval(iv);\n'
+    + '      var a = document.createElement("a");\n'
+    + '      a.href = "https://www.b144.co.il/x"; a.textContent = "b144"; d.appendChild(a);\n'
+    + '      var b = document.createElement("a");\n'
+    + '      b.href = "https://www.google.com/self"; b.textContent = "self"; d.appendChild(b);\n'
+    + '    }\n'
+    + '  }, 200);\n'
+    + '}\n'
+    + '</script>';
 }
 
-function serve(mode) {
-  return new Promise(res => {
-    const s = http.createServer((q, r) => {
+/**
+ * דפי מוק. כל אחד בנוי מהסלקטורים שבקונפיג של אותו מנוע.
+ * mode: ok = הסלקטור הראשון תופס | fallback = רק השני | broken = אף אחד
+ *       absent = (google בלבד) הדף נטען אבל אין בלוק AI
+ */
+function page(engine, mode) {
+  if (engine === 'chatgpt') {
+    const input = mode === 'ok'       ? '<div id="prompt-textarea" contenteditable="true"></div>'
+                : mode === 'fallback' ? '<div contenteditable="true"></div>'
+                :                       '<div class="renamed-by-openai"></div>';
+    return '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>'
+      + '<button aria-label="Close">Close</button>' + input
+      + '<button data-testid="send-button" aria-label="Send">שלח</button><div id="out"></div>'
+      + streamScript('(function(){var d=document.createElement("div");'
+        + 'd.setAttribute("data-message-author-role","assistant");'
+        + 'document.getElementById("out").appendChild(d);return d;})()')
+      + '<script>document.querySelector("[data-testid=send-button]").addEventListener("click",emit);</script>'
+      + '</body></html>';
+  }
+
+  if (engine === 'gemini') {
+    // ql-editor הוא העורך של Quill, ו-model-response הוא רכיב מותאם של Gemini
+    const input = mode === 'ok'       ? '<div class="ql-editor" contenteditable="true"></div>'
+                : mode === 'fallback' ? '<rich-textarea><div contenteditable="true"></div></rich-textarea>'
+                :                       '<div class="renamed-by-google"></div>';
+    return '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>'
+      + '<button>הבנתי</button>' + input
+      + '<button aria-label="Send">שלח</button><div id="out"></div>'
+      + streamScript('(function(){var d=document.createElement("model-response");'
+        + 'document.getElementById("out").appendChild(d);return d;})()')
+      + '<script>document.querySelector("button[aria-label=Send]").addEventListener("click",emit);</script>'
+      + '</body></html>';
+  }
+
+  // google_aio — אין שדה קלט. השאלה בכתובת, והשאלה היחידה היא אם יש בלוק AI.
+  if (mode === 'absent') {
+    return '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>'
+      + '<button id="L2AGLb">אני מסכים</button>'
+      + '<div id="search">תוצאות חיפוש רגילות בלבד, בלי שום בלוק AI.</div>'
+      + '</body></html>';
+  }
+  const block = mode === 'ok' ? 'div data-attrid="SGE"' : 'div id="eob_a"';
+  return '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>'
+    + '<button id="L2AGLb">אני מסכים</button>'
+    + '<' + block + '>' + ANSWER.replace(/\n/g, '<br>')
+    + '<a href="https://www.b144.co.il/x">b144</a>'
+    + '<a href="https://www.google.com/self">self</a></div>'
+    + '</body></html>';
+}
+
+function serve(engine, mode) {
+  return new Promise(function (res) {
+    const s = http.createServer(function (q, r) {
       r.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      r.end(page(mode));
+      r.end(page(engine, mode));
     });
-    s.listen(0, '127.0.0.1', () => res({ server: s, port: s.address().port }));
+    s.listen(0, '127.0.0.1', function () { res({ server: s, port: s.address().port }); });
   });
 }
 
-async function drive(browser, mode, shot) {
-  const { server, port } = await serve(mode);
+async function drive(browser, engine, mode, shot) {
+  const served = await serve(engine, mode);
   try {
-    const cfg = JSON.parse(JSON.stringify(CFG.chatgpt));
-    cfg.url = 'http://127.0.0.1:' + port + '/';
-    cfg.waitAfterSubmitMs = 1500; cfg.settleMs = 1500; cfg.maxWaitMs = 20000;
+    const cfg = JSON.parse(JSON.stringify(CFG[engine]));
+    cfg.url = engine === 'google_aio'
+      ? 'http://127.0.0.1:' + served.port + '/?q={QUERY}'
+      : 'http://127.0.0.1:' + served.port + '/';
+    cfg.waitAfterSubmitMs = 1500;
+    cfg.settleMs = 1500;
+    cfg.maxWaitMs = 20000;
+    // בדיקת העשן לא אמורה לדרוש קובץ התחברות
+    cfg.requiresLogin = false;
+
     const ctx = await browser.newContext({ locale: 'he-IL', timezoneId: 'Asia/Jerusalem' });
-    try { return await chatgpt.ask(ctx, cfg, 'מי הכי מומלץ לקניית דגים טריים בביתר עילית?', shot); }
-    finally { await ctx.close(); }
-  } finally { server.close(); }
+    try {
+      return await DRIVERS[engine].ask(ctx, cfg, 'מי הכי מומלץ לקניית דגים טריים בביתר עילית?', shot);
+    } finally { await ctx.close(); }
+  } finally { served.server.close(); }
 }
 
 (async () => {
@@ -103,36 +159,62 @@ async function drive(browser, mode, shot) {
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'geo-smoke-'));
   try {
-    console.log('\n— מסלול תקין —');
-    const shotOk = path.join(dir, 'ok.png');
-    const r1 = await drive(browser, 'ok', shotOk);
-    ok('אין שגיאה', r1.error === null, String(r1.error));
-    ok('הטקסט נקלט', r1.text.indexOf('גולד פיש') !== -1);
-    ok('קישורים נאספו', r1.urls.length >= 2);
-    ok('דומיין המנוע עצמו מסונן', JSON.stringify(N.domainsOf(r1.urls)) === JSON.stringify(['b144.co.il']));
-    ok('צילום מסך נוצר', fs.existsSync(shotOk) && fs.statSync(shotOk).size > 1000);
+    for (const engine of ['chatgpt', 'gemini']) {
+      const label = CFG[engine].label;
+      console.log('\n— ' + label + ' · מסלול תקין —');
+      const shotOk = path.join(dir, engine + '-ok.png');
+      const r1 = await drive(browser, engine, 'ok', shotOk);
+      ok('אין שגיאה', r1.error === null, String(r1.error));
+      ok('הטקסט נקלט', r1.text.indexOf('גולד פיש') !== -1);
+      ok('קישורים נאספו', r1.urls.length >= 2);
+      ok('דומיין המנוע עצמו מסונן',
+         JSON.stringify(N.domainsOf(r1.urls)) === JSON.stringify(['b144.co.il']));
+      ok('צילום מסך נוצר', fs.existsSync(shotOk) && fs.statSync(shotOk).size > 1000);
+      const a = A.analyzeCell(r1.text, CLIENT, RIVALS);
+      ok('המיקום נקבע לפי מבנה הרשימה', a.positionBasis === 'list', JSON.stringify(a));
+      ok('מקום 2 ברשימה', a.position === 2, JSON.stringify(a));
 
-    const a = A.analyzeCell(r1.text, { name: 'גולד פיש', variants: ['גולדפיש'] },
-                            [{ name: 'בית הקרפיון', variants: [] }, { name: 'דגי הבירה', variants: [] }]);
-    ok('המיקום נקבע לפי מבנה הרשימה', a.positionBasis === 'list', JSON.stringify(a));
-    ok('מקום 2 ברשימה', a.position === 2, JSON.stringify(a));
+      console.log('— ' + label + ' · נפילה חזרה לסלקטור חלופי —');
+      const r2 = await drive(browser, engine, 'fallback', path.join(dir, engine + '-fb.png'));
+      ok('הסלקטור השני תופס כשהראשון נעלם', r2.error === null, String(r2.error));
+      ok('התשובה עדיין נקלטת', r2.text.indexOf('גולד פיש') !== -1);
 
-    console.log('\n— נפילה חזרה לסלקטור חלופי —');
-    const r2 = await drive(browser, 'fallback', path.join(dir, 'fb.png'));
-    ok('הסלקטור השני ברשימה תופס כשהראשון נעלם', r2.error === null, String(r2.error));
-    ok('התשובה עדיין נקלטת', r2.text.indexOf('גולד פיש') !== -1);
+      console.log('— ' + label + ' · כל הסלקטורים התיישנו —');
+      const shotBad = path.join(dir, engine + '-bad.png');
+      const r3 = await drive(browser, engine, 'broken', shotBad);
+      ok('מוחזרת שגיאה מפורשת', !!r3.error && r3.error.indexOf('שדה הקלט לא נמצא') === 0, String(r3.error));
+      ok('השגיאה מפנה לקובץ הקונפיג', !!r3.error && r3.error.indexOf('config/engines.json') !== -1);
+      ok('צילום מסך נשמר גם בכשל', fs.existsSync(shotBad) && fs.statSync(shotBad).size > 1000);
+    }
 
-    console.log('\n— כל הסלקטורים התיישנו —');
-    const shotBad = path.join(dir, 'bad.png');
-    const r3 = await drive(browser, 'broken', shotBad);
-    ok('מוחזרת שגיאה מפורשת', !!r3.error && r3.error.indexOf('שדה הקלט לא נמצא') === 0, String(r3.error));
-    ok('השגיאה מפנה לקובץ הקונפיג', !!r3.error && r3.error.indexOf('config/engines.json') !== -1);
-    ok('צילום מסך נשמר גם בכשל', fs.existsSync(shotBad) && fs.statSync(shotBad).size > 1000);
+    console.log('\n— ' + CFG.google_aio.label + ' · יש בלוק AI —');
+    const g1 = await drive(browser, 'google_aio', 'ok', path.join(dir, 'g-ok.png'));
+    ok('אין שגיאה', g1.error === null, String(g1.error));
+    ok('הבלוק לא סומן כחסר', g1.absent === false);
+    ok('הטקסט נקלט', g1.text.indexOf('גולד פיש') !== -1);
+    ok('קישורים נאספו', g1.urls.length >= 1);
+
+    console.log('— ' + CFG.google_aio.label + ' · סלקטור חלופי —');
+    const g2 = await drive(browser, 'google_aio', 'fallback', path.join(dir, 'g-fb.png'));
+    ok('הסלקטור השני תופס', g2.absent === false && g2.text.indexOf('גולד פיש') !== -1, JSON.stringify(g2.error));
+
+    // הכלל הכי חשוב בפרויקט כולו: דף בלי בלוק AI הוא "לא נמדד", לא "לא מופיע"
+    console.log('— ' + CFG.google_aio.label + ' · אין בלוק AI כלל —');
+    const shotAbs = path.join(dir, 'g-absent.png');
+    const g3 = await drive(browser, 'google_aio', 'absent', shotAbs);
+    ok('לא מוחזרת שגיאה', g3.error === null, String(g3.error));
+    ok('הבלוק מסומן כחסר', g3.absent === true);
+    ok('לא הוחזר טקסט', !g3.text);
+    ok('צילום מסך נשמר גם כשאין בלוק', fs.existsSync(shotAbs) && fs.statSync(shotAbs).size > 1000);
+    const aAbs = A.analyzeCell(g3.text, CLIENT, RIVALS);
+    ok('נרשם כלא-נמדד ולא כאפס', aAbs.status === null, JSON.stringify(aAbs));
+    const sc = A.score([{ status: aAbs.status, questionText: 'ש', rivals: [], sources: [] }]);
+    ok('אינו נספר במכנה של הציון', sc.measured === 0, JSON.stringify(sc));
   } finally {
     await browser.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log(`\n${pass} עברו, ${fail} נכשלו\n`);
+  console.log('\n' + pass + ' עברו, ' + fail + ' נכשלו\n');
   process.exit(fail ? 1 : 0);
 })();
