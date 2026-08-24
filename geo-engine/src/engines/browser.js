@@ -142,10 +142,32 @@ async function waitForSettle(page, answerSelectors, settleMs, maxWaitMs, stopSel
   return { settled: false, text: last || '' };
 }
 
-/** הקלדה בקצב אנושי */
+/** מה שבאמת נמצא בתוך השדה — textarea ו-contenteditable נקראים אחרת */
+async function typedText(loc) {
+  try {
+    return await loc.evaluate(el => (el.value !== undefined ? el.value : el.innerText) || '');
+  } catch (e) {
+    return '';
+  }
+}
+
+/**
+ * מקליד כמו אדם, ואז מוודא שהטקסט באמת נכנס.
+ *
+ * הקלדה לתוך שדה שנראה נכון אבל אינו מקבל פוקוס נכשלת בשקט: המנוע שולח,
+ * המסך ריק, והתוצאה נרשמת כאילו נמדדה. עדיף להיכשל ברעש.
+ */
 async function humanType(loc, text) {
   await loc.click();
   await loc.type(text, { delay: 25 + Math.random() * 45 });
+
+  if ((await typedText(loc)).trim()) return;
+
+  // ניסיון שני: מילוי ישיר. עוזר כשההקלדה תו-תו נבלעה על ידי עורך עשיר.
+  try { await loc.fill(text); } catch (e) { /* fill לא נתמך בכל שדה */ }
+  if ((await typedText(loc)).trim()) return;
+
+  throw new Error('השאלה לא נכנסה לשדה הקלט — הוא נמצא אבל לא קיבל את הטקסט');
 }
 
 /** השהיה אקראית בין שאלות — חובה, מונע חסימות */
@@ -201,6 +223,6 @@ async function collectLinks(page, containerSelectors, linkSelector) {
   return urls;
 }
 
-module.exports = { firstVisible, dismissAll, waitForSettle, readAnswer, anyVisible,
+module.exports = { firstVisible, dismissAll, waitForSettle, readAnswer, anyVisible, typedText,
                    looksLikeWorking, looksBlocked, humanType, pause, shotPath, collectLinks,
                    ROOT, WORKING_HINTS, BLOCK_HINTS };

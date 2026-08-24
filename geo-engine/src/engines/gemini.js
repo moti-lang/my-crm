@@ -18,8 +18,12 @@ async function ask(context, cfg, question, shotFile) {
       throw new Error('לא מחובר ל-Gemini. הרץ: npm run login -- gemini');
     }
 
-    const input = await B.firstVisible(page, cfg.selectors.input, 15000);
-    if (!input) throw new Error('שדה הקלט לא נמצא — עדכן את הסלקטורים ב-config/engines.json');
+    const input = await B.firstVisible(page, cfg.selectors.input, cfg.inputWaitMs || 45000);
+    if (!input) {
+      await page.screenshot({ path: shotFile, fullPage: true });
+      throw new Error('שדה הקלט לא נמצא. פתח את צילום המסך שנשמר וראה מה הופיע'
+        + ' — התחברות, אימות "אני לא רובוט", או שינוי בעמוד:\n  ' + shotFile);
+    }
 
     await B.humanType(input, question);
     await page.waitForTimeout(600);

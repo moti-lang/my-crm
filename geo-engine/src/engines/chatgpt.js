@@ -13,7 +13,8 @@ async function ask(context, cfg, question, shotFile) {
     await page.waitForTimeout(2500);
     await B.dismissAll(page, cfg.selectors.dismiss);
 
-    const input = await B.firstVisible(page, cfg.selectors.input, 15000);
+    // 15 שניות לא הספיקו לטעינה קרה: העמוד נטען, אבל רק אחרי שכבר ויתרנו
+    const input = await B.firstVisible(page, cfg.selectors.input, cfg.inputWaitMs || 45000);
     if (!input) {
       // ‏"הסלקטור התיישן" הוא רק אחד ההסברים, והוא גם היחיד שאי אפשר לעשות
       // איתו כלום בלי לראות. הצילום כבר נשמר — ההודעה מפנה אליו.
