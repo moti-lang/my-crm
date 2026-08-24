@@ -39,7 +39,11 @@ function signal(file, text) {
   try {
     fs.mkdirSync(SIGNAL_DIR, { recursive: true });
     fs.writeFileSync(file, String(text), 'utf8');
-  } catch (e) { /* חוסר הרשאה לא אמור להפיל את התוכנה */ }
+  } catch (e) {
+    // כישלון כאן לא אמור להפיל את התוכנה, אבל הוא כן גורם למשגר לחשוב
+    // שהיא לא עלתה — ולכן הוא נרשם ליומן ולא נבלע בשקט.
+    console.error('לא הצלחתי לכתוב את ' + path.basename(file) + ': ' + e.message);
+  }
 }
 function clearSignals() {
   for (const f of [URL_FILE, ERR_FILE]) { try { fs.unlinkSync(f); } catch (e) {} }
