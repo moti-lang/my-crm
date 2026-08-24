@@ -14,7 +14,13 @@ async function ask(context, cfg, question, shotFile) {
     await B.dismissAll(page, cfg.selectors.dismiss);
 
     const input = await B.firstVisible(page, cfg.selectors.input, 15000);
-    if (!input) throw new Error('שדה הקלט לא נמצא — כנראה הסלקטור התיישן. עדכן config/engines.json');
+    if (!input) {
+      // ‏"הסלקטור התיישן" הוא רק אחד ההסברים, והוא גם היחיד שאי אפשר לעשות
+      // איתו כלום בלי לראות. הצילום כבר נשמר — ההודעה מפנה אליו.
+      await page.screenshot({ path: shotFile, fullPage: true });
+      throw new Error('שדה הקלט לא נמצא. פתח את צילום המסך שנשמר וראה מה הופיע'
+        + ' — התחברות, אימות "אני לא רובוט", או שינוי בעמוד:\n  ' + shotFile);
+    }
 
     await B.humanType(input, question);
     await page.waitForTimeout(500);

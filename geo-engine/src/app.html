@@ -51,6 +51,8 @@ textarea{min-height:80px;resize:vertical;line-height:1.7}
 .btn-teal{background:var(--teal);color:var(--dark)}
 .btn-ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
 .btn-sm{font-size:14px;padding:8px 12px;border-radius:8px;flex:0 0 auto}
+.btn.danger{color:#A8341A;border-color:#E8C4B8}
+.btn.danger:hover{background:#FFF1EC}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
 .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;align-items:center}
@@ -190,6 +192,7 @@ code{font-family:Consolas,ui-monospace,monospace;font-size:.92em;background:var(
 
     <div class="row">
       <button class="btn btn-main" id="cSave">שמור לקוח</button>
+      <button class="btn btn-ghost btn-sm danger" id="cDelete" style="display:none">מחק לקוח</button>
       <span class="st" id="cSt"></span>
     </div>
 
@@ -591,12 +594,14 @@ function pickClient(slug){
     // מרוקן מיד, אחרת נראה לרגע כאילו פרטי הלקוח הקודם הם של החדש
     fillClient({});
     el('slugRow').style.display = 'block';
+    el('cDelete').style.display = 'none';
     return fetch('/api/client-new').then(function(r){ return r.json(); }).then(function(o){
       el('cSlug').value = o.slug;
       el('cName').focus();
     });
   }
   el('slugRow').style.display = 'none';
+  el('cDelete').style.display = 'inline-block';
   return fetch('/api/client?slug=' + encodeURIComponent(slug))
     .then(function(r){ return r.json(); })
     .then(function(c){ if (c.error) throw new Error(c.error); fillClient(c); })
@@ -694,6 +699,36 @@ el('cSave').addEventListener('click', function(){
   }).catch(function(e){
     b.disabled = false;
     el('cSt').textContent = 'לא נשמר: ' + e.message;
+  });
+});
+
+el('cDelete').addEventListener('click', function(){
+  var slug = el('cPick').value;
+  if (!slug || slug === NEW) return;
+
+  var name = el('cName').value.trim() || slug;
+  var mine = S.state.runs.filter(function(r){ return r.slug === slug; }).length;
+
+  // מונה את מה שיימחק בפועל, כי "אתה בטוח?" בלי מספרים הוא שאלה בלי מידע
+  if (!confirm('למחוק את "' + name + '"?\n\n'
+      + (mine ? 'יימחקו גם ' + mine + ' בדיקות וכל צילומי המסך שלהן.\n' : '')
+      + 'הדוחות שכבר הופקו יישארו, ועותק של ההגדרה יישמר בתיקיית clients.')) return;
+
+  var b = this;
+  b.disabled = true;
+  el('cSt').textContent = 'מוחק…';
+  api('/api/client-delete', {slug:slug}).then(function(o){
+    return load().then(function(){
+      b.disabled = false;
+      el('cPick').value = S.state.clients.length ? S.state.clients[0].slug : NEW;
+      pickClient(el('cPick').value);
+      el('cSt').textContent = '"' + o.name + '" נמחק'
+        + (o.runs ? ' עם ' + o.runs + ' בדיקות' : '')
+        + (o.backup ? '. עותק נשמר ב-clients/' + o.backup : '.');
+    });
+  }).catch(function(e){
+    b.disabled = false;
+    el('cSt').textContent = 'לא נמחק: ' + e.message;
   });
 });
 

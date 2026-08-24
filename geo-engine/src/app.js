@@ -279,6 +279,62 @@ function saveClient(b) {
   return readClient(slug);
 }
 
+/**
+ * מוחק לקוח וכל מה שנמדד עבורו.
+ *
+ * לפני המחיקה נשמר עותק של ההגדרה ב-clients/, כי לקוח שעזב עלול לחזור,
+ * וטעות לחיצה כאן אחרת אינה הפיכה. הדוחות שכבר הופקו נשארים — הם נשלחו
+ * ללקוח וזה לא המקום למחוק אותם.
+ */
+function deleteClient(slug) {
+  const c = readClient(slug);
+
+  let backup = null;
+  try {
+    const dir = path.join(ROOT, 'clients');
+    fs.mkdirSync(dir, { recursive: true });
+    backup = path.join(dir, slug + '-נמחק.json');
+    fs.writeFileSync(backup, JSON.stringify(c, null, 2) + '\n', 'utf8');
+  } catch (e) {
+    backup = null;
+  }
+
+  const db = DB.open();
+  const row = db.prepare('SELECT id FROM clients WHERE slug = ?').get(slug);
+  if (!row) { db.close(); throw new Error('לקוח לא נמצא: ' + slug); }
+
+  const runIds = db.prepare('SELECT id FROM runs WHERE client_id = ?').all(row.id).map(r => r.id);
+
+  // results.question_id אינו מוגדר כמחיקה מדורגת, ולכן הסדר כאן אינו קוסמטי:
+  // מחיקת השאלות לפני התוצאות שמצביעות עליהן פשוט תיכשל.
+  const wipe = db.transaction(() => {
+    db.prepare(`DELETE FROM results WHERE run_id IN (SELECT id FROM runs WHERE client_id = ?)`).run(row.id);
+    db.prepare(`DELETE FROM results WHERE question_id IN (SELECT id FROM questions WHERE client_id = ?)`).run(row.id);
+    db.prepare('DELETE FROM runs WHERE client_id = ?').run(row.id);
+    db.prepare('DELETE FROM questions WHERE client_id = ?').run(row.id);
+    db.prepare('DELETE FROM competitors WHERE client_id = ?').run(row.id);
+    db.prepare('DELETE FROM clients WHERE id = ?').run(row.id);
+  });
+  wipe();
+  db.close();
+
+  // צילומי המסך שייכים לריצות שנמחקו, והם התופסים הגדולים בדיסק
+  let shots = 0;
+  for (const id of runIds) {
+    const dir = path.join(ROOT, 'data', 'screenshots', String(id));
+    try {
+      if (fs.existsSync(dir)) { fs.rmSync(dir, { recursive: true, force: true }); shots++; }
+    } catch (e) { /* קובץ נעול לא מצדיק כישלון של המחיקה כולה */ }
+  }
+
+  return {
+    name: c.name,
+    runs: runIds.length,
+    shots,
+    backup: backup ? path.basename(backup) : null
+  };
+}
+
 /* ---------- מיתוג ---------- */
 
 const BRAND_FIELDS = ['name', 'tagline', 'phone', 'email', 'site'];
@@ -470,6 +526,12 @@ function handle(req, res, body) {
 
     if (p === '/api/client-save') return json(res, 200, saveClient(b));
 
+    if (p === '/api/client-delete') {
+      const slug = String((b && b.slug) || '').trim().toLowerCase();
+      if (!SLUG_RE.test(slug)) throw new Error('לקוח לא תקין');
+      return json(res, 200, deleteClient(slug));
+    }
+
     if (p === '/api/brand') return json(res, 200, writeBrand(b));
 
     if (p === '/api/report') {
@@ -605,7 +667,7 @@ function start(opts) {
 }
 
 module.exports = { start, readState, handle, openUrl, alreadyMine,
-                   readBrand, writeBrand, readClient, saveClient, nextSlug, PORT };
+                   readBrand, writeBrand, readClient, saveClient, deleteClient, nextSlug, PORT };
 
 if (require.main === module) {
   clearSignals();
