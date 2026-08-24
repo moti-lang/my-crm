@@ -169,6 +169,16 @@ function req(method, p, body) {
   r = await req('GET', '/api/client?slug=' + encodeURIComponent('אין-כזה'));
   ok('לקוח שלא קיים נדחה', r.code === 400);
 
+  r = await req('POST', '/api/suggest-questions',
+                { trade: 'תספורת גברים', city: 'בני ברק', city2: 'רמת גן', extra: 'ללא תור' });
+  ok('הצעת שאלות מחזירה עשר', r.code === 200 && r.json.questions.length === 10, r.text);
+  ok('השאלות נבנות מהתחום ומהעיר',
+     r.json.questions.every(q => q.indexOf('בני ברק') !== -1), JSON.stringify(r.json.questions[0]));
+  r = await req('POST', '/api/suggest-questions', { trade: 'תספורת גברים', city: 'בני ברק' });
+  ok('גם בלי פרטים נוספים — עשר', r.json.questions.length === 10, JSON.stringify(r.json.questions));
+  r = await req('POST', '/api/suggest-questions', { trade: 'תספורת גברים' });
+  ok('בלי עיר לא מוצעות שאלות', r.code === 200 && r.json.questions.length === 0, r.text);
+
   r = await req('GET', '/api/client-new');
   ok('מוצע מזהה פנוי ללקוח חדש', /^client\d+$/.test(r.json.slug || ''), JSON.stringify(r.json));
 

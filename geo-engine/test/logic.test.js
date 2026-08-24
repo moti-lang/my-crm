@@ -9,6 +9,7 @@ const N = require('../src/normalize');
 const A = require('../src/analyze');
 const E = require('../src/exportJson');
 const REPORT = require('../src/report');
+const Q = require('../src/questions');
 
 let pass = 0, fail = 0;
 function ok(name, cond) {
@@ -414,6 +415,33 @@ const more = multLabel([
   { status: 0, questionText: 'ש2', rivals: [], sources: [] }
 ]);
 ok('כשהמתחרים מופיעים יותר — הכיתוב נכון', more && more.l.indexOf('המתחרים מופיעים יותר') !== -1, JSON.stringify(more));
+
+console.log('\n— הצעת שאלות —');
+{
+  const full = Q.suggest({ trade: 'קניית דגים טריים', city: 'ביתר עילית',
+                           city2: 'ירושלים', extra: 'כשר למהדרין עם משלוחים' });
+  eq('עשר שאלות כשכל הפרטים מלאים', full.length, 10);
+  ok('שם הפעולה יורד היכן שהוא לא מתאים',
+     full.indexOf('אני מחפש דגים טריים בביתר עילית, על מי אתה ממליץ?') !== -1, JSON.stringify(full));
+  ok('התחום המלא נשאר היכן שהוא כן מתאים',
+     full.some(q => q.indexOf('לקניית דגים טריים') !== -1));
+  ok('העיר השנייה נכנסת', full.some(q => q.indexOf('ירושלים') !== -1));
+  ok('מה שמייחד את העסק נכנס', full.some(q => q.indexOf('כשר למהדרין') !== -1));
+  ok('כל שאלה מזכירה את העיר', full.every(q => q.indexOf('ביתר עילית') !== -1));
+  ok('אין כפילויות', new Set(full).size === full.length);
+
+  const plain = Q.suggest({ trade: 'פיצה', city: 'ירושלים' });
+  eq('גם בלי עיר שנייה ובלי ייחוד — עשר', plain.length, 10);
+  ok('יש חלופה כשאין מה שמייחד', plain.some(q => q.indexOf('שירות מהיר') !== -1));
+  ok('יש חלופה כשאין עיר שנייה', plain.some(q => q.indexOf('והסביבה') !== -1));
+  ok('תחום שאינו שם פעולה נשאר שלם', plain[0] === 'מי הכי מומלץ לפיצה בירושלים?', plain[0]);
+
+  eq('בלי עיר אין שאלות', Q.suggest({ trade: 'פיצה' }), []);
+  eq('בלי תחום אין שאלות', Q.suggest({ city: 'ירושלים' }), []);
+  eq('בלי כלום אין שאלות', Q.suggest({}), []);
+  eq('שם פעולה יחיד לא נחתך', Q.bareTrade('שירותי'), 'שירותי');
+  eq('רווחים מיותרים לא שוברים', Q.bareTrade('  קניית   דגים  '), 'דגים');
+}
 
 console.log(`\n${pass} עברו, ${fail} נכשלו\n`);
 process.exit(fail ? 1 : 0);

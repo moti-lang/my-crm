@@ -237,6 +237,7 @@ td.acts{white-space:nowrap}
       <div>
         <label for="cTrade">התחום — מה העסק עושה</label>
         <input type="text" id="cTrade" maxlength="200" placeholder="קניית דגים טריים">
+        <div class="hint" style="margin:6px 0 0">כתוב אותו כמו שלקוח שואל, לא כמו שכתוב בח.פ. "קניית דגים טריים" עדיף על "מסחר קמעונאי בדגים".</div>
       </div>
       <div>
         <label for="cCity">עיר</label>
@@ -255,8 +256,11 @@ td.acts{white-space:nowrap}
     <label for="cExtra">מה מייחד אותו</label>
     <input type="text" id="cExtra" maxlength="200" placeholder="כשר למהדרין עם משלוחים">
 
-    <label for="cQuestions">השאלות שהמנוע ישאל <span class="mini" id="qCount"></span></label>
-    <div class="hint" style="margin:0 0 6px">שאלה בכל שורה. אלה השאלות שלקוח פוטנציאלי היה שואל.</div>
+    <label for="cQuestions">השאלות שהמנוע ישאל
+      <span class="mini" id="qCount"></span>
+      <a href="#" class="mini" id="suggestQ">הצע שאלות לפי התחום והעיר</a>
+    </label>
+    <div class="hint" style="margin:0 0 6px">שאלה בכל שורה. אלה השאלות שלקוח פוטנציאלי היה שואל. ההצעה היא נקודת פתיחה — תקן ניסוח שלא מתאים.</div>
     <textarea id="cQuestions" rows="10" placeholder="מי הכי מומלץ לקניית דגים טריים בביתר עילית?"></textarea>
 
     <label for="cRivals">מתחרים <span class="mini" id="rCount"></span></label>
@@ -547,6 +551,25 @@ el('toClient').addEventListener('click', function(){
   // בוחר בעורך את הלקוח שנבחר למעלה, כדי שהקישור יוביל למקום הנכון
   var slug = el('client').value;
   if (slug && el('cPick').value !== slug) { el('cPick').value = slug; pickClient(slug); }
+});
+
+el('suggestQ').addEventListener('click', function(e){
+  e.preventDefault();
+  var trade = el('cTrade').value.trim(), city = el('cCity').value.trim();
+  if (!trade || !city) { el('cSt').textContent = 'מלא קודם את התחום ואת העיר — מהם נבנות השאלות.'; return; }
+
+  var had = lines(el('cQuestions').value).length;
+  if (had && !confirm('להחליף את ' + had + ' השאלות הקיימות בהצעה חדשה?')) return;
+
+  el('cSt').textContent = 'בונה…';
+  api('/api/suggest-questions', {
+    trade: trade, city: city, city2: el('cCity2').value.trim(), extra: el('cExtra').value.trim()
+  }).then(function(o){
+    if (!o.questions.length) { el('cSt').textContent = 'לא הצלחתי לבנות שאלות מהפרטים האלה.'; return; }
+    el('cQuestions').value = o.questions.join('\n');
+    counts();
+    el('cSt').textContent = o.questions.length + ' שאלות הוצעו. עבור עליהן ותקן מה שצריך.';
+  }).catch(function(err){ el('cSt').textContent = 'לא נבנה: ' + err.message; });
 });
 
 el('cSave').addEventListener('click', function(){

@@ -371,6 +371,10 @@ function handle(req, res, body) {
 
 
 
+    if (p === '/api/suggest-questions') {
+      return json(res, 200, { questions: require('./questions').suggest(b) });
+    }
+
     if (p === '/api/client-save') return json(res, 200, saveClient(b));
 
     if (p === '/api/brand') return json(res, 200, writeBrand(b));
