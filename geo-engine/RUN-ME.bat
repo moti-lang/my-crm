@@ -21,10 +21,13 @@ if not exist "%PS1%" (
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%"
 
-echo.
-echo   ------------------------------------------------
-echo    Script finished with exit code %ERRORLEVEL%
-echo    Log file: %USERPROFILE%\geo-engine-log.txt
-echo   ------------------------------------------------
-echo.
-pause
+rem ההתקנה עוצרת בעצמה כשהיא נכשלת. עצירה נוספת כאן רק מבלבלת.
+if errorlevel 1 (
+  echo.
+  echo   ------------------------------------------------
+  echo    Setup exited with code %ERRORLEVEL%
+  echo    Log file: %USERPROFILE%\geo-engine-log.txt
+  echo   ------------------------------------------------
+  echo.
+  pause
+)

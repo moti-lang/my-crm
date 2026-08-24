@@ -14,6 +14,7 @@ try { Start-Transcript -Path $LogPath -Force | Out-Null; $Transcribing = $true }
 
 $Branch  = 'claude/already-sending-continued-np8pr6'
 $RepoUrl = 'https://github.com/moti-lang/my-crm.git'
+$Failed  = $false
 $Root    = Join-Path $HOME 'my-crm'
 $Proj    = Join-Path $Root 'geo-engine'
 
@@ -197,6 +198,7 @@ try {
 
 }
 catch {
+  $Failed = $true
   $msg = $_.Exception.Message
   Write-Host ''
   Write-Host '════════════════════════════════════════' -ForegroundColor Red
@@ -215,11 +217,19 @@ catch {
 finally {
   try { if ($Transcribing) { Stop-Transcript | Out-Null } } catch {}
   Write-Host ''
-  Write-Host ' ─────────────────────────────────────' -ForegroundColor White
-  Write-Host '  אם היו בעיות — שלח לי את הקובץ הזה:' -ForegroundColor White
-  Write-Host ("  " + $LogPath) -ForegroundColor Yellow
-  Write-Host ' ─────────────────────────────────────' -ForegroundColor White
-  try { Start-Process explorer.exe -ArgumentList ('/select,"' + $LogPath + '"') } catch {}
-  Write-Host ''
-  Read-Host ' Enter לסגירה'
+  if ($Failed) {
+    # רק כשנכשל: מציג את היומן ופותח אותו, כדי שיהיה מה לשלוח
+    Write-Host ' ─────────────────────────────────────' -ForegroundColor White
+    Write-Host '  שלח לי את הקובץ הזה:' -ForegroundColor White
+    Write-Host ("  " + $LogPath) -ForegroundColor Yellow
+    Write-Host ' ─────────────────────────────────────' -ForegroundColor White
+    try { Start-Process explorer.exe -ArgumentList ('/select,"' + $LogPath + '"') } catch {}
+    Write-Host ''
+    Read-Host ' Enter לסגירה'
+  } else {
+    Write-Host '  אפשר לסגור את החלון הזה. התוכנה כבר פתוחה.' -ForegroundColor Green
+    Write-Host ("  יומן ההתקנה, אם יהיה צורך: " + $LogPath) -ForegroundColor DarkGray
+    Write-Host ''
+    Start-Sleep -Seconds 4
+  }
 }
