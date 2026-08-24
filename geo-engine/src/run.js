@@ -236,6 +236,17 @@ async function run(slug, opts) {
   let browser, sharedCtx = null;
 
   if (useCdp) {
+    // אם הדפדפן לא פתוח — פותחים אותו במקום להיכשל. הפרופיל קבוע,
+    // ולכן ההתחברות מהפעם הקודמת אמורה להיות שם כבר.
+    if (!(await portOpen(CDP_PORT))) {
+      console.log('  הדפדפן לא פתוח. פותח אותו עכשיו…');
+      const opened = await openRealBrowser('https://gemini.google.com/app');
+      console.log(`  נפתח ${opened.label}.`);
+      console.log('');
+      console.log('  ודא שאתה מחובר ושממשק Gemini נטען, ואז חזור לכאן.');
+      console.log('  (אם אתה כבר מחובר מהפעם הקודמת — פשוט לחץ Enter)');
+      await new Promise(res => process.stdin.once('data', res));
+    }
     browser = await R_connect();
     sharedCtx = browser.contexts()[0];
     if (!sharedCtx) throw new Error('הדפדפן פתוח אבל אין בו חלון. פתח לשונית והרץ שוב.');
