@@ -156,6 +156,15 @@ function startUpdate() {
     job.child = child;
   });
 
+  /** מריץ פקודה ומחזיר את הפלט שלה בלי להציג אותו */
+  const capture = (cmd, args) => new Promise((resolve) => {
+    let out = '';
+    const child = spawn(cmd, args, { cwd: ROOT, shell: process.platform === 'win32' });
+    child.stdout.on('data', d => { out += d; });
+    child.on('error', () => resolve(''));
+    child.on('close', () => resolve(out));
+  });
+
   (async () => {
     try {
       say('מוריד את הגרסה האחרונה…');
@@ -163,7 +172,16 @@ function startUpdate() {
         throw new Error('ההורדה נכשלה. בדוק חיבור לאינטרנט.');
       }
 
-      // הנתונים שלך אינם בגיט — מסד הנתונים, הדוחות והמיתוג — ולכן זה בטוח
+      // הנתונים שלך אינם בגיט — מסד הנתונים, הדוחות והמיתוג — ולכן זה בטוח.
+      // מה שכן בגיט ושונה מקומית יימחק, ולכן הוא נרשם לפני כן ולא בשקט.
+      const dirty = await capture('git', ['status', '--porcelain']);
+      if (dirty.trim()) {
+        say('');
+        say('שים לב — הקבצים האלה שונו מקומית ויוחזרו לגרסת המקור:');
+        for (const line of dirty.trim().split(/\r?\n/)) say('   ' + line.trim());
+        say('');
+      }
+
       if (await run('git', ['reset', '--hard', 'origin/' + BRANCH])) {
         throw new Error('עדכון הקבצים נכשל.');
       }
