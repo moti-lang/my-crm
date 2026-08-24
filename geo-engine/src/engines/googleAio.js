@@ -19,6 +19,15 @@ async function ask(context, cfg, question, shotFile) {
     await B.dismissAll(page, cfg.selectors.dismiss);
     await page.waitForTimeout(cfg.waitAfterSubmitMs);
 
+    // חייב לבוא לפני בדיקת בלוק ה-AI: דף חסימה נראה בדיוק כמו דף בלי בלוק
+    if (await B.looksBlocked(page)) {
+      await page.screenshot({ path: shotFile, fullPage: true });
+      return {
+        text: '', urls: [], absent: false, blocked: true,
+        error: 'גוגל הציגה אימות "אני לא רובוט" — נרשם כלא-נמדד'
+      };
+    }
+
     let block = null;
     for (const sel of cfg.selectors.aiBlock) {
       try {

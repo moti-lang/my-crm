@@ -151,6 +151,16 @@ function page(engine, mode) {
       + '</body></html>';
   }
 
+  // דף החסימה של גוגל. נראה כמעט זהה לדף בלי בלוק AI, וזה בדיוק הסיכון:
+  // בלי זיהוי מפורש הוא נרשם עם ההסבר השקרי "לא הוצג בלוק AI".
+  if (mode === 'blocked') {
+    return '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>'
+      + '<h1>לפני שאתם ממשיכים</h1>'
+      + '<p>המערכות שלנו זיהו תעבורה חריגה מרשת המחשבים שלך. אנא אשר שאינך רובוט.</p>'
+      + '<div>אני לא רובוט</div>'
+      + '</body></html>';
+  }
+
   // google_aio — אין שדה קלט. השאלה בכתובת, והשאלה היחידה היא אם יש בלוק AI.
   if (mode === 'absent') {
     return '<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"></head><body>'
@@ -303,6 +313,19 @@ async function drive(browser, engine, mode, shot) {
     ok('נרשם כלא-נמדד ולא כאפס', aAbs.status === null, JSON.stringify(aAbs));
     const sc = A.score([{ status: aAbs.status, questionText: 'ש', rivals: [], sources: [] }]);
     ok('אינו נספר במכנה של הציון', sc.measured === 0, JSON.stringify(sc));
+
+    // דף החסימה של גוגל נראה כמעט זהה לדף בלי בלוק AI. בלי זיהוי מפורש
+    // הוא נרשם עם ההסבר השקרי "לא הוצג בלוק AI".
+    console.log('— ' + CFG.google_aio.label + ' · דף "אני לא רובוט" —');
+    const shotBlk = path.join(dir, 'g-blocked.png');
+    const g4 = await drive(browser, 'google_aio', 'blocked', shotBlk);
+    ok('מזוהה כחסימה', g4.blocked === true, JSON.stringify(g4.error));
+    ok('לא מדווח בטעות כ"אין בלוק AI"', g4.absent === false, JSON.stringify(g4));
+    ok('השגיאה אומרת שזו חסימה ולא היעדר בלוק',
+       !!g4.error && g4.error.indexOf('לא רובוט') !== -1, String(g4.error));
+    ok('צילום מסך נשמר כראיה', fs.existsSync(shotBlk) && fs.statSync(shotBlk).size > 1000);
+    const aBlk = A.analyzeCell(g4.text, CLIENT, RIVALS);
+    ok('נרשם כלא-נמדד ולא כאפס', aBlk.status === null, JSON.stringify(aBlk));
   } finally {
     await browser.close();
     fs.rmSync(dir, { recursive: true, force: true });

@@ -58,6 +58,39 @@ function looksLikeWorking(text) {
   return WORKING_HINTS.some(h => low.indexOf(h.toLowerCase()) !== -1);
 }
 
+/**
+ * סימנים לכך שגוגל חסמה אותנו במקום להציג תוצאות.
+ *
+ * למה זה חשוב: בלי הזיהוי הזה, דף "אני לא רובוט" נראה למערכת כמו דף חיפוש
+ * שפשוט אין בו בלוק AI — והתא נרשם עם ההסבר "לא הוצג בלוק AI".
+ * זה הסבר שקרי. "נחסמנו" ו"גוגל לא הציגה בלוק" הם שני דברים שונים,
+ * גם אם שניהם בסוף נרשמים כלא-נמדד.
+ */
+const BLOCK_HINTS = [
+  'אני לא רובוט', 'לא רובוט', 'תעבורה חריגה', 'תנועה חריגה',
+  "i'm not a robot", 'im not a robot', 'unusual traffic',
+  'our systems have detected', 'verify you are human', 'are you a robot'
+];
+
+/** האם הדף הנוכחי הוא דף חסימה או אימות אנושי */
+async function looksBlocked(page) {
+  try {
+    const url = String(page.url() || '');
+    if (/\/sorry\/|\/recaptcha\//.test(url)) return true;
+  } catch (e) { /* ממשיכים */ }
+
+  try {
+    const frames = await page.locator('iframe[src*="recaptcha"], iframe[title*="reCAPTCHA"]').count();
+    if (frames > 0) return true;
+  } catch (e) { /* ממשיכים */ }
+
+  try {
+    // רק ראש הדף — טקסט מלא של דף תוצאות עלול להכיל את המילים האלה במקרה
+    const body = String(await page.locator('body').innerText()).slice(0, 600).toLowerCase();
+    return BLOCK_HINTS.some(h => body.indexOf(h.toLowerCase()) !== -1);
+  } catch (e) { return false; }
+}
+
 /** האם אחד מהסלקטורים נראה על המסך כרגע */
 async function anyVisible(page, selectors) {
   for (const sel of selectors || []) {
@@ -169,4 +202,5 @@ async function collectLinks(page, containerSelectors, linkSelector) {
 }
 
 module.exports = { firstVisible, dismissAll, waitForSettle, readAnswer, anyVisible,
-                   looksLikeWorking, humanType, pause, shotPath, collectLinks, ROOT, WORKING_HINTS };
+                   looksLikeWorking, looksBlocked, humanType, pause, shotPath, collectLinks,
+                   ROOT, WORKING_HINTS, BLOCK_HINTS };

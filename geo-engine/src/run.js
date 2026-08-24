@@ -278,6 +278,7 @@ async function run(slug, opts) {
         }
       }
 
+      let blockedStreak = 0;
       for (let i = 0; i < client.questions.length; i++) {
         const q = client.questions[i];
         const shot = B.shotPath(runId, engineKey, i);
@@ -286,6 +287,8 @@ async function run(slug, opts) {
         const res = await DRIVERS[engineKey].ask(ctx, cfg, q.text, shot);
 
         let analysis;
+        if (res.blocked) blockedStreak++; else if (!res.error) blockedStreak = 0;
+
         if (res.error) {
           analysis = { status: null, position: null, positionBasis: null, rivalsFound: [] };
           console.log('שגיאה: ' + res.error.slice(0, 60));
@@ -310,6 +313,16 @@ async function run(slug, opts) {
           sources: N.domainsOf(res.urls),
           error: res.error || (res.absent ? 'no_ai_block' : null)
         });
+
+        // שלוש חסימות ברצף — אין טעם להמשיך, וכל השאר יירשמו כלא-נמדדים
+        if (blockedStreak >= 3) {
+          console.log('');
+          console.log(`  ✗ ${cfg.label} חסם אותנו שלוש פעמים ברצף. מפסיק כאן.`);
+          console.log('    השאלות שנותרו לא נמדדו ואינן נספרות בציון.');
+          console.log('    נסה שוב מאוחר יותר, או הרץ עם --cdp דרך הדפדפן שלך.');
+          console.log('');
+          break;
+        }
 
         if (i < client.questions.length - 1) await B.pause(20000, 60000);
       }

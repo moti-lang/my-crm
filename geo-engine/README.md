@@ -88,6 +88,15 @@ node src/cli.js run goldfish
 node src/cli.js run goldfish --engine=chatgpt
 ```
 
+**Gemini ו-Google AI Overviews דורשים `--cdp`.** גוגל חוסמת דפדפן שנפתח על ידי אוטומציה: ב-Gemini היא מסרבת להתחבר, ובחיפוש היא מציגה "אני לא רובוט". שניהם עוברים דרך הדפדפן האמיתי שלך:
+
+```bash
+node src/cli.js browser
+node src/cli.js run goldfish --engine=google_aio --cdp
+```
+
+אם גוגל חוסמת בכל זאת, המערכת **אומרת את זה מפורשות** ולא מתחזה ל"לא הוצג בלוק AI" — ואחרי שלוש חסימות ברצף היא עוצרת במקום לבזבז עוד עשר דקות. השאלות שלא נמדדו אינן נספרות בציון.
+
 ### 4. אימות ידני
 
 ```bash
