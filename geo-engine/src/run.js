@@ -2,6 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
+const { spawn } = require('child_process');
 const { chromium } = require('playwright');
 
 const DB = require('./db');
@@ -24,6 +26,95 @@ const ORDER = ['chatgpt', 'gemini', 'google_aio'];
  * מהכרומיום המצומצם ש-Playwright מוריד. מנסים לפי הסדר ולוקחים את הראשון שקיים.
  */
 const CHANNELS = ['chrome', 'msedge', null];
+
+/* ==========================================================
+   חיבור לדפדפן אמיתי (CDP)
+
+   גוגל חוסמת התחברות מדפדפן ש-Playwright פותח, ומציגה
+   "ייתכן שהדפדפן או האפליקציה לא מאובטחים". אי אפשר לעקוף את זה
+   מבפנים, וגם לא כדאי לנסות.
+
+   הפתרון: לא לפתוח דפדפן דרך Playwright בכלל. פותחים את Chrome או Edge
+   האמיתי שמותקן במחשב, עם פורט ניפוי, המשתמש מתחבר בו כרגיל —
+   וזה דפדפן רגיל לכל דבר, כי הוא באמת רגיל — ורק אז המנוע מתחבר אליו
+   מבחוץ ומנהג אותו.
+   ========================================================== */
+
+const CDP_PORT = 9222;
+
+const REAL_BROWSERS = [
+  ['Chrome', 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'],
+  ['Chrome', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'],
+  ['Chrome', process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe') : ''],
+  ['Edge',   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'],
+  ['Edge',   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'],
+  ['Chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'],
+  ['Chrome', '/usr/bin/google-chrome'],
+  ['Chromium', '/usr/bin/chromium']
+];
+
+/** מאתר דפדפן אמיתי מותקן */
+function findRealBrowser() {
+  for (const [label, p] of REAL_BROWSERS) {
+    if (p && fs.existsSync(p)) return { label, path: p };
+  }
+  return null;
+}
+
+/** האם פורט הניפוי כבר מאזין */
+function portOpen(port) {
+  return new Promise(res => {
+    const sock = net.connect({ host: '127.0.0.1', port }, () => { sock.end(); res(true); });
+    sock.on('error', () => res(false));
+    sock.setTimeout(1200, () => { sock.destroy(); res(false); });
+  });
+}
+
+/**
+ * פותח את הדפדפן האמיתי עם פורט ניפוי ומשאיר אותו פתוח.
+ * מפעילים פעם אחת, מתחברים ידנית, ומשאירים פתוח לריצות.
+ */
+async function openRealBrowser(startUrl) {
+  if (await portOpen(CDP_PORT)) {
+    return { already: true, label: 'דפדפן שכבר פתוח' };
+  }
+
+  const found = findRealBrowser();
+  if (!found) {
+    throw new Error('לא נמצא Chrome או Edge מותקן במחשב.\nהתקן Chrome מ- https://www.google.com/chrome ואז הרץ שוב.');
+  }
+
+  // Chrome מסרב לפתוח פורט ניפוי על הפרופיל הרגיל, ולכן פרופיל נפרד — וזה גם נכון:
+  // ההתחברות לבדיקות נשארת מופרדת לגמרי מהדפדפן היומיומי שלך.
+  const profileDir = path.join(B.ROOT, 'data', 'browser-profile');
+  fs.mkdirSync(profileDir, { recursive: true });
+
+  const args = [
+    '--remote-debugging-port=' + CDP_PORT,
+    '--user-data-dir=' + profileDir,
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--restore-last-session'
+  ];
+  if (startUrl) args.push(startUrl);
+
+  const child = spawn(found.path, args, { detached: true, stdio: 'ignore' });
+  child.unref();
+
+  for (let i = 0; i < 40; i++) {
+    if (await portOpen(CDP_PORT)) return { already: false, label: found.label, profileDir };
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error('הדפדפן נפתח אבל פורט הניפוי לא נענה.\nסגור את כל חלונות ' + found.label + ' והרץ שוב.');
+}
+
+/** מתחבר לדפדפן שכבר פתוח */
+async function R_connect() {
+  if (!(await portOpen(CDP_PORT))) {
+    throw new Error('לא נמצא דפדפן פתוח לחיבור.\nהרץ קודם:  node src/cli.js browser');
+  }
+  return chromium.connectOverCDP('http://127.0.0.1:' + CDP_PORT);
+}
 
 /**
  * בודק איזה דפדפן זמין בפועל, בהרצה קצרה ומוסתרת.
@@ -139,11 +230,23 @@ async function run(slug, opts) {
   const runId = DB.newRun(db, client.id, opts.notes);
   console.log(`\n▶ ריצה #${runId} · ${client.name} · ${client.questions.length} שאלות × ${engines.length} מנועים\n`);
 
-  const picked = await pickChannel();
-  const launchOpts = { headless: opts.headless === true };
-  if (picked.channel) launchOpts.channel = picked.channel;
-  const browser = await chromium.launch(launchOpts);
-  console.log(`  דפדפן: ${picked.label}\n`);
+  // cdp: מתחבר לדפדפן האמיתי שכבר פתוח ומחובר, במקום לפתוח דפדפן משלנו.
+  // זה המסלול היחיד שעובד מול Gemini, כי גוגל חוסמת דפדפן שנפתח אוטומטית.
+  const useCdp = opts.cdp === true || opts.cdp === 'true';
+  let browser, sharedCtx = null;
+
+  if (useCdp) {
+    browser = await R_connect();
+    sharedCtx = browser.contexts()[0];
+    if (!sharedCtx) throw new Error('הדפדפן פתוח אבל אין בו חלון. פתח לשונית והרץ שוב.');
+    console.log('  דפדפן: מחובר לדפדפן שלך\n');
+  } else {
+    const picked = await pickChannel();
+    const launchOpts = { headless: opts.headless === true };
+    if (picked.channel) launchOpts.channel = picked.channel;
+    browser = await chromium.launch(launchOpts);
+    console.log(`  דפדפן: ${picked.label}\n`);
+  }
 
   let done = 0;
   const totalCells = client.questions.length * engines.length;
@@ -153,11 +256,15 @@ async function run(slug, opts) {
       const cfg = CFG[engineKey];
       console.log(`\n── ${cfg.label} ──`);
       let ctx;
-      try {
-        ctx = await makeContext(browser, engineKey);
-      } catch (e) {
-        console.log('  ✗ ' + e.message);
-        continue;
+      if (sharedCtx) {
+        ctx = sharedCtx;
+      } else {
+        try {
+          ctx = await makeContext(browser, engineKey);
+        } catch (e) {
+          console.log('  ✗ ' + e.message);
+          continue;
+        }
       }
 
       for (let i = 0; i < client.questions.length; i++) {
@@ -196,14 +303,17 @@ async function run(slug, opts) {
         if (i < client.questions.length - 1) await B.pause(20000, 60000);
       }
 
-      await ctx.close();
+      // בחיבור CDP זה הדפדפן של המשתמש — לא סוגרים אותו
+      if (!sharedCtx) await ctx.close();
     }
     DB.finishRun(db, runId, 'done');
   } catch (e) {
     DB.finishRun(db, runId, 'error');
     throw e;
   } finally {
-    await browser.close();
+    // בחיבור CDP רק מתנתקים; הדפדפן נשאר פתוח כדי שההתחברות תישמר לריצה הבאה
+    if (useCdp) { try { await browser.close(); } catch (e) { /* ניתוק בלבד */ } }
+    else { await browser.close(); }
     db.close();
   }
 
@@ -233,4 +343,4 @@ function reanalyze(runId) {
   console.log(`ניתוח מחדש הושלם. ${changed} תוצאות השתנו.`);
 }
 
-module.exports = { run, login, reanalyze, ORDER, CFG };
+module.exports = { run, login, reanalyze, openRealBrowser, connectRealBrowser: R_connect, findRealBrowser, portOpen, CDP_PORT, ORDER, CFG };

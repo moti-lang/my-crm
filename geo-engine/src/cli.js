@@ -61,6 +61,27 @@ async function verify(runId) {
   console.log('\nהאימות נשמר.\n');
 }
 
+/* ---------- פתיחת הדפדפן האמיתי להתחברות ---------- */
+async function openBrowser() {
+  const out = await R.openRealBrowser('https://gemini.google.com/app');
+  console.log('');
+  if (out.already) {
+    console.log('דפדפן כבר פתוח ומחובר לפורט הניפוי. אין צורך לפתוח שוב.');
+  } else {
+    console.log(`נפתח ${out.label} בחלון נפרד.`);
+  }
+  console.log('');
+  console.log('──────────────────────────────────────────');
+  console.log('1. התחבר בחלון שנפתח לחשבון גוגל הייעודי');
+  console.log('2. חכה שממשק Gemini ייטען — עד שאתה רואה את שדה ההקלדה');
+  console.log('3. השאר את החלון פתוח. אל תסגור אותו.');
+  console.log('4. חזור לכאן והרץ:');
+  console.log('');
+  console.log('   node src/cli.js run goldfish --engine=gemini --cdp');
+  console.log('──────────────────────────────────────────');
+  console.log('');
+}
+
 /* ---------- דף אימות בדפדפן ---------- */
 function review(runId) {
   const out = REVIEW.generate(runId, DB);
@@ -150,8 +171,9 @@ async function main() {
   try {
     switch (cmd) {
       case 'client:add': clientAdd(args[0] || 'clients/example.json'); break;
+      case 'browser':    await openBrowser(); break;
       case 'login':      await R.login(args[0] || 'gemini'); break;
-      case 'run':        await R.run(args[0], { engine: flags.engine, headless: flags.headless === 'true', notes: flags.notes }); break;
+      case 'run':        await R.run(args[0], { engine: flags.engine, headless: flags.headless === 'true', notes: flags.notes, cdp: flags.cdp }); break;
       case 'analyze':    R.reanalyze(parseInt(args[0], 10)); break;
       case 'review':     review(parseInt(args[0], 10)); break;
       case 'verify':
@@ -166,7 +188,9 @@ async function main() {
 מנוע בדיקת נראות במנועי AI
 
   node src/cli.js client:add <קובץ>     טעינת לקוח מקובץ JSON
-  node src/cli.js login <gemini>        התחברות חד-פעמית
+  node src/cli.js browser              פתיחת הדפדפן שלך להתחברות ל-Gemini
+  node src/cli.js run <slug> --engine=gemini --cdp    ריצה דרך הדפדפן שלך
+  node src/cli.js login <gemini>        התחברות חד-פעמית (לא עובד מול גוגל)
   node src/cli.js run <slug>            ריצה מלאה
   node src/cli.js run <slug> --engine=chatgpt
   node src/cli.js analyze <run-id>      ניתוח מחדש על טקסט שמור
