@@ -15,12 +15,22 @@ const RECOMMEND_HINTS = [
   // ארבע מתוך ארבע המלצות מפורשות, כי המודל כמעט לא משתמש ב"הכי מומלץ".
   'הבחירה שלי', 'הבחירה הכי ברורה', 'הייתי שם את', 'הייתי בוחר',
   'הייתי מתחיל עם', 'הייתי מתחיל מ', 'הייתי הולך על', 'במקום הראשון',
+  // ניסוחים של תשובות ה-AI של גוגל, שנאספו מריצה אמיתית
+  'הבולט והמומלץ', 'המומלץ המרכזי', 'ההמלצה המרכזית', 'הבולט ביותר',
+  'הבחירה המרכזית', 'העסק המומלץ',
   'top recommendation', 'best choice', 'i recommend'
 ];
 
 // כמה מילים אחרי שם הלקוח עוד נחשבות לאותה נשימה.
 // "הייתי מתחיל מגולד פיש או בית הקרפיון" היא המלצה משותפת, לא בלעדית.
 const SHARED_WINDOW_WORDS = 4;
+
+/**
+ * אוגד שצמוד לשם קושר אליו את ההמלצה גם ממרחק.
+ * "המומלץ המרכזי והבולט ביותר לקניית דגים טריים בביתר עילית הוא גולד פיש"
+ * הוא משפט אחד עם תשע מילים באמצע, ועדיין המלצה מפורשת חד-משמעית.
+ */
+const COPULAS = ['הוא', 'היא', 'הם', 'הן', 'זה', 'זו', 'זהו', 'הינו', 'הינה'];
 
 // כמה מילים מותר שיפרידו בין ניסוח ההמלצה לשם הלקוח.
 // מעבר לזה — ההמלצה כנראה מתייחסת למישהו אחר.
@@ -92,8 +102,9 @@ function recommendsClient(text, clientForms, rivalForms) {
       if (ci === -1) continue;
 
       const between = after.slice(0, ci).trim();
-      const words = between ? between.split(/\s+/).length : 0;
-      if (words > MAX_WORDS_BETWEEN) continue;
+      const parts = between ? between.split(/\s+/) : [];
+      const linked = parts.length > 0 && COPULAS.indexOf(parts[parts.length - 1]) !== -1;
+      if (parts.length > MAX_WORDS_BETWEEN && !linked) continue;
       if (rivalForms.some(f => between.includes(f))) continue;
 
       // מתחרה צמוד אחרי הלקוח הופך את ההמלצה למשותפת ולא לבלעדית
