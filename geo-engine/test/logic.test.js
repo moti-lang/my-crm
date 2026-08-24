@@ -292,6 +292,48 @@ eq('כותרת של כמה ריצות מציגה טווח תאריכים',
    REPORT.runsLabel([{ id: 1, started_at: '2026-08-01' }, { id: 2, started_at: '2026-08-24' }]),
    '2026-08-01 עד 2026-08-24');
 
+console.log('\n— השוואה למדידה קודמת —');
+
+function measure(statuses) {
+  return statuses.map(function (st, i) {
+    return { engine: 'chatgpt', questionText: 'ש' + (i + 1), status: st, rivals: [], sources: [] };
+  });
+}
+function trendHtml(now, before) {
+  const rows = measure(now);
+  const prows = measure(before);
+  return REPORT.buildHtml({ name: 'ע', trade: 't', city: 'c', competitors: [] },
+                          [{ id: 2, started_at: '2026-09-24' }], rows, A.score(rows),
+                          { runs: [{ id: 1, started_at: '2026-08-24' }], rows: prows, s: A.score(prows) });
+}
+
+const th = trendHtml([3, 3, 2, 2, 2], [1, 1, 0, 2, 2]);
+ok('נוסף סעיף השוואה', th.indexOf('מה השתנה מאז המדידה הקודמת') !== -1);
+ok('הציון מציג שינוי מהמדידה הקודמת', th.indexOf('מהמדידה הקודמת') !== -1);
+ok('השינוי כלפי מעלה מסומן בחץ', th.indexOf('▲') !== -1);
+
+// המסמך RTL, ובתוך SVG התכונה text-anchor מתייחסת לכיוון הכתיבה ולא
+// לגאומטריה — בלי direction=ltr התוויות נמתחות אל מחוץ למסגרת ונחתכות.
+ok('הגרף מקבע כיוון גאומטרי כדי שהתוויות לא ייחתכו',
+   th.indexOf('direction="ltr"') !== -1);
+ok('שלושת המדדים מופיעים בגרף',
+   th.indexOf('הופעה בתשובות') !== -1 && th.indexOf('בשלושת הראשונים') !== -1
+   && th.indexOf('המלצה ישירה') !== -1);
+ok('יש מקרא לשתי המדידות',
+   th.indexOf('המדידה הקודמת') !== -1 && th.indexOf('המדידה הנוכחית') !== -1);
+
+// החלק שאפשר לפעול לפיו: אילו שאלות בדיוק זזו
+ok('שאלה שהשתנתה מופיעה בטבלת השינויים', th.indexOf('מוזכר') !== -1);
+
+const same = trendHtml([2, 2, 2], [2, 2, 2]);
+ok('בלי שינוי — נאמר שזו יציבות ולא נותר ריק',
+   same.indexOf('אף תוצאה לא שינתה סיווג') !== -1);
+
+ok('בלי השוואה אין סעיף מגמה כלל',
+   REPORT.buildHtml({ name: 'ע', trade: 't', city: 'c', competitors: [] },
+                    [{ id: 1, started_at: '2026-08-24' }], measure([2, 2]), A.score(measure([2, 2])))
+     .indexOf('מה השתנה מאז') === -1);
+
 // האתר של הלקוח בראש טבלת "המקומות שצריך להיות בהם" הוא סתירה גלויה
 function htmlWithDomain(rows, domain) {
   return REPORT.buildHtml({ name: 'גולד פיש', trade: 'דגים', city: 'ביתר', domain: domain, competitors: [] },

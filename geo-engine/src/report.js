@@ -14,6 +14,59 @@ function esc(s) {
 }
 function pct(x) { return Math.round(x * 100) + '%'; }
 
+/* ---------- השוואה בין מדידות ---------- */
+
+// זוג מתבדר: השתפר מול הידרדר. שני הגוונים עברו את בדיקת הפלטה מול רקע בהיר
+// (הפרדה לעיוורי צבעים ΔE 11.7, ניגודיות מעל 3:1), והכיוון מסומן גם במספר
+// ובחץ ולא בצבע בלבד.
+const UP = '#00897B', DOWN = '#C25F1E', FLAT = '#5A6379', PREV = '#98A2B8';
+
+function delta(now, before) {
+  const d = Math.round(now * 100) - Math.round(before * 100);
+  return { n: d, sign: d > 0 ? '▲' : d < 0 ? '▼' : '=', color: d > 0 ? UP : d < 0 ? DOWN : FLAT,
+           text: (d > 0 ? '+' : '') + d };
+}
+
+/**
+ * דמבל: שתי נקודות על ציר משותף וקו ביניהן.
+ * עם שתי מדידות בלבד, קו מגמה הוא שתי נקודות ותו לא — הדמבל מראה
+ * את שני הערכים ואת גודל השינוי במבט אחד, וגם נדפס היטב.
+ * הציר מימין לשמאל, כמו שאר המסמך.
+ */
+function dumbbell(metrics) {
+  const W = 680, ROW = 52, TOP = 34, H = TOP + metrics.length * ROW + 16;
+  const X0 = 500, X1 = 90;               // 0% מימין, 100% משמאל
+  const x = (v) => X0 - (v * (X0 - X1));
+
+  // direction=ltr הכרחי: המסמך כולו RTL, ובתוך SVG התכונה text-anchor
+  // מתייחסת לכיוון הכתיבה ולא לגאומטריה — בלי זה התוויות נמתחות אל מחוץ
+  // למסגרת ונחתכות. הטקסט העברי עצמו עדיין נכתב מימין לשמאל.
+  let g = `<svg viewBox="0 0 ${W} ${H}" width="100%" direction="ltr" role="img" aria-label="השוואת מדדים בין שתי המדידות">`;
+
+  for (let t = 0; t <= 100; t += 25) {
+    const gx = x(t / 100);
+    g += `<line x1="${gx}" y1="${TOP - 12}" x2="${gx}" y2="${H - 18}" stroke="#E8ECF2" stroke-width="1"/>`
+       + `<text x="${gx}" y="${H - 4}" font-size="10" fill="#8E9AB4" text-anchor="middle">${t}%</text>`;
+  }
+
+  metrics.forEach((m, i) => {
+    const y = TOP + i * ROW + 12;
+    const xa = x(m.before), xb = x(m.now);
+    const d = delta(m.now, m.before);
+    g += `<text x="${W - 10}" y="${y + 4}" font-size="12.5" fill="#12172B" text-anchor="end">${esc(m.label)}</text>`;
+    if (Math.abs(xa - xb) > 1) {
+      g += `<line x1="${xa}" y1="${y}" x2="${xb}" y2="${y}" stroke="${d.color}" stroke-width="2" stroke-linecap="round"/>`;
+    }
+    g += `<circle cx="${xa}" cy="${y}" r="5" fill="#fff" stroke="${PREV}" stroke-width="2"/>`
+       + `<circle cx="${xb}" cy="${y}" r="5.5" fill="${d.color}" stroke="#fff" stroke-width="2"/>`
+       + `<text x="${x(m.now)}" y="${y - 11}" font-size="11.5" font-weight="700" fill="#12172B" text-anchor="middle">${pct(m.now)}</text>`
+       + `<text x="${W - 10}" y="${y + 20}" font-size="11" fill="${d.color}" text-anchor="end">${d.sign} ${d.text} נקודות אחוז</text>`;
+  });
+
+  g += `</svg>`;
+  return g;
+}
+
 /** ניסוח כמות בעברית תקינה: "מנוע אחד" ולא "1 מנועים" */
 function count(n, one, many) { return n === 1 ? one : n + ' ' + many; }
 
@@ -27,7 +80,7 @@ function runsLabel(runs) {
   return runs.length === 1 ? ('ריצה #' + runs[0].id + ' · ' + when) : when;
 }
 
-function buildHtml(client, runs, rows, s) {
+function buildHtml(client, runs, rows, s, prev) {
   if (!Array.isArray(runs)) runs = [runs];
   // המשפט הזה הוא הדבר הראשון שהלקוח קורא, ולכן הוא חייב לתאר את המספרים
   // שמעליו ולא רק את הטווח שאליו נפל הציון. ציון 66 עם 87% הופעה אינו
@@ -88,7 +141,12 @@ li{margin-top:4px}
   h += `<h1>דוח נראות במנועי AI</h1>
 <div class="muted">${esc(client.name)} · ${esc(client.trade)} · ${esc(client.city)}${client.city2 ? ' ו' + esc(client.city2) : ''} · ${esc(runsLabel(runs))}</div>`;
 
-  h += `<div class="score"><div class="n">${s.score}</div><div class="of">מתוך 100</div><div class="v">${verdict}</div></div>`;
+  const scoreDelta = prev ? (s.score - prev.s.score) : null;
+  h += `<div class="score"><div class="n">${s.score}</div><div class="of">מתוך 100`
+     + (scoreDelta === null ? '' :
+        ` · <span style="color:${scoreDelta > 0 ? '#4ADFC8' : scoreDelta < 0 ? '#F0A16A' : '#8E9AB4'}">`
+        + `${scoreDelta > 0 ? '▲ +' : scoreDelta < 0 ? '▼ ' : '= '}${scoreDelta !== 0 ? scoreDelta : ''} מהמדידה הקודמת</span>`)
+     + `</div><div class="v">${verdict}</div></div>`;
 
   h += `<div class="metrics">
 <div class="m"><div class="n">${pct(s.pAppear)}</div><div class="l">הופעה בתשובות</div></div>
@@ -109,6 +167,52 @@ li{margin-top:4px}
 
   const skipped = rows.length - s.measured;
   h += `<div class="note">הבדיקה כללה ${count(Object.keys(byQ).length, 'שאלה אחת', 'שאלות')} על ${count(engines.length, 'מנוע אחד', 'מנועים')}. נמדדו בפועל ${count(s.measured, 'תא אחד', 'תאים')}${skipped > 0 ? ` (${count(skipped, 'תא אחד לא נמדד', 'תאים לא נמדדו')} — לא הוצג בלוק AI או אירעה שגיאה, ואינם נספרים בציון)` : ''}. חישוב הציון: 40% הופעה, 30% מיקום בשלושת הראשונים, 30% המלצה ישירה.</div>`;
+
+  if (prev) {
+    h += `<h2>מה השתנה מאז המדידה הקודמת</h2>`;
+    h += `<div class="muted" style="margin-bottom:8px">מדידה קודמת: ${esc(runsLabel(prev.runs))} · ${count(prev.s.measured, 'תא אחד', 'תאים')} · ציון ${prev.s.score}</div>`;
+    h += `<div style="border:1px solid #DDE3EC;border-radius:9px;padding:10px 6px 4px;margin-top:8px">`
+       + dumbbell([
+           { label: 'הופעה בתשובות',   before: prev.s.pAppear, now: s.pAppear },
+           { label: 'בשלושת הראשונים', before: prev.s.pTop3,   now: s.pTop3 },
+           { label: 'המלצה ישירה',     before: prev.s.pDirect, now: s.pDirect }
+         ])
+       + `<div style="font-size:9.5pt;color:#5A6379;padding:0 10px 6px;text-align:right">`
+       + `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;border:2px solid ${PREV};background:#fff;margin-left:5px"></span>המדידה הקודמת`
+       + `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${UP};margin:0 14px 0 5px"></span>המדידה הנוכחית`
+       + `</div></div>`;
+
+    // מה באמת זז: שאלה-מנוע שהסיווג שלה השתנה. זה החלק שאפשר לפעול לפיו,
+    // בניגוד לאחוזים שמסכמים אותו.
+    const label = (v) => v === null || v === undefined ? 'לא נמדד'
+      : v === 0 ? 'לא מופיע' : v === 1 ? 'מוזכר' : v === 2 ? 'בשלושת הראשונים' : 'מומלץ במפורש';
+    const before = {};
+    for (const r of prev.rows) before[r.questionText + '\u0000' + r.engine] = r.status;
+
+    const moved = [];
+    for (const r of rows) {
+      const k = r.questionText + '\u0000' + r.engine;
+      if (!(k in before)) continue;
+      const b = before[k], n = r.status;
+      if (b === n) continue;
+      const bn = (b === null || b === undefined) ? -1 : b;
+      const nn = (n === null || n === undefined) ? -1 : n;
+      moved.push({ q: r.questionText, engine: r.engine, from: b, to: n, up: nn > bn });
+    }
+    moved.sort((a, b) => (a.up === b.up) ? 0 : (a.up ? -1 : 1));
+
+    if (moved.length) {
+      h += `<table><tr><th>שאלה</th><th>מנוע</th><th>קודם</th><th>עכשיו</th></tr>`;
+      for (const m of moved.slice(0, 14)) {
+        h += `<tr><td>${esc(m.q)}</td><td>${esc(ENGINE_LABEL[m.engine] || m.engine)}</td>`
+           + `<td style="color:#5A6379">${esc(label(m.from))}</td>`
+           + `<td style="color:${m.up ? UP : DOWN};font-weight:700">${m.up ? '▲' : '▼'} ${esc(label(m.to))}</td></tr>`;
+      }
+      h += `</table>`;
+    } else {
+      h += `<div class="note">אף תוצאה לא שינתה סיווג בין שתי המדידות. יציבות היא ממצא בפני עצמו — תשובות של מודלים משתנות מטבען, וחוסר תזוזה אומר שהתמונה אמיתית ולא רעש.</div>`;
+    }
+  }
 
   // דוח על כמה מנועים שנותן ציון אחד בלבד מסתיר את כל הסיפור:
   // אותו עסק יכול להיות ראשון בגוגל ונעדר ב-ChatGPT.
@@ -207,8 +311,23 @@ async function generate(runIds, opts) {
     else if (r.id > merged[seen[key]].id) { merged[seen[key]] = r; }
   }
 
+  let prev = null;
+  if (opts.vs && opts.vs.length) {
+    const pdb = DB.open();
+    const pruns = [], prows = [];
+    for (const id of opts.vs) {
+      const run = pdb.prepare('SELECT runs.*, clients.slug FROM runs JOIN clients ON clients.id = runs.client_id WHERE runs.id = ?').get(id);
+      if (!run) { pdb.close(); throw new Error('ריצת ההשוואה לא נמצאה: ' + id); }
+      if (run.slug !== runs[0].slug) { pdb.close(); throw new Error('ריצת ההשוואה ' + id + ' שייכת ללקוח אחר.'); }
+      pruns.push(run);
+      for (const r of DB.getRunResults(pdb, id)) prows.push(r);
+    }
+    pdb.close();
+    if (prows.length) prev = { runs: pruns, rows: prows, s: A.score(prows) };
+  }
+
   const s = A.score(merged);
-  const html = buildHtml(client, runs, merged, s);
+  const html = buildHtml(client, runs, merged, s, prev);
 
   const dir = path.join(ROOT, 'reports');
   fs.mkdirSync(dir, { recursive: true });
