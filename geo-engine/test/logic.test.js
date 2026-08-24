@@ -171,6 +171,45 @@ eq('שאלה בלי תוצאות בכלל נשארת בייצוא', exp.question
 eq('שאלה בלי תוצאות — כל התאים null', exp.questions[1].cells.map(c => c.status), [null, null, null]);
 eq('מקור נשמר בייצוא', cells1[0].source, 'b144.co.il');
 
+console.log('\n— עדכון לקוח אחרי שכבר יש ריצות —');
+
+// עדכון קובץ הלקוח נכשל ב-FOREIGN KEY ברגע שקיימת ריצה אחת, כי כל השאלות
+// נמחקו ותוצאות מצביעות עליהן. זה חסם בדיוק את הפעולה הכי שימושית:
+// להוסיף מתחרים שהתגלו בריצה ולנתח מחדש בלי למדוד שוב.
+const DBM = require('../src/db');
+const fsx = require('fs');
+const pathx = require('path');
+const osx = require('os');
+const tmpDb = pathx.join(fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'geo-db-')), 'geo.db');
+const Database = require('better-sqlite3');
+const tdb = new Database(tmpDb);
+tdb.exec(fsx.readFileSync(pathx.join(__dirname, '..', 'src', 'db.js'), 'utf8')
+  .match(/db\.exec\(`([\s\S]*?)`\);/)[1]);
+
+const cid = DBM.upsertClient(tdb, { slug: 'x', name: 'ע', nameVariants: [], trade: 't', city: 'c',
+  competitors: [{ name: 'מתחרה א', variants: [] }], questions: ['ש1', 'ש2'] });
+const before = DBM.getClient(tdb, 'x');
+const qid = before.questions[0].id;
+const rid = DBM.newRun(tdb, cid, null);
+DBM.saveResult(tdb, { runId: rid, questionId: qid, engine: 'gemini', rawText: 'טקסט',
+                      status: 2, position: 1, rivals: [], sources: [] });
+
+let updateOk = true;
+try {
+  DBM.upsertClient(tdb, { slug: 'x', name: 'ע', nameVariants: [], trade: 't', city: 'c',
+    competitors: [{ name: 'מתחרה א', variants: [] }, { name: 'מתחרה ב', variants: [] }],
+    questions: ['ש1', 'ש3'] });
+} catch (e) { updateOk = false; }
+ok('אפשר לעדכן לקוח שכבר יש לו ריצות', updateOk);
+
+const after = DBM.getClient(tdb, 'x');
+eq('המתחרה החדש נוסף', after.competitors.map(c => c.name), ['מתחרה א', 'מתחרה ב']);
+eq('רק השאלות שבקובץ פעילות', after.questions.map(q => q.text), ['ש1', 'ש3']);
+ok('מזהה השאלה הקיימת נשמר', after.questions.filter(q => q.text === 'ש1')[0].id === qid);
+eq('התוצאה מהריצה הקודמת שרדה', DBM.getRunResults(tdb, rid).length, 1);
+tdb.close();
+fsx.rmSync(pathx.dirname(tmpDb), { recursive: true, force: true });
+
 console.log('\n— דף האימות —');
 const RV = require('../src/review');
 

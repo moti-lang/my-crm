@@ -89,9 +89,14 @@ function upsertClient(db, c) {
                 WHERE id=?`)
       .run(c.name, JSON.stringify(c.nameVariants || []), c.trade, c.city, c.city2 || null,
            c.extra || null, c.domain || null, existing.id);
+    // מתחרים אפשר להחליף לגמרי — שום תוצאה לא מצביעה עליהם
     db.prepare('DELETE FROM competitors WHERE client_id = ?').run(existing.id);
-    db.prepare('DELETE FROM questions WHERE client_id = ?').run(existing.id);
-    insertChildren(db, existing.id, c);
+    const insR = db.prepare('INSERT INTO competitors (client_id,name,name_variants) VALUES (?,?,?)');
+    for (const r of (c.competitors || [])) {
+      insR.run(existing.id, r.name, JSON.stringify(r.variants || []));
+    }
+    // שאלות אי אפשר למחוק: תוצאות של ריצות עבר מצביעות עליהן
+    syncQuestions(db, existing.id, c.questions);
     return existing.id;
   }
   const info = db.prepare(`INSERT INTO clients (slug,name,name_variants,trade,city,city2,extra,domain)
@@ -109,6 +114,32 @@ function insertChildren(db, clientId, c) {
   }
   const insQ = db.prepare('INSERT INTO questions (client_id,text,active,sort_order) VALUES (?,?,1,?)');
   (c.questions || []).forEach((q, i) => insQ.run(clientId, q, i));
+}
+
+/**
+ * מסנכרן את רשימת השאלות בלי למחוק שאלות שיש עליהן תוצאות.
+ *
+ * מחיקה גורפת נכשלת ברגע שקיימת ריצה אחת, כי results.question_id מצביע
+ * על השאלה — וזה בדיוק המצב שבו מתעדכן קובץ לקוח: אחרי שכבר מדדו.
+ * לכן: שאלה שקיימת נשארת עם המזהה שלה, שאלה חדשה נוספת,
+ * ושאלה שהוסרה מהקובץ מכובה ולא נמחקת — כדי שהריצות הישנות יישארו שלמות.
+ */
+function syncQuestions(db, clientId, questions) {
+  const existing = db.prepare('SELECT id, text FROM questions WHERE client_id = ?').all(clientId);
+  const byText = {};
+  for (const q of existing) byText[q.text] = q.id;
+
+  const keep = {};
+  const insQ = db.prepare('INSERT INTO questions (client_id,text,active,sort_order) VALUES (?,?,1,?)');
+  const updQ = db.prepare('UPDATE questions SET active=1, sort_order=? WHERE id=?');
+
+  (questions || []).forEach((text, i) => {
+    if (byText[text] !== undefined) { updQ.run(i, byText[text]); keep[byText[text]] = true; }
+    else { keep[insQ.run(clientId, text, i).lastInsertRowid] = true; }
+  });
+
+  const off = db.prepare('UPDATE questions SET active=0 WHERE id=?');
+  for (const q of existing) { if (!keep[q.id]) off.run(q.id); }
 }
 
 function getClient(db, slug) {
@@ -176,6 +207,6 @@ function getRun(db, runId) {
 }
 
 module.exports = {
-  open, upsertClient, getClient, newRun, finishRun,
+  open, upsertClient, getClient, syncQuestions, newRun, finishRun,
   saveResult, updateResult, getRunResults, listRuns, getRun, DB_PATH
 };
