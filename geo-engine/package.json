@@ -18,7 +18,7 @@
     "smoke": "node test/driver-smoke.test.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^12.11.1",
     "playwright": "^1.48.0"
   }
 }

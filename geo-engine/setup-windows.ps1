@@ -22,6 +22,31 @@ function Good($m)     { Write-Host "    $m" -ForegroundColor Green }
 function Info($m)     { Write-Host "    $m" -ForegroundColor Gray }
 function Die($m)      { throw (New-Object System.Exception("GEO::" + $m)) }
 function Have($c)     { $null -ne (Get-Command $c -ErrorAction SilentlyContinue) }
+
+<#
+  הרצת תוכנית חיצונית.
+
+  קריטי: ב-Windows PowerShell 5.1, כשמפנים 2>&1 מתוכנית חיצונית
+  ו-ErrorActionPreference הוא Stop, כל שורה שהתוכנית כותבת לערוץ השגיאות
+  הופכת לשגיאה קטלנית — גם כשהיא הודעת הצלחה תמימה.
+  git fetch כותב "From https://..." לערוץ הזה בכל הרצה מוצלחת, ו-npm כותב
+  אזהרות. לכן כאן מנמיכים זמנית ל-Continue, ובודקים הצלחה לפי קוד היציאה
+  בלבד — שזו הדרך הנכונה ממילא.
+#>
+function Run($exe, [string[]]$argv, [switch]$Live) {
+  $old = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  $global:LASTEXITCODE = 0
+  try {
+    if ($Live) {
+      & $exe @argv 2>&1 | ForEach-Object { Write-Host $_ }
+      return @{ Code = $LASTEXITCODE; Out = '' }
+    }
+    $out = & $exe @argv 2>&1 | Out-String
+    return @{ Code = $LASTEXITCODE; Out = $out }
+  } finally { $ErrorActionPreference = $old }
+}
+
 function RefreshPath {
   $mp = [Environment]::GetEnvironmentVariable('Path','Machine')
   $up = [Environment]::GetEnvironmentVariable('Path','User')
@@ -38,8 +63,7 @@ try {
   Step 0 'אוסף פרטי מערכת'
   Info ("PowerShell : " + $PSVersionTable.PSVersion.ToString())
   Info ("מערכת      : " + [Environment]::OSVersion.VersionString)
-  Info ("64 סיביות  : " + [Environment]::Is64BitOperatingSystem)
-  Info ("node       : " + $(if (Have 'node')   { (& node -v) 2>$null } else { 'לא מותקן' }))
+  Info ("node       : " + $(if (Have 'node')   { (Run 'node' @('-v')).Out.Trim() } else { 'לא מותקן' }))
   Info ("git        : " + $(if (Have 'git')    { 'מותקן' } else { 'לא מותקן' }))
   Info ("winget     : " + $(if (Have 'winget') { 'זמין' }  else { 'לא זמין' }))
   Info ("יומן       : " + $LogPath)
@@ -48,23 +72,23 @@ try {
   Step 1 'בודק Node.js'
   $nodeOk = $false
   if (Have 'node') {
-    $v = (& node -v) 2>$null
-    if ($v -match '^v(\d+)\.') {
+    $v = (Run 'node' @('-v')).Out.Trim()
+    if ($v -match 'v(\d+)\.') {
       if ([int]$Matches[1] -ge 20) { Good "Node $v תקין"; $nodeOk = $true }
       else { Info "Node $v ישן מדי, צריך 20 ומעלה" }
     }
   }
   if (-not $nodeOk) {
     if (-not (Have 'winget')) {
-      Die 'Node.js חסר ו-winget לא זמין במחשב הזה. התקן ידנית מ- https://nodejs.org/en/download (גרסה 22 LTS, קובץ msi), ואז הרץ שוב את RUN-ME.bat'
+      Die 'Node.js חסר ו-winget לא זמין. התקן ידנית מ- https://nodejs.org/en/download ואז הרץ שוב.'
     }
     Info 'מתקין Node.js — כמה דקות, ייתכן שתתבקש לאשר'
-    & winget install --id OpenJS.NodeJS.LTS -e --silent --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+    Run 'winget' @('install','--id','OpenJS.NodeJS.LTS','-e','--silent','--accept-source-agreements','--accept-package-agreements') | Out-Null
     RefreshPath
     if (-not (Have 'node')) {
-      Die 'Node הותקן אבל החלון הנוכחי עדיין לא מזהה אותו. סגור את החלון והרץ שוב את RUN-ME.bat — בפעם השנייה זה יעבוד.'
+      Die 'Node הותקן אבל החלון הנוכחי לא מזהה אותו. סגור את החלון והרץ שוב — בפעם השנייה זה יעבוד.'
     }
-    Good ("Node " + (& node -v) + " הותקן")
+    Good ("Node " + (Run 'node' @('-v')).Out.Trim() + " הותקן")
   }
 
   # ---------- 2. Git ----------
@@ -73,9 +97,9 @@ try {
   else {
     if (-not (Have 'winget')) { Die 'Git חסר ו-winget לא זמין. התקן מ- https://git-scm.com ואז הרץ שוב.' }
     Info 'מתקין Git'
-    & winget install --id Git.Git -e --silent --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+    Run 'winget' @('install','--id','Git.Git','-e','--silent','--accept-source-agreements','--accept-package-agreements') | Out-Null
     RefreshPath
-    if (-not (Have 'git')) { Die 'Git הותקן אבל החלון לא מזהה אותו. סגור את החלון והרץ שוב את RUN-ME.bat' }
+    if (-not (Have 'git')) { Die 'Git הותקן אבל החלון לא מזהה אותו. סגור את החלון והרץ שוב.' }
     Good 'Git הותקן'
   }
 
@@ -84,45 +108,52 @@ try {
   if (Test-Path (Join-Path $Root '.git')) {
     Info 'קיים כבר — מושך עדכונים'
     Set-Location $Root
-    & git fetch origin $Branch 2>&1 | Out-Null
-    & git checkout $Branch    2>&1 | Out-Null
-    & git pull origin $Branch 2>&1 | Out-Null
-    Good 'עודכן'
+    $r = Run 'git' @('fetch','origin',$Branch)
+    if ($r.Code -ne 0) { Die ("git fetch נכשל:`n" + $r.Out) }
+    $r = Run 'git' @('checkout',$Branch)
+    if ($r.Code -ne 0) { Die ("git checkout נכשל:`n" + $r.Out) }
+    $r = Run 'git' @('reset','--hard',"origin/$Branch")
+    if ($r.Code -ne 0) { Die ("git reset נכשל:`n" + $r.Out) }
+    Good 'עודכן לגרסה האחרונה'
   } else {
     if (Test-Path $Root) { Die "התיקייה $Root קיימת אבל אינה פרויקט Git. שנה את שמה או מחק אותה והרץ שוב." }
-    & git clone -b $Branch $RepoUrl $Root 2>&1 | Out-Null
-    if (-not (Test-Path $Proj)) { Die 'ההורדה נכשלה. בדוק חיבור לאינטרנט והרץ שוב.' }
+    $r = Run 'git' @('clone','-b',$Branch,$RepoUrl,$Root)
+    if ($r.Code -ne 0) { Die ("ההורדה נכשלה:`n" + $r.Out) }
     Good "הורד אל $Root"
   }
+  if (-not (Test-Path $Proj)) { Die "לא נמצאה התיקייה $Proj" }
   Set-Location $Proj
 
   # ---------- 4. ספריות ----------
   Step 4 'מתקין ספריות — 2 עד 5 דקות'
-  & npm install --no-audit --no-fund 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { Die 'התקנת הספריות נכשלה. שלח לי את היומן.' }
+  $r = Run 'npm' @('install','--no-audit','--no-fund')
+  if ($r.Code -ne 0) { Die ("התקנת הספריות נכשלה:`n" + $r.Out) }
   Good 'הותקנו'
 
   # ---------- 5. דפדפן ----------
   Step 5 'מוריד דפדפן ייעודי — כ-150 מגה'
-  & npx playwright install chromium 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { Die 'הורדת הדפדפן נכשלה. בדוק חיבור והרץ שוב.' }
+  $r = Run 'npx' @('playwright','install','chromium')
+  if ($r.Code -ne 0) { Die ("הורדת הדפדפן נכשלה:`n" + $r.Out) }
   Good 'הורד'
 
   # ---------- 6-7. בדיקות ----------
   Step 6 'בודק את הלוגיקה'
-  & npm test 2>&1 | ForEach-Object { if ($_ -match 'עברו|נכשלו') { Info $_ } }
-  if ($LASTEXITCODE -ne 0) { Die 'בדיקות הלוגיקה נכשלו. זו בעיה בקוד ולא אצלך — שלח לי את היומן.' }
+  $r = Run 'npm' @('test')
+  foreach ($line in ($r.Out -split "`r?`n")) { if ($line -match 'עברו|נכשלו') { Info $line.Trim() } }
+  if ($r.Code -ne 0) { Die ("בדיקות הלוגיקה נכשלו:`n" + $r.Out) }
   Good 'עברו'
 
   Step 7 'בודק דפדפן ודרייבר — ייפתח חלון לרגע'
-  & npm run smoke 2>&1 | ForEach-Object { if ($_ -match 'עברו|נכשלו') { Info $_ } }
-  if ($LASTEXITCODE -ne 0) { Die 'בדיקת הדפדפן נכשלה. שלח לי את היומן — זו לא בעיית סלקטורים.' }
+  $r = Run 'npm' @('run','smoke')
+  foreach ($line in ($r.Out -split "`r?`n")) { if ($line -match 'עברו|נכשלו') { Info $line.Trim() } }
+  if ($r.Code -ne 0) { Die ("בדיקת הדפדפן נכשלה:`n" + $r.Out) }
   Good 'תקין — מכאן, כל כשל הוא סלקטור שהתיישן'
 
   # ---------- 8. לקוח ----------
   Step 8 'טוען את לקוח הדוגמה'
-  & node src/cli.js "client:add" clients/example.json 2>&1 | ForEach-Object { Info $_ }
-  if ($LASTEXITCODE -ne 0) { Die 'טעינת הלקוח נכשלה.' }
+  $r = Run 'node' @('src/cli.js','client:add','clients/example.json')
+  if ($r.Code -ne 0) { Die ("טעינת הלקוח נכשלה:`n" + $r.Out) }
+  Info $r.Out.Trim()
 
   # ---------- 9. ריצה ----------
   Write-Host ''
@@ -133,11 +164,11 @@ try {
   Write-Host '════════════════════════════════════════' -ForegroundColor Yellow
   Read-Host ' Enter כדי להתחיל'
 
-  & node src/cli.js run goldfish --engine=chatgpt 2>&1 | ForEach-Object { Write-Host $_ }
+  Run 'node' @('src/cli.js','run','goldfish','--engine=chatgpt') -Live | Out-Null
 
   Write-Host ''
   Write-Host ' הריצה הסתיימה.' -ForegroundColor Green
-  try { Start-Process explorer.exe $Proj } catch {}
+  try { Start-Process explorer.exe -ArgumentList $Proj } catch {}
 
 }
 catch {
@@ -160,10 +191,10 @@ finally {
   try { if ($Transcribing) { Stop-Transcript | Out-Null } } catch {}
   Write-Host ''
   Write-Host ' ─────────────────────────────────────' -ForegroundColor White
-  Write-Host '  שלח לי את הקובץ הזה:' -ForegroundColor White
+  Write-Host '  אם היו בעיות — שלח לי את הקובץ הזה:' -ForegroundColor White
   Write-Host ("  " + $LogPath) -ForegroundColor Yellow
   Write-Host ' ─────────────────────────────────────' -ForegroundColor White
-  try { Start-Process explorer.exe ('/select,"' + $LogPath + '"') } catch {}
+  try { Start-Process explorer.exe -ArgumentList ('/select,"' + $LogPath + '"') } catch {}
   Write-Host ''
   Read-Host ' Enter לסגירה'
 }
