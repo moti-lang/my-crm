@@ -402,16 +402,21 @@ async function generate(runIds, opts) {
 
   let pdfPath = null;
   if (opts.pdf !== false) {
+    let browser = null;
     try {
       const { chromium } = require('playwright');
-      const browser = await chromium.launch();
+      browser = await chromium.launch();
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: 'load' });
-      pdfPath = path.join(dir, base + '.pdf');
-      await page.pdf({ path: pdfPath, format: 'A4', printBackground: true });
-      await browser.close();
+      const target = path.join(dir, base + '.pdf');
+      await page.pdf({ path: target, format: 'A4', printBackground: true });
+      // רק אחרי שהקובץ באמת נכתב — אחרת נדפיס נתיב לקובץ שאינו קיים
+      pdfPath = target;
     } catch (e) {
       console.log('יצירת ה-PDF נכשלה (ה-HTML נוצר בהצלחה): ' + e.message);
+      console.log('אפשר לפתוח את ה-HTML בדפדפן ולהדפיס אותו ל-PDF.');
+    } finally {
+      if (browser) { try { await browser.close(); } catch (e) { /* כבר נסגר */ } }
     }
   }
 

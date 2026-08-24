@@ -21,6 +21,8 @@ const DB = require('./db');
 const R = require('./run');
 
 const ROOT = path.join(__dirname, '..');
+// GEO_CONFIG קיים כדי שבדיקות יכתבו מיתוג לתיקייה זמנית ולא ידרסו את שלך
+const CONFIG = process.env.GEO_CONFIG ? path.resolve(process.env.GEO_CONFIG) : path.join(ROOT, 'config');
 const PORT = 7317;
 
 /* ---------- הרצת פקודות ---------- */
@@ -93,9 +95,80 @@ function readState() {
 
   return {
     clients, runs, reports, clientFiles,
-    branded: fs.existsSync(path.join(ROOT, 'config', 'brand.json')),
+    branded: fs.existsSync(path.join(CONFIG, 'brand.json')),
     engines: Object.keys(ENGINE_LABEL).map(k => ({ key: k, label: ENGINE_LABEL[k] }))
   };
+}
+
+/* ---------- מיתוג ---------- */
+
+const BRAND_FIELDS = ['name', 'tagline', 'phone', 'email', 'site'];
+const LOGO_EXT = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/svg+xml': '.svg' };
+const MAX_LOGO = 2 * 1024 * 1024;
+
+function brandFile() { return path.join(CONFIG, 'brand.json'); }
+
+function readBrand() {
+  const out = { name: '', tagline: '', phone: '', email: '', site: '', logo: '', logoData: '' };
+  if (!fs.existsSync(brandFile())) return out;
+  let b;
+  try { b = JSON.parse(fs.readFileSync(brandFile(), 'utf8')); }
+  catch (e) { throw new Error('config/brand.json אינו JSON תקין. תקן אותו או מחק אותו והזן מחדש.'); }
+  for (const f of BRAND_FIELDS) if (typeof b[f] === 'string') out[f] = b[f];
+  if (b.logo) {
+    const lp = path.isAbsolute(b.logo) ? b.logo : path.join(ROOT, b.logo);
+    out.logo = b.logo;
+    // התצוגה המקדימה נשלחת מוטמעת, כי הדפדפן לא יכול לקרוא קובץ מהדיסק
+    if (fs.existsSync(lp)) {
+      const ext = path.extname(lp).toLowerCase();
+      const mime = Object.keys(LOGO_EXT).find(m => LOGO_EXT[m] === ext) || 'image/png';
+      out.logoData = 'data:' + mime + ';base64,' + fs.readFileSync(lp).toString('base64');
+    } else {
+      out.logoMissing = true;
+    }
+  }
+  return out;
+}
+
+/**
+ * שומר את המיתוג. הלוגו מגיע כ-data URI מהדפדפן ונשמר כקובץ,
+ * כי report.js מטמיע אותו מהדיסק בזמן הפקת הדוח.
+ */
+function writeBrand(b) {
+  const out = {};
+  for (const f of BRAND_FIELDS) {
+    const v = String((b && b[f]) || '').trim();
+    if (v.length > 200) throw new Error('השדה "' + f + '" ארוך מדי');
+    if (v) out[f] = v;
+  }
+  if (out.email && out.email.indexOf('@') === -1) throw new Error('כתובת המייל אינה נראית תקינה');
+
+  const dir = CONFIG;
+  fs.mkdirSync(dir, { recursive: true });
+
+  if (b && b.logoData) {
+    const m = String(b.logoData).match(/^data:([\w.+/-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+    if (!m) throw new Error('קובץ הלוגו לא נקרא כראוי. נסה קובץ אחר.');
+    const ext = LOGO_EXT[m[1]];
+    if (!ext) throw new Error('סוג הקובץ אינו נתמך. השתמש ב-PNG, JPG, WEBP או SVG.');
+    const bytes = Buffer.from(m[2], 'base64');
+    if (!bytes.length) throw new Error('קובץ הלוגו ריק');
+    if (bytes.length > MAX_LOGO) throw new Error('הלוגו גדול מ-2 מגה. כווץ אותו ונסה שוב.');
+    // מוחק לוגו קודם בפורמט אחר, אחרת יישארו שניים והדוח ייקח את הישן
+    for (const e of Object.keys(LOGO_EXT).map(k => LOGO_EXT[k])) {
+      const old = path.join(dir, 'logo' + e);
+      if (e !== ext && fs.existsSync(old)) { try { fs.unlinkSync(old); } catch (err) {} }
+    }
+    fs.writeFileSync(path.join(dir, 'logo' + ext), bytes);
+    // נשמר יחסית לשורש הפרויקט, כך שהוא נשאר תקף גם אם התיקייה תועתק
+    out.logo = path.relative(ROOT, path.join(dir, 'logo' + ext)).split(path.sep).join('/');
+  } else if (b && b.keepLogo) {
+    const cur = readBrand();
+    if (cur.logo) out.logo = cur.logo;
+  }
+
+  fs.writeFileSync(brandFile(), JSON.stringify(out, null, 2) + '\n', 'utf8');
+  return readBrand();
 }
 
 /** פותח קובץ בתוכנה שמוגדרת אצלו במערכת */
@@ -152,6 +225,11 @@ function handle(req, res, body) {
 
   if (p === '/api/state') return json(res, 200, readState());
 
+  if (p === '/api/brand' && req.method === 'GET') {
+    try { return json(res, 200, readBrand()); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
+
   if (p === '/api/job' && req.method === 'GET') {
     const j = jobs[url.searchParams.get('id')];
     if (!j) return json(res, 404, { error: 'ריצה לא נמצאה' });
@@ -197,6 +275,8 @@ function handle(req, res, body) {
     }
 
 
+
+    if (p === '/api/brand') return json(res, 200, writeBrand(b));
 
     if (p === '/api/report') {
       const list = ids(b.runs);
@@ -250,7 +330,8 @@ function start(opts) {
   opts = opts || {};
   const server = http.createServer((req, res) => {
     let raw = '';
-    req.on('data', c => { raw += c; if (raw.length > 1e6) req.destroy(); });
+    // התקרה גבוהה כי הלוגו נשלח מוטמע כ-base64; הכל מקומי ממילא
+    req.on('data', c => { raw += c; if (raw.length > 8e6) req.destroy(); });
     req.on('end', () => {
       let body = null;
       if (raw) { try { body = JSON.parse(raw); } catch (e) { body = null; } }
@@ -273,7 +354,7 @@ function start(opts) {
   });
 }
 
-module.exports = { start, readState, handle, openUrl, alreadyMine, PORT };
+module.exports = { start, readState, handle, openUrl, alreadyMine, readBrand, writeBrand, PORT };
 
 if (require.main === module) {
   start({}).then(({ url }) => {

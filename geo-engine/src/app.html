@@ -33,6 +33,13 @@ header .spacer{flex:1}
 .card > h2{font-size:19px;font-weight:800;margin-bottom:4px}
 .card > .hint{color:var(--muted);font-size:14.5px;margin-bottom:16px}
 summary{font-size:19px;font-weight:800;cursor:pointer}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+@media (max-width:640px){.grid2{grid-template-columns:1fr}}
+.hidefile{position:absolute;opacity:0;width:0;height:0}
+.filerow{display:flex;align-items:center;gap:10px;margin-top:6px}
+.logoprev{display:flex;align-items:center;gap:14px;margin-top:16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.logoprev img{max-height:52px;max-width:200px;width:auto;height:auto}
+.st{font-size:14px;color:var(--muted);align-self:center}
 summary:focus-visible{outline:3px solid var(--teal);outline-offset:3px;border-radius:4px}
 
 label{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:14px 0 6px}
@@ -151,6 +158,55 @@ td.acts{white-space:nowrap}
   <div class="card">
     <h2>דוחות</h2>
     <div id="reports"></div>
+  </div>
+
+  <div class="card">
+    <details id="brandBox">
+      <summary>מיתוג הדוח</summary>
+      <div class="hint" style="margin-top:12px">מה שיופיע בראש הדוח ובתחתיתו. ממלאים פעם אחת. כל שדה אופציונלי — מה שריק לא יופיע.</div>
+
+      <div class="grid2">
+        <div>
+          <label for="bName">שם המשרד</label>
+          <input type="text" id="bName" maxlength="200" placeholder="אוטומציה ו-AI">
+        </div>
+        <div>
+          <label for="bTagline">שורת תיאור</label>
+          <input type="text" id="bTagline" maxlength="200" placeholder="בדיקת נראות עסקים במנועי AI">
+        </div>
+        <div>
+          <label for="bPhone">טלפון</label>
+          <input type="text" id="bPhone" maxlength="200" placeholder="050-0000000">
+        </div>
+        <div>
+          <label for="bEmail">מייל</label>
+          <input type="text" id="bEmail" maxlength="200" placeholder="you@example.co.il">
+        </div>
+        <div>
+          <label for="bSite">אתר</label>
+          <input type="text" id="bSite" maxlength="200" placeholder="example.co.il">
+        </div>
+        <div>
+          <label for="bLogoBtn">לוגו</label>
+          <!-- הפקד המקורי מוסתר כי הכיתוב שלו נקבע בדפדפן ומופיע באנגלית -->
+          <input type="file" id="bLogo" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="hidefile">
+          <div class="filerow">
+            <button type="button" class="btn ghost sm" id="bLogoBtn">בחר קובץ</button>
+            <span class="st" id="bLogoName">לא נבחר קובץ</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="logoPrev" class="logoprev" style="display:none">
+        <img id="logoImg" alt="הלוגו שנבחר">
+        <button type="button" class="btn ghost sm" id="logoDrop">הסר לוגו</button>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="brandSave">שמור מיתוג</button>
+        <span class="st" id="brandSt"></span>
+      </div>
+    </details>
   </div>
 
   <div class="card">
@@ -341,6 +397,82 @@ el('reportBtn').addEventListener('click', function(){
 });
 el('clearSel').addEventListener('click', function(){ S.sel = {}; drawRuns(); });
 
+/* ---------- מיתוג ---------- */
+
+// null = לא נבחר לוגו חדש בטופס הזה; המצב הקיים נשמר דרך keepLogo
+var newLogo = null, hasLogo = false;
+
+function loadBrand(){
+  fetch('/api/brand').then(function(r){ return r.json(); }).then(function(b){
+    if (b.error) { el('brandSt').textContent = b.error; return; }
+    el('bName').value = b.name || '';
+    el('bTagline').value = b.tagline || '';
+    el('bPhone').value = b.phone || '';
+    el('bEmail').value = b.email || '';
+    el('bSite').value = b.site || '';
+    showLogo(b.logoData || '', !!b.logo);
+    el('bLogoName').textContent = b.logo ? b.logo.split('/').pop() : 'לא נבחר קובץ';
+    if (b.logoMissing) el('brandSt').textContent = 'קובץ הלוגו שנשמר לא נמצא. בחר אותו שוב.';
+  }).catch(function(){ /* המיתוג אינו חוסם שום דבר אחר */ });
+}
+
+function showLogo(dataUri, exists){
+  hasLogo = !!exists;
+  if (dataUri) {
+    el('logoImg').src = dataUri;
+    el('logoPrev').style.display = 'flex';
+  } else {
+    el('logoPrev').style.display = 'none';
+    el('logoImg').removeAttribute('src');
+  }
+}
+
+el('bLogoBtn').addEventListener('click', function(){ el('bLogo').click(); });
+
+el('bLogo').addEventListener('change', function(){
+  var f = this.files && this.files[0];
+  if (!f) return;
+  if (f.size > 2 * 1024 * 1024) {
+    el('brandSt').textContent = 'הקובץ גדול מ-2 מגה. כווץ אותו ונסה שוב.';
+    this.value = ''; el('bLogoName').textContent = 'לא נבחר קובץ'; return;
+  }
+  el('bLogoName').textContent = f.name;
+  var fr = new FileReader();
+  fr.onload = function(){ newLogo = String(fr.result); showLogo(newLogo, true); el('brandSt').textContent = 'הלוגו ייכנס בלחיצה על "שמור מיתוג".'; };
+  fr.onerror = function(){ el('brandSt').textContent = 'לא הצלחתי לקרוא את הקובץ.'; };
+  fr.readAsDataURL(f);
+});
+
+el('logoDrop').addEventListener('click', function(){
+  newLogo = null; el('bLogo').value = ''; el('bLogoName').textContent = 'לא נבחר קובץ';
+  showLogo('', false);
+  el('brandSt').textContent = 'הלוגו יוסר בלחיצה על "שמור מיתוג".';
+});
+
+el('brandSave').addEventListener('click', function(){
+  var b = this;
+  var body = {
+    name: el('bName').value, tagline: el('bTagline').value,
+    phone: el('bPhone').value, email: el('bEmail').value, site: el('bSite').value
+  };
+  if (newLogo) body.logoData = newLogo;
+  else if (hasLogo) body.keepLogo = true;
+
+  b.disabled = true;
+  el('brandSt').textContent = 'שומר…';
+  api('/api/brand', body).then(function(saved){
+    newLogo = null; el('bLogo').value = '';
+    el('bLogoName').textContent = saved.logo ? saved.logo.split('/').pop() : 'לא נבחר קובץ';
+    showLogo(saved.logoData || '', !!saved.logo);
+    el('brandSt').textContent = 'נשמר. הדוח הבא ייצא ממותג.';
+    b.disabled = false;
+    load();
+  }).catch(function(e){
+    el('brandSt').textContent = 'לא נשמר: ' + e.message;
+    b.disabled = false;
+  });
+});
+
 el('verifyBtn').addEventListener('click', function(){
   var t = el('setLine').value.trim();
   var m = t.match(/verify\s+(\d+)\s+--set=([\d:,n]+)/i) || t.match(/^(\d+)\s+([\d:,n]+)$/i);
@@ -370,6 +502,7 @@ el('termStop').addEventListener('click', function(){
 });
 
 load();
+loadBrand();
 </script>
 </body>
 </html>

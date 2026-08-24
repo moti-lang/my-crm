@@ -18,6 +18,7 @@ const http = require('http');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'geo-app-'));
 process.env.GEO_DB = path.join(TMP, 'test.db');
+process.env.GEO_CONFIG = path.join(TMP, 'config');
 
 const DB = require('../src/db');
 const APP = require('../src/app');
@@ -154,6 +155,47 @@ function req(method, p, body) {
   ok('הסטטוס שהמשתמש בחר נשמר', rows[0].status === 0, JSON.stringify(rows[0]));
   ok('"לא נמדד" נשמר כ-null ולא כאפס', rows[1].status === null, JSON.stringify(rows[1]));
   ok('שתי התוצאות מסומנות כמאומתות', rows.every(x => x.verified_by_human === 1));
+
+  console.log('\n— מיתוג —');
+
+  // PNG אמיתי, 1x1, כדי שהנתיב יהיה זהה לזה של לוגו שהמשתמש בוחר
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
+            + 'AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+  r = await req('GET', '/api/brand');
+  ok('מיתוג ריק כשאין קובץ', r.code === 200 && r.json.name === '' && r.json.logo === '');
+  r = await req('GET', '/api/state');
+  ok('הכותרת יודעת שאין מיתוג', r.json.branded === false);
+
+  r = await req('POST', '/api/brand', { name: 'אוטומציה ו-AI', phone: '050-1234567',
+                                        email: 'moti@automation1.co.il', logoData: PNG });
+  ok('מיתוג נשמר', r.code === 200 && r.json.name === 'אוטומציה ו-AI', r.text);
+  ok('הלוגו נשמר כקובץ', /logo\.png$/.test(r.json.logo || ''), JSON.stringify(r.json.logo));
+  ok('הלוגו חוזר מוטמע לתצוגה', /^data:image\/png;base64,/.test(r.json.logoData || ''));
+
+  r = await req('GET', '/api/state');
+  ok('הכותרת יודעת שיש מיתוג', r.json.branded === true);
+
+  r = await req('GET', '/api/brand');
+  ok('הערכים נטענים חזרה לטופס', r.json.phone === '050-1234567' && r.json.email === 'moti@automation1.co.il');
+
+  r = await req('POST', '/api/brand', { name: 'אוטומציה ו-AI', keepLogo: true });
+  ok('שמירה בלי בחירת לוגו שומרת עליו', /logo\.png$/.test(r.json.logo || ''), JSON.stringify(r.json.logo));
+  r = await req('POST', '/api/brand', { name: 'אוטומציה ו-AI' });
+  ok('הסרת לוגו מוחקת אותו מהמיתוג', !r.json.logo);
+
+  r = await req('POST', '/api/brand', { name: 'x', logoData: 'data:application/x-msdownload;base64,TVo=' });
+  ok('קובץ שאינו תמונה נדחה', r.code === 400, r.text);
+  r = await req('POST', '/api/brand', { name: 'x', logoData: 'לא data URI בכלל' });
+  ok('מחרוזת שאינה קובץ נדחית', r.code === 400);
+  r = await req('POST', '/api/brand', { email: 'בלי שטרודל' });
+  ok('מייל לא תקין נדחה', r.code === 400);
+  r = await req('POST', '/api/brand', { name: 'א'.repeat(201) });
+  ok('שדה ארוך מדי נדחה', r.code === 400);
+
+  const savedFields = JSON.parse(fs.readFileSync(path.join(TMP, 'config', 'brand.json'), 'utf8'));
+  ok('שדות ריקים לא נכתבים לקובץ', !('tagline' in savedFields) && !('site' in savedFields),
+     JSON.stringify(savedFields));
 
   console.log('\n— פתיחה חוזרת —');
 
