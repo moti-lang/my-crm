@@ -82,13 +82,29 @@ function mentions(text, name, variants) {
   return findFirst(text, expand(name, variants)) !== -1;
 }
 
-/** חילוץ דומיינים מרשימת קישורים */
+/**
+ * דומיינים שאינם מקורות מידע: הממשק של המנוע עצמו, ושרתי מפות ואריחים
+ * שנגררים מווידג׳טים. בטבלה שאומרת ללקוח איפה להשקיע הם רעש בלבד.
+ */
+const INFRA_DOMAINS = [
+  'chatgpt.com', 'openai.com', 'oaistatic.com', 'oaiusercontent.com',
+  'google.com', 'gstatic.com', 'googleusercontent.com', 'googleapis.com',
+  'gemini.google.com', 'bing.com', 'virtualearth.net',
+  'mapbox.com', 'openstreetmap.org', 'carto.com', 'arcgisonline.com'
+];
+
+/** האם הדומיין הוא תשתית ולא מקור מידע */
+function isInfra(host) {
+  return INFRA_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+}
+
+/** חילוץ דומיינים מרשימת קישורים, בלי דומיינים של תשתית */
 function domainsOf(urls) {
   const out = [];
   for (const u of urls || []) {
     try {
-      const h = new URL(u).hostname.replace(/^www\./, '');
-      if (h && !/^(chatgpt|openai|gemini|google|gstatic|googleusercontent)\./.test(h)) out.push(h);
+      const h = new URL(u).hostname.replace(/^www\./, '').toLowerCase();
+      if (h && !isInfra(h)) out.push(h);
     } catch (e) { /* לא URL תקין — מדלגים */ }
   }
   return out;
@@ -101,4 +117,4 @@ function tally(list) {
   return Object.keys(m).map(k => [k, m[k]]).sort((a, b) => b[1] - a[1]);
 }
 
-module.exports = { norm, tight, expand, findFirst, mentions, domainsOf, tally };
+module.exports = { norm, tight, expand, findFirst, mentions, domainsOf, tally, isInfra, INFRA_DOMAINS };

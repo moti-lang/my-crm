@@ -70,9 +70,17 @@ li{margin-top:4px}
 <div class="m"><div class="n">${pct(s.pAppear)}</div><div class="l">הופעה בתשובות</div></div>
 <div class="m"><div class="n">${pct(s.pTop3)}</div><div class="l">בשלושת הראשונים</div></div>
 <div class="m"><div class="n">${pct(s.pDirect)}</div><div class="l">המלצה ישירה</div></div>`;
-  h += s.multiplier === null
-    ? `<div class="m hi"><div class="n">—</div><div class="l">המתחרים הופיעו ${s.rivalTotal} פעמים, העסק אף פעם</div></div>`
-    : `<div class="m${s.multiplier > 1 ? ' hi' : ''}"><div class="n">פי ${Math.round(s.multiplier * 10) / 10}</div><div class="l">המתחרים מופיעים יותר</div></div>`;
+  // המכפיל הוא יחס בין הופעות המתחרים להופעות העסק. מתחת ל-1 המשמעות הפוכה,
+  // ולכן גם המספר וגם הכיתוב מוצגים בכיוון שמתאים למציאות.
+  if (s.multiplier === null) {
+    h += `<div class="m hi"><div class="n">—</div><div class="l">המתחרים הופיעו ${s.rivalTotal} פעמים, העסק אף פעם</div></div>`;
+  } else if (s.multiplier > 1) {
+    h += `<div class="m hi"><div class="n">פי ${Math.round(s.multiplier * 10) / 10}</div><div class="l">המתחרים מופיעים יותר ממך</div></div>`;
+  } else if (s.multiplier < 1) {
+    h += `<div class="m"><div class="n">פי ${Math.round((1 / s.multiplier) * 10) / 10}</div><div class="l">אתה מופיע יותר מהמתחרים</div></div>`;
+  } else {
+    h += `<div class="m"><div class="n">שוויון</div><div class="l">אתה והמתחרים מופיעים אותו מספר פעמים</div></div>`;
+  }
   h += `</div>`;
 
   h += `<div class="note">הבדיקה כללה ${Object.keys(byQ).length} שאלות על ${engines.length} מנועים. נמדדו בפועל ${s.measured} תאים${rows.length - s.measured > 0 ? ` (${rows.length - s.measured} לא נמדדו — לא הוצג בלוק AI או אירעה שגיאה, ואינם נספרים בציון)` : ''}. חישוב הציון: 40% הופעה, 30% מיקום בשלושת הראשונים, 30% המלצה ישירה.</div>`;

@@ -170,7 +170,9 @@ function score(results) {
   const gaps = {};
 
   for (const r of results) {
-    for (const src of (r.sources || [])) allSources.push(src);
+    // מסננים גם כאן ולא רק בזמן האיסוף, כדי שריצות שכבר נשמרו
+    // לפני שהסינון הורחב יתוקנו בדוח בלי להריץ אותן מחדש.
+    for (const src of (r.sources || [])) { if (!N.isInfra(src)) allSources.push(src); }
     for (const rv of (r.rivals || [])) allRivals.push(rv);
 
     if (r.status === null || r.status === undefined) continue;

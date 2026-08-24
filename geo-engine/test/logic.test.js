@@ -148,5 +148,42 @@ eq('סינון דומיינים של המנועים עצמם',
    N.domainsOf(['https://www.b144.co.il/x', 'https://chatgpt.com/y', 'https://zap.co.il/z']),
    ['b144.co.il', 'zap.co.il']);
 
+// שרתי מפות נגררים מווידג׳טים ואינם מקורות מידע. בטבלה ללקוח הם רעש.
+eq('שרתי מפות ואריחים מסוננים',
+   N.domainsOf(['https://api.mapbox.com/tiles/1', 'https://tile.openstreetmap.org/2',
+                'https://goldfishbeitar.co.il/', 'https://oaiusercontent.com/z']),
+   ['goldfishbeitar.co.il']);
+ok('דומיין עסקי רגיל אינו מסונן', !N.isInfra('b144.co.il') && !N.isInfra('pricez.co.il'));
+ok('תת-דומיין של תשתית מסונן', N.isInfra('api.mapbox.com'));
+ok('דומיין שרק מסתיים דומה אינו מסונן', !N.isInfra('notmapbox.com'));
+
+// ריצות שנשמרו לפני הרחבת הסינון מכילות שרתי מפות. הדוח חייב לנקות אותן.
+const sInfra = A.score([
+  { status: 2, questionText: 'ש', rivals: [], sources: ['mapbox.com', 'b144.co.il', 'openstreetmap.org'] }
+]);
+eq('מקורות תשתית שכבר נשמרו מסוננים בדוח', sInfra.sourceTally.map(x => x[0]), ['b144.co.il']);
+
+console.log('\n— כיתוב המכפיל בדוח —');
+const REPORT = require('../src/report');
+function multLabel(rows) {
+  const s = A.score(rows);
+  const h = REPORT.buildHtml({ name: 'ע', trade: 'ת', city: 'ע', competitors: [] },
+                             { id: 1, started_at: '2026-01-01' }, rows, s);
+  const m = h.match(/<div class="n">([^<]*)<\/div><div class="l">([^<]*מופיע[^<]*)<\/div>/);
+  return m ? { n: m[1], l: m[2] } : null;
+}
+// הלקוח הופיע 2, המתחרים 1 → אסור לכתוב שהמתחרים מופיעים יותר
+const less = multLabel([
+  { status: 2, questionText: 'ש1', rivals: ['א'], sources: [] },
+  { status: 2, questionText: 'ש2', rivals: [],    sources: [] }
+]);
+ok('כשהעסק מופיע יותר — הכיתוב לא סותר', less && less.l.indexOf('אתה מופיע יותר') !== -1, JSON.stringify(less));
+// המתחרים 4, הלקוח 1
+const more = multLabel([
+  { status: 2, questionText: 'ש1', rivals: ['א','ב','ג','ד'], sources: [] },
+  { status: 0, questionText: 'ש2', rivals: [], sources: [] }
+]);
+ok('כשהמתחרים מופיעים יותר — הכיתוב נכון', more && more.l.indexOf('המתחרים מופיעים יותר') !== -1, JSON.stringify(more));
+
 console.log(`\n${pass} עברו, ${fail} נכשלו\n`);
 process.exit(fail ? 1 : 0);
