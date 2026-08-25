@@ -545,6 +545,13 @@ function handle(req, res, body) {
 
     if (p === '/api/open') return json(res, 200, { opened: path.basename(openLocal(String(b.file || ''))) });
 
+    if (p === '/api/open-folder') {
+      const dir = path.join(ROOT, 'reports');
+      fs.mkdirSync(dir, { recursive: true });
+      openDefault(dir);
+      return json(res, 200, { folder: dir });
+    }
+
     if (p === '/api/quit') {
       json(res, 200, { closing: true });
       // מרווח קצר כדי שהתשובה תספיק לצאת לפני שהתהליך נסגר
