@@ -266,8 +266,9 @@ code{font-family:Consolas,ui-monospace,monospace;font-size:.92em;background:var(
     <div id="reports"></div>
     <div class="row">
       <button class="btn btn-ghost btn-sm" id="openFolder">פתח את תיקיית הדוחות</button>
-      <span class="st" id="folderSt"></span>
+      <button class="btn btn-ghost btn-sm" id="copyFolder" style="display:none">העתק את הנתיב</button>
     </div>
+    <div class="st" id="folderSt" style="margin-top:8px"></div>
 
     <details id="brandBox">
       <summary>מיתוג הדוח</summary>
@@ -480,7 +481,8 @@ function drawReports(){
   }).join('') + '</table>';
   [].slice.call(document.querySelectorAll('.op')).forEach(function(b){
     b.addEventListener('click', function(){
-      api('/api/open', {file:this.dataset.f}).catch(function(e){ alert(e.message); });
+      // התוכנה מגישה את הקובץ בעצמה. פתיחה דרך סייר Windows נכשלה בשקט.
+      window.open('/report?file=' + encodeURIComponent(this.dataset.f), '_blank');
     });
   });
 }
@@ -545,11 +547,31 @@ el('reportBtn').addEventListener('click', function(){
 });
 el('clearSel').addEventListener('click', function(){ S.sel = {}; drawRuns(); });
 
+var folderPath = '';
+
 el('openFolder').addEventListener('click', function(){
-  // הנתיב מוצג גם בטקסט, כי סייר שנפתח מאחורי החלון נראה כאילו כלום לא קרה
+  // הסייר עלול לא להיפתח כלל, ולכן הנתיב מוצג תמיד ואפשר להעתיק אותו.
+  // כתובת שאפשר להדביק ב-Win+R עובדת גם כשהפתיחה האוטומטית לא.
   api('/api/open-folder', {}).then(function(o){
-    el('folderSt').textContent = o.folder;
+    folderPath = o.folder;
+    el('copyFolder').style.display = 'inline-block';
+    el('folderSt').textContent = 'אם הסייר לא נפתח — הדבק את זה ב-Win+R:  ' + o.folder;
   }).catch(function(e){ el('folderSt').textContent = 'לא נפתח: ' + e.message; });
+});
+
+el('copyFolder').addEventListener('click', function(){
+  var b = this;
+  function done(){ b.textContent = 'הועתק'; setTimeout(function(){ b.textContent = 'העתק את הנתיב'; }, 1600); }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(folderPath).then(done, function(){ b.textContent = 'סמן והעתק ידנית'; });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = folderPath; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { b.textContent = 'סמן והעתק ידנית'; }
+      document.body.removeChild(ta);
+    }
+  } catch (e) { b.textContent = 'סמן והעתק ידנית'; }
 });
 
 el('verifyBtn').addEventListener('click', function(){

@@ -444,6 +444,30 @@ function handle(req, res, body) {
 
   if (p === '/favicon.ico') { res.writeHead(204); return res.end(); }
 
+  /**
+   * מגיש דוח מתוך תיקיית reports.
+   *
+   * למה לא לפתוח אותו דרך סייר Windows: פתיחה חיצונית תלויה בסייר, בשיוך
+   * הקבצים ובנתיב — ואם משהו מזה לא עובד, הלחיצה פשוט לא עושה כלום.
+   * כאן הדפדפן שכבר פתוח מציג את הקובץ בעצמו.
+   */
+  if (p === '/report') {
+    const name = path.basename(String(url.searchParams.get('file') || ''));
+    if (!/^[\w.\- ()֐-׿]+\.(pdf|html)$/i.test(name)) {
+      return json(res, 400, { error: 'שם קובץ לא תקין' });
+    }
+    const full = path.join(ROOT, 'reports', name);
+    if (!fs.existsSync(full)) return json(res, 404, { error: 'הקובץ לא נמצא: ' + name });
+    const pdf = /\.pdf$/i.test(name);
+    res.writeHead(200, {
+      'Content-Type': pdf ? 'application/pdf' : 'text/html; charset=utf-8',
+      // inline: להציג בחלון ולא להוריד. שם הקובץ נשמר לשמירה ידנית.
+      'Content-Disposition': 'inline; filename*=UTF-8\'\'' + encodeURIComponent(name),
+      'Cache-Control': 'no-store'
+    });
+    return fs.createReadStream(full).pipe(res);
+  }
+
   // דף האימות מוגש מכאן ולא כקובץ, כדי שהשמירה תהיה באותו מקור —
   // בלי CORS, בלי טוקן, ובלי להעתיק שורה בין שני חלונות.
   if (p === '/review') {
@@ -602,10 +626,22 @@ function launch(cmd, args, onFail) {
   } catch (e) { fail(); }
 }
 
-/** פותח בכלי ברירת המחדל של מערכת ההפעלה */
+/**
+ * פותח בכלי ברירת המחדל של מערכת ההפעלה.
+ *
+ * ב-Windows יש שני מסלולים כי אחד מהם לבדו נכשל בשקט: explorer בלי סיומת
+ * תלוי בפתרון PATH, ו-start של cmd עובד גם כשהוא לא. הכישלון של הראשון
+ * הוא אירוע אסינכרוני, ולכן הניסיון השני נתלה בו ולא רץ במקביל.
+ */
 function openDefault(target) {
-  const cmd = process.platform === 'win32' ? 'explorer'
-            : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  if (process.platform === 'win32') {
+    launch('explorer.exe', [target], () => {
+      const comspec = process.env.ComSpec || 'cmd.exe';
+      launch(comspec, ['/c', 'start', '', target], () => { /* נשאר הנתיב בטקסט */ });
+    });
+    return;
+  }
+  const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
   launch(cmd, [target], () => { /* אין דרך נוספת; המשתמש יקבל את הכתובת בטקסט */ });
 }
 

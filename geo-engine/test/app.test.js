@@ -118,6 +118,30 @@ function req(method, p, body) {
   r = await req('GET', '/review?run=999999');
   ok('ריצה שלא קיימת נדחית', r.code === 400 && /לא נמצאה/.test(r.json.error), r.text);
 
+  console.log('\n— הגשת דוחות —');
+  {
+    // הדוחות מוגשים מהתוכנה ולא נפתחים דרך סייר Windows, שנכשל שם בשקט
+    const dir = path.join(__dirname, '..', 'reports');
+    fs.mkdirSync(dir, { recursive: true });
+    const seen = fs.readdirSync(dir);
+    const name = 'zzz-app-test.html';
+    fs.writeFileSync(path.join(dir, name), '<html><body>דוח</body></html>');
+
+    r = await req('GET', '/report?file=' + name);
+    ok('דוח קיים מוגש', r.code === 200 && r.text.indexOf('דוח') !== -1, 'קוד ' + r.code);
+
+    r = await req('GET', '/report?file=' + encodeURIComponent('../package.json'));
+    ok('יציאה מתיקיית הדוחות נחסמת', r.code === 400, 'קוד ' + r.code);
+    r = await req('GET', '/report?file=nope.pdf');
+    ok('דוח שאינו קיים מחזיר 404', r.code === 404);
+    r = await req('GET', '/report?file=x.exe');
+    ok('סוג קובץ אחר נדחה', r.code === 400);
+
+    for (const f of fs.readdirSync(dir)) {
+      if (seen.indexOf(f) === -1) fs.unlinkSync(path.join(dir, f));
+    }
+  }
+
   console.log('\n— ולידציה —');
 
   r = await req('POST', '/api/run', { slug: '../../etc/passwd' });
