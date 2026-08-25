@@ -455,9 +455,19 @@ function drawVs(){
 
 function drawReports(){
   var rp = S.state.reports;
-  if (!rp.length) { el('reports').innerHTML = '<div class="empty">עוד אין דוחות.</div>'; return; }
-  el('reports').innerHTML = '<table>' + rp.map(function(f){
-    return '<tr><td>'+esc(f)+'</td><td class="acts"><button class="btn btn-ghost btn-sm op" data-f="'+esc(f)+'">פתח</button></td></tr>';
+  if (!rp.length) {
+    el('reports').innerHTML = '<div class="empty">עוד אין דוחות. סמן בדיקות בלשונית "הרצה" ולחץ "הפק דוח".</div>';
+    return;
+  }
+  // כל דוח נוצר בשני קבצים באותו שם. בלי סימון אי אפשר לדעת מה לשלוח.
+  el('reports').innerHTML =
+      '<div class="note" style="margin-top:0">כל הפקה יוצרת שני קבצים: '
+    + '<b>PDF</b> — זה מה ששולחים ללקוח, ו<b>דף</b> — לפתיחה בדפדפן. הציון נמצא בראש שניהם.</div>'
+    + '<table>' + rp.map(function(f){
+    var pdf = /\.pdf$/i.test(f);
+    return '<tr><td>' + (pdf ? '<span class="pill ok">PDF</span>' : '<span class="pill">דף</span>')
+         + '</td><td>'+esc(f)+'</td>'
+         + '<td class="acts"><button class="btn btn-ghost btn-sm op" data-f="'+esc(f)+'">פתח</button></td></tr>';
   }).join('') + '</table>';
   [].slice.call(document.querySelectorAll('.op')).forEach(function(b){
     b.addEventListener('click', function(){
