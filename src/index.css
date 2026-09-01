@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #f6f4f8; --card: #ffffff; --ink: #241a2e; --soft: #6b5d78;
+  --plum: #5b2a57;  --rose: #b03a62;  --sage: #5f7458; --amber: #b07a22;
+  --rule: #e1d9e6;  --shade: #f0eaf3; --nav: #2e1f3d;
+  --ok: #3f7d4e;    --warn: #b07a22;  --bad: #b33a3a;
+  color-scheme: light;
+}
+
+.dark {
+  --paper: #141020; --card: #1e1830; --ink: #ede7f2; --soft: #a396b0;
+  --rose: #ec7fa1;  --plum: #b98cb4;  --rule: #2e2743; --shade: #241d38;
+  --nav: #0e0a18;   --ok: #6fae7e;    --warn: #d3a04a; --bad: #e07b7b;
+  color-scheme: dark;
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    margin: 0;
+  }
+  h1, h2, h3 { @apply font-display; }
+  /* חובה: פוקוס מקלדת נראה */
+  :focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; border-radius: 4px; }
+}
+
+@layer components {
+  .card { @apply bg-card border border-rule rounded-card; }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-btn px-4 py-2 text-sm font-medium
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary { @apply btn bg-plum text-white hover:opacity-90; }
+  .btn-ghost   { @apply btn border border-rule text-ink hover:bg-shade; }
+  .field {
+    @apply w-full rounded-field border border-rule bg-card px-3 py-2 text-sm text-ink
+           placeholder:text-soft focus:border-rose;
+  }
+  .table-wrap { @apply overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

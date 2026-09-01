@@ -1,0 +1,41 @@
+{
+  "name": "teichtal-crm",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "db:reset": "supabase db reset",
+    "db:reset:local": "./supabase/tests/reset.sh",
+    "db:test": "psql -h /tmp -p 5433 -U postgres -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/01_rls_proof.sql",
+    "gen:types": "supabase gen types typescript --local > src/lib/database.types.ts",
+    "gen:types:local": "psql -h /tmp -p 5433 -U postgres -d teichtal -tAqc \"$(cat scripts/introspect.sql)\" | node scripts/gen-types.mjs > src/lib/database.types.ts"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.0",
+    "@supabase/supabase-js": "^2.45.4",
+    "@tanstack/react-query": "^5.59.0",
+    "date-fns": "^4.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.53.0",
+    "react-router-dom": "^6.26.2",
+    "recharts": "^2.12.7",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "supabase": "^1.200.3",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}
