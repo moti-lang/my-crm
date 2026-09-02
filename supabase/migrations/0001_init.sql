@@ -1,8 +1,10 @@
 -- 0001_init.sql — סכמת הליבה של מערכת הניהול של החוג של הניה טייכטל
 -- כל שינוי סכמה עובר דרך מיגרציה. אין עריכה ידנית בדשבורד.
 
-create extension if not exists pgcrypto;
-create extension if not exists pg_trgm;
+-- בסופבייס ההרחבות כבר מותקנות בסכמת extensions. השורות האלה
+-- הן no-op שם, ומכסות מסד ריק לגמרי במקום אחר.
+create extension if not exists pgcrypto with schema extensions;
+create extension if not exists pg_trgm  with schema extensions;
 
 -- ─────────────────────────────── Enums ───────────────────────────────
 create type user_role         as enum ('owner','branch_manager','accountant');

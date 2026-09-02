@@ -3,9 +3,9 @@
 -- אם קובץ זה עובר, ההפרדה בין הסניפים נאכפת במסד — לא בקוד הלקוח.
 
 \set ON_ERROR_STOP on
-\set OWNER    '''cccccccc-0000-0000-0000-000000000001'''
-\set MANAGER  '''cccccccc-0000-0000-0000-000000000002'''
-\set ACCT     '''cccccccc-0000-0000-0000-000000000003'''
+\set OWNER    ''t_user('owner'::user_role)''
+\set MANAGER  ''t_user('branch_manager'::user_role)''
+\set ACCT     ''t_user('accountant'::user_role)''
 \set BEITAR   '''bbbbbbbb-0000-0000-0000-000000000001'''
 \set MODIIN   '''bbbbbbbb-0000-0000-0000-000000000002'''
 
@@ -14,7 +14,7 @@
 -- ═════════════ בעלים: רואה הכל ═════════════
 begin;
 set local role authenticated;
-select set_config('request.jwt.claims', json_build_object('sub', :OWNER, 'role','authenticated')::text, true);
+select set_config('request.jwt.claims', json_build_object('sub', (select t_user('owner'::user_role)), 'role','authenticated')::text, true);
 select assert_eq((select count(*) from branches), 5, 'בעלים רואה 5 סניפים');
 select assert_eq((select count(*) from students), 21,'בעלים רואה 21 תלמידות');
 select assert_eq((select count(*) from v_branch_pnl), 5, 'בעלים רואה רווחיות של 5 סניפים');
@@ -26,7 +26,7 @@ rollback;
 -- ═════════════ מנהלת סניף: ביתר עילית בלבד ═════════════
 begin;
 set local role authenticated;
-select set_config('request.jwt.claims', json_build_object('sub', :MANAGER, 'role','authenticated')::text, true);
+select set_config('request.jwt.claims', json_build_object('sub', (select t_user('branch_manager'::user_role)), 'role','authenticated')::text, true);
 
 select assert_eq((select count(*) from branches), 1, 'מנהלת רואה סניף אחד בלבד');
 select assert_eq((select count(*) from branches where id = :BEITAR), 1, 'הסניף שהיא רואה הוא ביתר עילית');
@@ -89,7 +89,7 @@ select assert_no_effect(
   'הסלמה: שינוי התפקיד העצמי ל-owner',
   $a$update profiles set role = 'owner' where id = auth.uid()$a$,
   $p$select role::text from public.profiles
-      where id = 'cccccccc-0000-0000-0000-000000000002'$p$);
+      where id = t_user('branch_manager'::user_role)$p$);
 
 -- 2. שיוך עצמה לסניף שאינו שלה
 select assert_no_effect(
@@ -97,22 +97,22 @@ select assert_no_effect(
   $a$insert into branch_staff (branch_id, user_id)
      values ('bbbbbbbb-0000-0000-0000-000000000002', auth.uid())$a$,
   $p$select string_agg(branch_id::text, ',' order by branch_id) from public.branch_staff
-      where user_id = 'cccccccc-0000-0000-0000-000000000002'$p$);
+      where user_id = t_user('branch_manager'::user_role)$p$);
 
 -- 3. גרסאות נוספות של אותה התקפה
 select assert_no_effect(
   'הסלמה: שינוי הפרופיל של הבעלים',
   $a$update profiles set role = 'branch_manager'
-     where id = 'cccccccc-0000-0000-0000-000000000001'$a$,
+     where id = t_user('owner'::user_role)$a$,
   $p$select role::text from public.profiles
-      where id = 'cccccccc-0000-0000-0000-000000000001'$p$);
+      where id = t_user('owner'::user_role)$p$);
 
 select assert_no_effect(
   'הסלמה: הזזת השיוך הקיים לסניף אחר',
   $a$update branch_staff set branch_id = 'bbbbbbbb-0000-0000-0000-000000000002'
      where user_id = auth.uid()$a$,
   $p$select string_agg(branch_id::text, ',' order by branch_id) from public.branch_staff
-      where user_id = 'cccccccc-0000-0000-0000-000000000002'$p$);
+      where user_id = t_user('branch_manager'::user_role)$p$);
 
 select assert_no_effect(
   'הסלמה: הוספת מספר מורשה לפקודות וואטסאפ',
@@ -132,7 +132,7 @@ rollback;
 -- ═════════════ רואת חשבון: ללא טלפונים וכתובות ═════════════
 begin;
 set local role authenticated;
-select set_config('request.jwt.claims', json_build_object('sub', :ACCT, 'role','authenticated')::text, true);
+select set_config('request.jwt.claims', json_build_object('sub', (select t_user('accountant'::user_role)), 'role','authenticated')::text, true);
 select assert_eq((select count(*) from students), 0,
                  '★ רואת חשבון אינה קוראת מטבלת students ישירות');
 select assert_eq((select count(*) from v_student_overview), 0,
@@ -155,12 +155,11 @@ rollback;
 -- נבדק ברמת ה-GRANT ולא בתפיסת שגיאה בזמן ריצה. הסיבה: עם grant על
 -- students השאילתה נופלת על "permission denied for function my_branches"
 -- — אותו SQLSTATE 42501, ובדיקה שתופסת אותו הייתה מדווחת ✓ בטעות.
-select assert_no_table_privilege('anon', array[
-  'students','payments','branches','profiles','lessons','attendance',
-  'attendance_links','ledger_entries','reminders','wa_messages','settings',
-  'audit_log','authorized_numbers','commands','conversations','system_alerts',
-  'seasons','productions','production_cast','categories','holidays',
-  'message_templates','faq_entries','unanswered_questions']);
+-- דינמי ולא רשימה קבועה: טבלה שתיווסף במיגרציה עתידית בלי revoke
+-- תיתפס כאן. בסופבייס זה קריטי — שם alter default privileges מעניקה
+-- הרשאות ל-anon על כל טבלה חדשה אוטומטית.
+select assert_no_privilege_on_any_table('anon');
+select assert_no_privilege_on_any_view('anon');
 
 -- גם ההרצה של פונקציות פנימיות סגורה בפניו
 select assert_no_execute('anon', 'auth_role()');

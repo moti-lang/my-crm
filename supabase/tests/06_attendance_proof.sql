@@ -60,6 +60,73 @@ end $$;
 select assert_no_execute('anon', 'rpc_issue_attendance_link(uuid)');
 select assert_no_execute('anon', 'rpc_revoke_attendance_link(uuid)');
 
+-- ═════════ הנפקת קישור — הבדיקה החיובית ═════════
+-- לא הייתה כזו, ולכן באג ב-gen_random_bytes (שנמצא בסכמת extensions
+-- בסופבייס ולא נמצא כש-search_path נעול ל-public) שרד עד סריקת קדם.
+-- בדיקה שרק מוודאת חסימה אינה מוודאת שהדבר עובד.
+reset role;
+\echo 'הנפקת קישור פועלת:'
+do $$
+declare v_token text; v_old text; v_sheet jsonb;
+begin
+  perform set_config('request.jwt.claims',
+    t_claims('owner'::user_role), true);
+
+  select token into v_old from attendance_links
+   where branch_id = (select beitar_id from t) and is_active;
+
+  v_token := rpc_issue_attendance_link((select beitar_id from t));
+
+  perform assert_true(v_token is not null, '★ הנפקת קישור מחזירה טוקן');
+  perform assert_eq(length(v_token)::bigint, 32, '★ אורך הטוקן 32 תווים');
+  perform assert_true(v_token ~ '^[0-9a-f]{32}$', 'הטוקן הוא הקס בלבד');
+  perform assert_true(v_token <> v_old, 'הטוקן החדש שונה מהקודם');
+
+  perform assert_eq((select count(*) from attendance_links
+                      where branch_id = (select beitar_id from t) and is_active), 1,
+                    '★ הקישור הקודם בוטל — קישור פעיל אחד לסניף');
+  perform assert_true((select not is_active from attendance_links where token = v_old),
+                      '★ הטוקן הישן כבר אינו פעיל');
+
+  -- ★ הטוקן החדש באמת עובד מקצה לקצה
+  v_sheet := rpc_attendance_sheet(v_token);
+  perform assert_true((v_sheet ->> 'ok')::boolean, '★ הטוקן החדש פותח גיליון תקין');
+  perform assert_true(v_sheet ->> 'branch_name' = 'ביתר עילית', 'הגיליון הוא של הסניף הנכון');
+
+  -- שני טוקנים עוקבים אינם זהים
+  perform assert_true(rpc_issue_attendance_link((select beitar_id from t))
+                        <> rpc_issue_attendance_link((select beitar_id from t)),
+                      'שתי הנפקות מייצרות טוקנים שונים');
+end $$;
+
+-- ביטול מפורש
+do $$ begin
+  perform set_config('request.jwt.claims',
+    t_claims('owner'::user_role), true);
+  perform rpc_revoke_attendance_link((select beitar_id from t));
+  perform assert_eq((select count(*) from attendance_links
+                      where branch_id = (select beitar_id from t) and is_active), 0,
+                    '★ ביטול מפורש משבית את כל הקישורים לסניף');
+end $$;
+
+-- מנהלת סניף אחר אינה יכולה להנפיק
+do $$ begin
+  perform set_config('request.jwt.claims',
+    t_claims('branch_manager'::user_role), true);
+  perform assert_no_effect(
+    'הנפקת קישור לסניף שאינו שלה',
+    $a$select rpc_issue_attendance_link((select modiin_id from t))$a$,
+    $p$select count(*)::text from public.attendance_links
+        where branch_id = (select modiin_id from t) and is_active$p$);
+end $$;
+
+-- מכאן ואילך שוב צריך קישור פעיל לביתר
+insert into attendance_links (branch_id, token)
+select beitar_id, replace(gen_random_uuid()::text, '-', '') from t;
+update t set beitar = (select token from attendance_links
+                        where branch_id = (select beitar_id from t) and is_active);
+set local role anon;
+
 -- ═════════ הגיליון ═════════
 \echo 'גיליון הנוכחות:'
 do $$

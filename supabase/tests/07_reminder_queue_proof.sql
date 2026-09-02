@@ -59,7 +59,7 @@ rollback;
 begin;
 set local role authenticated;
 select set_config('request.jwt.claims',
-  '{"sub":"cccccccc-0000-0000-0000-000000000001","role":"authenticated"}', true);
+  t_claims('owner'::user_role), true);
 
 select assert_eq((select count(*) from v_absence_streaks where absent_streak >= 3), 1,
                  'תלמידה אחת עם שלוש היעדרויות רצופות');
@@ -70,7 +70,7 @@ select assert_eq((select absent_streak from v_absence_streaks where full_name='�
 
 -- מנהלת סניף רואה רק את הסניף שלה גם כאן
 select set_config('request.jwt.claims',
-  '{"sub":"cccccccc-0000-0000-0000-000000000002","role":"authenticated"}', true);
+  t_claims('branch_manager'::user_role), true);
 select assert_eq((select count(*) from v_absence_streaks
                    where branch_id <> 'bbbbbbbb-0000-0000-0000-000000000001'), 0,
                  '★ רצפי היעדרות של סניפים אחרים אינם נראים');

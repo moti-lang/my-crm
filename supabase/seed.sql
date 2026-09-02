@@ -177,7 +177,7 @@ where a.lesson_id = l.id
 
 -- קישורי נוכחות לכל סניף
 insert into attendance_links (branch_id, token)
-select id, encode(gen_random_bytes(16),'hex') from branches;
+select id, replace(gen_random_uuid()::text, '-', '') from branches;
 
 -- ═══════════════════════ תבניות הודעה (7) ═══════════════════════
 insert into message_templates (key, name, body, kind) values

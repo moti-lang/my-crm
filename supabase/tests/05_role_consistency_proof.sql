@@ -13,8 +13,9 @@
 -- ★ להוסיף כאן שורה אחת לכל דוח כספי חדש שנבנה. ★
 
 \set ON_ERROR_STOP on
-\set OWNER '''cccccccc-0000-0000-0000-000000000001'''
-\set ACCT  '''cccccccc-0000-0000-0000-000000000003'''
+\ir _assert.sql
+\set OWNER ''t_user('owner'::user_role)''
+\set ACCT  ''t_user('accountant'::user_role)''
 
 /**
  * מריץ את אותה שאילתה בתור בעלים ובתור רואת חשבון ומשווה.
@@ -28,11 +29,11 @@ returns void language plpgsql as $$
 declare v_owner numeric; v_acct numeric;
 begin
   perform set_config('request.jwt.claims',
-    '{"sub":"cccccccc-0000-0000-0000-000000000001","role":"authenticated"}', true);
+    t_claims('owner'::user_role), true);
   execute p_sql into v_owner;
 
   perform set_config('request.jwt.claims',
-    '{"sub":"cccccccc-0000-0000-0000-000000000003","role":"authenticated"}', true);
+    t_claims('accountant'::user_role), true);
   execute p_sql into v_acct;
 
   if p_min_owner is not null and (v_owner is null or v_owner < p_min_owner) then
@@ -99,7 +100,7 @@ do $$
 declare b record; n int := 0;
 begin
   perform set_config('request.jwt.claims',
-    '{"sub":"cccccccc-0000-0000-0000-000000000001","role":"authenticated"}', true);
+    t_claims('owner'::user_role), true);
   for b in select branch_id, name from v_branch_pnl order by name loop
     perform t_roles_agree(
       format('%s · הכנסות', b.name),
@@ -115,7 +116,7 @@ begin
       format('select allocated_amount from v_general_allocation where branch_id = %L', b.branch_id));
     -- חוזרים לזהות הבעלים כדי שהלולאה תמשיך לראות את כל הסניפים
     perform set_config('request.jwt.claims',
-      '{"sub":"cccccccc-0000-0000-0000-000000000001","role":"authenticated"}', true);
+      t_claims('owner'::user_role), true);
     n := n + 1;
   end loop;
   if n < 5 then raise exception E'\n  ✗ הלולאה עברה על % סניפים בלבד', n; end if;
@@ -128,7 +129,7 @@ do $$
 declare v int;
 begin
   perform set_config('request.jwt.claims',
-    '{"sub":"cccccccc-0000-0000-0000-000000000003","role":"authenticated"}', true);
+    t_claims('accountant'::user_role), true);
   select count(parent_phone) into v from v_debtors;
   if v <> 0 then
     raise exception E'\n  ✗ ★ רואת חשבון רואה % מספרי טלפון ברשימת החייבות', v;

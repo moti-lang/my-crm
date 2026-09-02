@@ -17,7 +17,10 @@
  */
 import pg from 'pg';
 
-const CONN = { host: '/tmp', port: 5433, user: 'postgres', database: 'teichtal' };
+// מקומי כברירת מחדל; PGURL מפנה אותו לענן בשלב 4 של סבב האימות.
+const CONN = process.env.PGURL
+  ? { connectionString: process.env.PGURL }
+  : { host: '/tmp', port: 5433, user: 'postgres', database: 'teichtal' };
 
 let fails = 0;
 const check = (label, ok, detail = '') => {

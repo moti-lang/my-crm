@@ -9,7 +9,7 @@
 
 \set ON_ERROR_STOP on
 \ir _assert.sql
-\set OWNER '''cccccccc-0000-0000-0000-000000000001'''
+\set OWNER ''t_user('owner'::user_role)''
 
 /** צילום מלא של המצב הכספי. נקרא בזהות הבעלים כדי שהתצוגות יחזירו נתונים. */
 create or replace function t_snapshot()
@@ -17,7 +17,7 @@ returns jsonb language plpgsql as $$
 declare v jsonb;
 begin
   perform set_config('request.jwt.claims',
-    '{"sub":"cccccccc-0000-0000-0000-000000000001","role":"authenticated"}', true);
+    t_claims('owner'::user_role), true);
   select jsonb_build_object(
     'ledger_count',   (select count(*) from ledger_entries where deleted_at is null),
     'ledger_sum',     (select coalesce(sum(amount),0) from ledger_entries where deleted_at is null),

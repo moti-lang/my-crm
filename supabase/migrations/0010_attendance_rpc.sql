@@ -18,7 +18,11 @@ begin
   -- קישור קודם מבוטל: קישור שהודלף לא נשאר תקף לנצח.
   update attendance_links set is_active = false where branch_id = p_branch and is_active;
 
-  v_token := encode(gen_random_bytes(16), 'hex');   -- 32 תווים
+  -- gen_random_uuid נמצאת ב-pg_catalog ולכן זמינה תמיד, בניגוד
+  -- ל-gen_random_bytes של pgcrypto שיושבת בסכמת extensions בסופבייס
+  -- ולא נמצאת כש-search_path נעול ל-public.
+  -- UUID אחד ללא מקפים = 32 תווי הקס, ~122 ביט אנטרופיה.
+  v_token := replace(gen_random_uuid()::text, '-', '');
   insert into attendance_links (branch_id, token) values (p_branch, v_token);
   return v_token;
 end $$;

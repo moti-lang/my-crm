@@ -1,5 +1,15 @@
 -- שים (shim) מקומי בלבד: מחקה את מה ש-Supabase מספקת (סכמת auth + תפקידים).
 -- לא חלק מהמיגרציות. משמש להרצת הסכמה, ה-seed והבדיקות על פוסטגרס מקומי.
+-- ═══ מבנה הסכמות של סופבייס ═══
+-- סופבייס מתקינה הרחבות בסכמת extensions, לא ב-public, ומוסיפה
+-- אותה ל-search_path של המסד. shim שמתקין אותן ב-public מסתיר
+-- כשלים אמיתיים: פונקציה security definer עם search_path נעול
+-- ל-public לא תמצא את gen_random_bytes בענן, אבל כן תמצא מקומית.
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+create extension if not exists pg_trgm  with schema extensions;
+alter database teichtal set search_path to public, extensions;
+
 create schema if not exists auth;
 
 create table if not exists auth.users (

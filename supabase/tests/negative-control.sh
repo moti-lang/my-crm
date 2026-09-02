@@ -92,6 +92,10 @@ expect_fail "פתיחת טבלת students בפני anon" \
   "grant select on students to anon" \
   "06_attendance_proof.sql"
 
+expect_fail "החזרת התלות ב-pgcrypto בסכמה שאינה קיימת בענן" \
+  "\\i $DIR/holes/pgcrypto_search_path.sql" \
+  "06_attendance_proof.sql"
+
 expect_fail "הסרת בדיקת שיוך השיעור לסניף בדיווח הנוכחות" \
   "\\i $DIR/holes/attendance_no_branch_check.sql" \
   "06_attendance_proof.sql"
