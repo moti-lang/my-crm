@@ -11,6 +11,8 @@ import { Settings } from '@/pages/Settings';
 import { Collection } from '@/pages/Collection';
 import { Expenses } from '@/pages/Expenses';
 import { General } from '@/pages/General';
+import { Attendance } from '@/pages/Attendance';
+import { AttendanceSheet } from '@/pages/AttendanceSheet';
 import { Placeholder } from '@/pages/Placeholder';
 
 const queryClient = new QueryClient({
@@ -47,7 +49,7 @@ function Gate() {
         <Route path="/expenses" element={<Expenses />} />
         <Route path="/general" element={<General />} />
         <Route path="/productions" element={<Placeholder title="הפקות" round="סבב 8" />} />
-        <Route path="/attendance" element={<Placeholder title="נוכחות" round="סבב 4" />} />
+        <Route path="/attendance" element={<Attendance />} />
         <Route path="/reminders" element={<Placeholder title="תזכורות" round="סבב 5" />} />
         <Route path="/agent" element={<Placeholder title="סוכן AI" round="סבב 7" />} />
         <Route path="/commands" element={<Placeholder title="פקודות וואטסאפ" round="סבב 6" />} />
@@ -63,9 +65,19 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider>
-          <Gate />
-        </AuthProvider>
+        <Routes>
+          {/* ציבורי: מסך האחראית. מחוץ ל-AuthProvider בכוונה —
+              הוא לא דורש התחברות ולא אמור להמתין לבדיקת session. */}
+          <Route path="/a/:token" element={<AttendanceSheet />} />
+          <Route
+            path="*"
+            element={
+              <AuthProvider>
+                <Gate />
+              </AuthProvider>
+            }
+          />
+        </Routes>
       </BrowserRouter>
     </QueryClientProvider>
   );

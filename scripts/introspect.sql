@@ -8,6 +8,20 @@ select json_build_object(
                   from pg_enum e where e.enumtypid = t.oid) v on true
     where t.typtype = 'e'
   ),
+  'functions', (
+    select coalesce(json_agg(json_build_object(
+      'name', p.proname,
+      'args', (select coalesce(json_agg(json_build_object(
+                 'name', coalesce(p.proargnames[i], 'arg' || i),
+                 'type', format_type(p.proargtypes[i-1], null)) order by i), '[]'::json)
+               from generate_series(1, p.pronargs) i),
+      'returns', format_type(p.prorettype, null),
+      'returns_set', p.proretset
+    ) order by p.proname), '[]'::json)
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+    where p.prokind = 'f' and p.proname like 'rpc\_%'
+  ),
   'relations', (
     select coalesce(json_agg(r order by r->>'name'), '[]'::json) from (
       select json_build_object(

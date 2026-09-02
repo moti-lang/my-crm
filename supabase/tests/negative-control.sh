@@ -16,7 +16,7 @@ run_suite() {
 
 expect_pass() {
   "$DIR/reset.sh" >/dev/null
-  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql; do
+  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql; do
     SUITE="$s"
     if run_suite; then
       echo "  ✓ בסיס נקי: $s עוברת"
@@ -77,6 +77,14 @@ expect_fail "החזרת הדוחות הכספיים לתלות ב-RLS של stude
 expect_fail "ריקון הנתונים — בדיקת עקביות שמשווה שני אפסים" \
   "delete from payments" \
   "05_role_consistency_proof.sql"
+
+expect_fail "פתיחת טבלת students בפני anon" \
+  "grant select on students to anon" \
+  "06_attendance_proof.sql"
+
+expect_fail "הסרת בדיקת שיוך השיעור לסניף בדיווח הנוכחות" \
+  "\\i $DIR/holes/attendance_no_branch_check.sql" \
+  "06_attendance_proof.sql"
 
 # ─── חורים ברמת הקוד, לא ברמת המסד ───
 # expect_fail_code <תיאור> <קובץ> <שורה לזריקה> <פקודת בדיקה>

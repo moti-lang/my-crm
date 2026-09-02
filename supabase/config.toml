@@ -35,3 +35,6 @@ verify_jwt = false             # מאומתת בחתימת HMAC של ה-Hub, ל�
 
 [functions.cron-wa-health]
 verify_jwt = false             # נקראת מ-pg_cron
+
+[functions.cron-lessons]
+verify_jwt = false             # נקראת מ-pg_cron

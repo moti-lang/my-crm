@@ -1093,6 +1093,21 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_lesson_summary: {
+        Row: {
+          lesson_id: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          lesson_date: string | null;
+          status: Database["public"]["Enums"]["lesson_status"] | null;
+          reported_at: string | null;
+          reported_by: string | null;
+          attended: number | null;
+          marked: number | null;
+          expected: number | null;
+        };
+        Relationships: [];
+      };
       v_student_balance: {
         Row: {
           student_id: string | null;
@@ -1171,7 +1186,34 @@ export type Database = {
       student_status: "active" | "pending" | "stopped" | "graduated";
       user_role: "owner" | "branch_manager" | "accountant";
     };
-    Functions: { [_ in never]: never };
+    Functions: {
+      rpc_attendance_sheet: {
+        Args: {
+          p_token: string;
+        };
+        Returns: Json;
+      };
+      rpc_attendance_submit: {
+        Args: {
+          p_token: string;
+          p_lesson: string;
+          p_marks: Json;
+        };
+        Returns: Json;
+      };
+      rpc_issue_attendance_link: {
+        Args: {
+          p_branch: string;
+        };
+        Returns: string;
+      };
+      rpc_revoke_attendance_link: {
+        Args: {
+          p_branch: string;
+        };
+        Returns: undefined;
+      };
+    };
     CompositeTypes: { [_ in never]: never };
   };
 };

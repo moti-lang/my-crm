@@ -26,7 +26,7 @@ function readInput() {
 }
 
 const main = async () => {
-  const { enums, relations } = JSON.parse(await readInput());
+  const { enums, relations, functions = [] } = JSON.parse(await readInput());
   const enumNames = new Set(enums.map((e) => e.name));
 
   const tsType = (pg) => {
@@ -99,7 +99,26 @@ const main = async () => {
   out.push('    };');
   // supabase-js דורש את שני המפתחות האלה כדי שהסכמה תעמוד ב-GenericSchema.
   // בלעדיהם כל שאילתה מוחזרת כ-never. טיפוסי RPC ייווצרו בסבב שיציג אותם.
-  out.push('    Functions: { [_ in never]: never };');
+  // רק פונקציות rpc_* — אלה שהפרונט קורא להן דרך supabase.rpc()
+  if (functions.length === 0) {
+    out.push('    Functions: { [_ in never]: never };');
+  } else {
+    out.push('    Functions: {');
+    for (const f of functions) {
+      out.push(`      ${f.name}: {`);
+      if (f.args.length === 0) {
+        out.push('        Args: Record<PropertyKey, never>;');
+      } else {
+        out.push('        Args: {');
+        for (const a of f.args) out.push(`          ${a.name}: ${tsType(a.type)};`);
+        out.push('        };');
+      }
+      const ret = f.returns === 'void' ? 'undefined' : tsType(f.returns);
+      out.push(`        Returns: ${f.returns_set ? `${ret}[]` : ret};`);
+      out.push('      };');
+    }
+    out.push('    };');
+  }
   out.push('    CompositeTypes: { [_ in never]: never };');
   out.push('  };');
   out.push('};');
