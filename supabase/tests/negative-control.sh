@@ -118,6 +118,16 @@ expect_fail "פתיחת טבלת students בפני anon" \
   "grant select on students to anon" \
   "06_attendance_proof.sql"
 
+expect_fail_code "חשיפת מסך נוסף מחוץ לשער ההתחברות" \
+  "$DIR/../../src/App.tsx" \
+  'sed -i "s|<Route path=\"/a/:token\" element={<AttendanceSheet />} />|<Route path=\"/a/:token\" element={<AttendanceSheet />} />\\n          <Route path=\"/students\" element={<Students />} />|" "$F"' \
+  "node supabase/tests/public-surface.test.mjs"
+
+expect_fail_code "פתיחת הרשמה עצמית" \
+  "$DIR/../config.toml" \
+  'sed -i "s|enable_signup = false|enable_signup = true|g" "$F"' \
+  "node supabase/tests/public-surface.test.mjs"
+
 expect_fail_code "פונקציה חדשה בלי בדיקה חיובית" \
   "$DIR/../migrations/0013_function_privileges.sql" \
   'printf "\\ncreate or replace function rpc_untested_example() returns int language sql as \$\$ select 1 \$\$;\\n" >> "$F"' \

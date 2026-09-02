@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "node scripts/check-secrets.mjs && tsc --noEmit && vite build && node scripts/check-secrets.mjs --dist",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "db:reset": "supabase db reset && npm run seed:users",
@@ -21,7 +21,9 @@
     "test:purity": "node supabase/tests/ai-command-purity.test.mjs",
     "bench:model": "node supabase/tests/model-benchmark.mjs",
     "test:race": "node supabase/tests/command-race.test.mjs",
-    "test:coverage": "node supabase/tests/function-coverage.test.mjs"
+    "test:coverage": "node supabase/tests/function-coverage.test.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs --dist",
+    "test:public": "node supabase/tests/public-surface.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

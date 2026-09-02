@@ -49,6 +49,34 @@ npx supabase secrets set AI_DRY_RUN=false
 * **שגיאת render.** `ErrorBoundary` מציג הודעה וכפתור רענון במקום
   דף ריק.
 
+## סודות בצד הלקוח — שער בבילד
+
+כל מה שמתחיל ב-`VITE_` נארז לקוד הדפדפן וגלוי לכל מי שפותח את הדף.
+`npm run build` נעצר אם משהו דלף — לפני הבילד (שמות וערכי משתנים)
+ואחריו (סריקת `dist/`):
+
+* משתנה `VITE_` ששמו מרמז על סוד (`SERVICE_ROLE`, `SECRET`, `ANTHROPIC`…)
+* **ערך** שהוא JWT עם `role=service_role` — גם אם השם תמים
+* מפתח בתבנית `sk-ant-`
+* אותם דברים בתוך `dist/` — תופס גם הטמעה ידנית בקוד
+
+אומת בארבע בקרות שלילה. `service_role` ו-`ANTHROPIC_API_KEY` חיים רק
+כסודות של Edge Functions.
+
+## הכתובת החיה מוגנת
+
+`npm run test:public` מאמת שהמשטח הציבורי הוא דף אחד:
+
+* מסלול אחד בלבד מחוץ ל-`AuthProvider`, והוא `/a/:token`
+* המסלול `*` עוטף את `AuthProvider` — בלעדיו כל השאר חשוף
+* דף האחראית ניגש דרך שתי RPC בלבד, לא נוגע באף טבלה
+* `enable_signup = false`
+
+`config.toml` היא הגדרה מקומית. **ההגדרה המחייבת בפרויקט מתארח היא
+בדשבורד** — Authentication ← Providers ← Email ← Allow new users to
+sign up. `verify-login.mjs` מנסה להירשם בפועל ונכשל אם זה מצליח,
+כי זו הדרך היחידה לדעת.
+
 ## אחרי הפריסה
 
 ```bash

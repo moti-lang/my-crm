@@ -95,6 +95,27 @@ if step 6 "bench:model — 30 פקודות, שני מודלים"; then
   fi
 fi
 
+# ─────────── 7. פרונט חי ───────────
+if step 7 "פרונט בנטליפיי + כתובת חיה"; then
+  if need VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; then
+    npm run build && ok "בילד עבר, כולל שער הסודות" || fail "בילד נכשל"
+    if [ -n "${NETLIFY_AUTH_TOKEN:-}" ] && [ -n "${NETLIFY_SITE_ID:-}" ]; then
+      npx netlify deploy --prod --dir=dist --site "$NETLIFY_SITE_ID" \
+        && ok "נפרס" || fail "פריסה נכשלה"
+      if [ -n "${SITE_URL:-}" ]; then
+        # ★ הבדיקה שמוכיחה שניתוב ה-SPA עובד: הקישור של האחראית
+        code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE_URL/a/probe-token")
+        [ "$code" = "200" ] && ok "/a/:token מחזיר 200 (ניתוב SPA עובד)" \
+                            || fail "/a/:token מחזיר $code — ניתוב SPA שבור"
+        code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE_URL/students")
+        [ "$code" = "200" ] && ok "/students מחזיר 200" || fail "/students מחזיר $code"
+      fi
+    else
+      echo "  ! אין NETLIFY_AUTH_TOKEN/NETLIFY_SITE_ID — dist/ מוכן לגרירה ידנית"
+    fi
+  fi
+fi
+
 echo ""
 echo "═══════════════════════════════════════════════"
 if [ "$FAILED" -eq 0 ]; then

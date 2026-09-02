@@ -8,6 +8,12 @@ for suite in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_
     | grep -E '✓|✗|ERROR|═|עברו|עקביים|:$' | sed 's/^psql.*NOTICE:  //'
 done
 
+echo "═══ משטח ציבורי ═══"
+node "$DIR/public-surface.test.mjs" 2>&1 | grep -E "✓|✗|משטח|נכשלו"
+
+echo "═══ סודות בצד הלקוח ═══"
+(cd "$DIR/../.." && node scripts/check-secrets.mjs) 2>&1 | grep -E "✓|✗|סודות|דליפות"
+
 echo "═══ כיסוי פונקציות ═══"
 node "$DIR/function-coverage.test.mjs" 2>&1 | grep -E "✓|✗|לכל פונקציה|ללא בדיקה"
 

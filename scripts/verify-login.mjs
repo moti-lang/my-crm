@@ -71,5 +71,42 @@ for (const u of USERS) {
   await client.auth.signOut();
 }
 
+// ═══════ ★ הרשמה עצמית סגורה — בפרויקט האמיתי ═══════
+// config.toml היא הגדרה מקומית. מה שקובע בפרויקט מתארח הוא
+// Authentication ← Providers ← Email ← Allow new users to sign up.
+// הדרך היחידה לדעת היא לנסות.
+console.log('\nהרשמה עצמית:');
+{
+  const client = createClient(URL, ANON, { auth: { persistSession: false } });
+  const probe = `probe-${Date.now()}@teichtal.invalid`;
+  const { data, error } = await client.auth.signUp({ email: probe, password: 'Probe!12345' });
+
+  if (error) {
+    check('★ הרשמה עצמית נדחתה', true);
+    console.log(`      (${error.message})`);
+  } else if (data.user) {
+    check('★ הרשמה עצמית נדחתה', false,
+      `נוצר משתמש ${data.user.id} עם ${probe}.\n` +
+      '      יש לכבות: Authentication ← Providers ← Email ← Allow new users to sign up.\n' +
+      '      ולמחוק את המשתמש שנוצר בבדיקה.');
+  } else {
+    check('★ הרשמה עצמית נדחתה', false, 'לא הוחזרה שגיאה ולא נוצר משתמש — יש לבדוק ידנית');
+  }
+}
+
+// ═══════ ★ anon אינו קורא מאף טבלה ═══════
+console.log('\nגישת anon:');
+{
+  const client = createClient(URL, ANON, { auth: { persistSession: false } });
+  for (const table of ['students', 'payments', 'branches', 'settings', 'commands']) {
+    const { data, error } = await client.from(table).select('*').limit(1);
+    check(`★ anon חסום מ-${table}`, Boolean(error) || (data?.length ?? 0) === 0,
+          `הוחזרו ${data?.length} שורות`);
+  }
+  // ומה שכן פתוח לו
+  const { error: rpcErr } = await client.rpc('rpc_attendance_sheet', { p_token: 'invalid' });
+  check('anon כן יכול להריץ rpc_attendance_sheet', !rpcErr, rpcErr?.message);
+}
+
 console.log(fails === 0 ? '\nשלושת התפקידים עובדים מול GoTrue' : `\n${fails} בדיקות נכשלו`);
 process.exit(fails ? 1 : 0);
