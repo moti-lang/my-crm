@@ -16,7 +16,7 @@ run_suite() {
 
 expect_pass() {
   "$DIR/reset.sh" >/dev/null
-  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql; do
+  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql; do
     SUITE="$s"
     if run_suite; then
       echo "  ✓ בסיס נקי: $s עוברת"
@@ -32,6 +32,16 @@ expect_fail() {
   SUITE="${3:-02_rls_proof.sql}"
   "$DIR/reset.sh" >/dev/null
   $PSQL -c "$sql" >/dev/null 2>&1 || { echo "  ! לא הצלחתי לפתוח את החור: $label"; fails=$((fails+1)); return; }
+  if [[ "$SUITE" == __NODE__* ]]; then
+    local cmd="${SUITE#__NODE__ }"
+    if (cd "$DIR/../.." && eval "$cmd") >/tmp/nc-suite.out 2>&1; then
+      echo "  ✗ $label — החור נפתח והבדיקה עדיין עברה!"
+      fails=$((fails+1))
+    else
+      echo "  ✓ $label — הבדיקה נפלה כמצופה: $(grep -m1 '✗' /tmp/nc-suite.out | sed 's/^ *//')"
+    fi
+    return
+  fi
   if run_suite; then
     echo "  ✗ $label — החור נפתח והחבילה עדיין עברה. הבדיקה לא מכסה אותו!"
     fails=$((fails+1))
@@ -112,6 +122,59 @@ expect_fail_code() {
 expect_fail "הסרת מפתח הייחודיות של התזכורות (הצפת הורים)" \
   "drop index reminders_dedupe_idx" \
   "07_reminder_queue_proof.sql"
+
+# ★ הבקרות המרכזיות של סבב 6ב.
+expect_fail "ביטול התפיסה האטומית באישור (הוצאה נרשמת פעמיים)" \
+  "create or replace function rpc_execute_command(p_command_id uuid) returns jsonb language plpgsql security definer set search_path = public, pg_temp as \$f\$
+   declare c commands; f jsonb; v_season uuid; v_branch uuid; v_id uuid;
+   begin
+     select * into c from commands where id = p_command_id;
+     if c.id is null then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+     update commands set status='applied', confirmed_at=now() where id = p_command_id;
+     f := coalesce(c.parsed -> 'fields', '{}'::jsonb);
+     select id into v_season from seasons where is_current;
+     select id into v_branch from branches where name = f ->> 'branch' and deleted_at is null;
+     insert into ledger_entries (season_id, kind, scope, branch_id, entry_date, category, amount, source)
+     values (v_season, 'expense', 'branch', v_branch, current_date, coalesce(f ->> 'category','אחר'), (f ->> 'amount')::numeric, 'whatsapp')
+     returning id into v_id;
+     update commands set result_table='ledger_entries', result_id=v_id where id=c.id;
+     return jsonb_build_object('ok', true, 'result_table', 'ledger_entries', 'result_id', v_id);
+   end \$f\$" \
+  "__NODE__ node supabase/tests/command-race.test.mjs"
+
+expect_fail "ביטול בדיקת פקיעת התוקף" \
+  "create or replace function rpc_execute_command(p_command_id uuid) returns jsonb language plpgsql security definer set search_path = public, pg_temp as \$f\$
+   declare c commands; f jsonb; v_season uuid; v_branch uuid; v_id uuid;
+   begin
+     update commands set status='applied', confirmed_at=now()
+      where id = p_command_id and status='pending_confirm' returning * into c;
+     if not found then return jsonb_build_object('ok', false, 'reason', 'already_handled'); end if;
+     f := coalesce(c.parsed -> 'fields', '{}'::jsonb);
+     select id into v_season from seasons where is_current;
+     select id into v_branch from branches where name = f ->> 'branch' and deleted_at is null;
+     insert into ledger_entries (season_id, kind, scope, branch_id, entry_date, category, amount, source)
+     values (v_season, 'expense', 'branch', v_branch, current_date, coalesce(f ->> 'category','אחר'), (f ->> 'amount')::numeric, 'whatsapp')
+     returning id into v_id;
+     update commands set result_table='ledger_entries', result_id=v_id where id=c.id;
+     return jsonb_build_object('ok', true, 'result_table','ledger_entries','result_id', v_id);
+   end \$f\$" \
+  "__NODE__ node supabase/tests/command-race.test.mjs"
+
+expect_fail "ביטול שאינו מחזיר את המצב הקודם של תלמידה" \
+  "create or replace function rpc_cancel_command(p_command_id uuid) returns jsonb language plpgsql security definer set search_path = public, pg_temp as \$f\$
+   declare c commands;
+   begin
+     update commands set status='cancelled'
+      where id = p_command_id and status='applied' returning * into c;
+     if not found then return jsonb_build_object('ok', false, 'reason','not_applied'); end if;
+     if c.result_table = 'ledger_entries' then update ledger_entries set deleted_at=now() where id=c.result_id;
+     elsif c.result_table = 'payments' then update payments set deleted_at=now() where id=c.result_id;
+     elsif c.result_table = 'reminders' then update reminders set status='cancelled' where id=c.result_id;
+     elsif c.result_table = 'students' then update students set deleted_at=now() where id=c.result_id;
+     end if;
+     return jsonb_build_object('ok', true);
+   end \$f\$" \
+  "08_command_rollback_proof.sql"
 
 # ★ הבקרה המרכזית של סבב 6א: כתיבה למסד בתוך מסלול כישלון הפרסור.
 expect_fail_code "כתיבה למסד בתוך מסלול כישלון הפרסור" \

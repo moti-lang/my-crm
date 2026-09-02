@@ -42,16 +42,29 @@ function makeDb(rows) {
     }
     chain.maybeSingle = async () => ({ data: rows[table]?.single ?? null, error: null });
     chain.then = (resolve) => resolve({ data: rows[table]?.list ?? [], error: null });
+    // כתיבות מתועדות ומחזירות את השרשרת, כדי ש-.update().eq() יעבוד
+    // כמו ב-supabase-js האמיתי.
     for (const op of WRITE_OPS) {
-      chain[op] = async (payload) => {
+      chain[op] = (payload) => {
         writes.push({ table, op, payload });
-        return { data: null, error: null };
+        return chain;
       };
     }
     reads.push(table);
     return chain;
   };
-  return { db: { from: build }, writes, reads };
+  const rpcCalls = [];
+  return {
+    db: {
+      from: build,
+      rpc: async (name, args) => {
+        rpcCalls.push({ name, args });
+        writes.push({ table: `rpc:${name}`, op: 'rpc', payload: args });
+        return { data: rows.__rpc?.[name] ?? null, error: null };
+      },
+    },
+    writes, reads, rpcCalls,
+  };
 }
 
 const BRANCHES = { list: [{ name: 'ביתר עילית' }, { name: 'מודיעין עילית' }] };
@@ -76,10 +89,10 @@ const base = (caller) => ({
 const alerts = [];
 const deps = { alert: async (a) => { alerts.push(a); } };
 
-async function route(caller, body) {
-  const { db, writes } = makeDb(base(caller));
+async function route(caller, body, extra = {}) {
+  const { db, writes, rpcCalls } = makeDb({ ...base(caller), ...extra });
   const decision = await routeIncoming(db, deps, { phone: caller?.phone ?? '972500000000', body });
-  return { decision, writes };
+  return { decision, writes, rpcCalls };
 }
 
 // ═════════════ 1. פרסור מוצלח ═════════════
@@ -91,7 +104,9 @@ console.log('\nפרסור מוצלח:');
   check('הסכום חולץ', decision.parse.command?.fields?.amount === 860);
   check('הפעולה מאושרת לבעלים', decision.authorized?.allowed === true);
   check('פעולת כתיבה דורשת אישור', decision.needsConfirmation === true);
-  check('★ אף כתיבה למסד בשלב הפרסור', writes.length === 0,
+  // הכתיבה היחידה המותרת כאן היא שמירת הפקודה הממתינה עצמה.
+  check('★ הכתיבה היחידה היא הפקודה הממתינה',
+        writes.length === 1 && writes[0].table === 'rpc:rpc_create_pending_command',
         `נרשמו כתיבות: ${JSON.stringify(writes)}`);
 }
 {
@@ -230,6 +245,90 @@ console.log('\nמטריצת ההרשאות:');
     check(`"${t}" מזוהה כניסיון פקודה`, looksLikeCommand(t) === true);
   for (const t of ['שלום, כמה עולה החוג?', 'באיזה ימים החוג?', 'תודה רבה!'])
     check(`"${t}" אינו ניסיון פקודה`, looksLikeCommand(t) === false);
+}
+
+// ═════════════ 6. זרימת האישור ═════════════
+console.log('\nזרימת האישור:');
+{
+  const pendingRow = { id: 'cmd-1', intent: 'expense', raw_text: 'שילמתי 860',
+                       parsed: { human_summary: 'הוצאה של 860' } };
+
+  for (const yes of ['כן', 'אישור', '✅', '1']) {
+    const { decision, rpcCalls } = await route(owner, yes, {
+      commands: { single: pendingRow }, __rpc: { rpc_execute_command: { ok: true, result_table: 'ledger_entries' } },
+    });
+    check(`"${yes}" מפעיל ביצוע`, decision.route === 'confirmed');
+    check(`"${yes}" קורא ל-rpc_execute_command`,
+          rpcCalls.some((c) => c.name === 'rpc_execute_command' && c.args.p_command_id === 'cmd-1'));
+  }
+
+  for (const no of ['לא', 'ביטול']) {
+    const { decision, writes } = await route(owner, no, { commands: { single: pendingRow } });
+    check(`"${no}" מבטל את הממתינה`, decision.route === 'declined');
+    check(`"${no}" מסמן cancelled`,
+          writes.some((w) => w.table === 'commands' && w.payload?.status === 'cancelled'));
+    check(`"${no}" משיב בעברית`, decision.reply === 'בוטל, לא נשמר כלום.');
+  }
+
+  // ★ ביצוע שנדחה במרוץ — התשובה לא מבטיחה שנרשם
+  {
+    const { decision } = await route(owner, 'כן', {
+      commands: { single: pendingRow },
+      __rpc: { rpc_execute_command: { ok: false, reason: 'already_handled' } },
+    });
+    check('★ אישור שהפסיד במרוץ אינו מדווח על הצלחה',
+          !decision.reply.includes('נרשם'), `התקבל: ${decision.reply}`);
+    check('★ ומודיע שהפעולה כבר בוצעה', decision.reply.includes('כבר בוצעה'));
+  }
+  {
+    const { decision } = await route(owner, 'כן', {
+      commands: { single: pendingRow },
+      __rpc: { rpc_execute_command: { ok: false, reason: 'expired' } },
+    });
+    check('★ פקודה שפגה מדווחת ככזו', decision.reply.includes('פגה'));
+  }
+
+  // "בטל" בלי ממתינה → ביטול הפעולה האחרונה
+  {
+    const { decision, rpcCalls } = await route(owner, 'בטל', {
+      commands: { single: null }, __rpc: { rpc_cancel_last_command: { ok: true } },
+    });
+    check('"בטל" ללא ממתינה מבטל את האחרונה', decision.route === 'undo');
+    check('קורא ל-rpc_cancel_last_command',
+          rpcCalls.some((c) => c.name === 'rpc_cancel_last_command'));
+  }
+  {
+    const { decision } = await route(owner, 'בטל', {
+      commands: { single: null },
+      __rpc: { rpc_cancel_last_command: { ok: false, reason: 'nothing_to_cancel', message: 'אין פעולה אחרונה לביטול.' } },
+    });
+    check('אין מה לבטל — הודעה ברורה', decision.reply === 'אין פעולה אחרונה לביטול.');
+  }
+
+  // שדה חסר → שאלה, בלי פקודה ממתינה
+  {
+    const { decision, writes } = await route(owner, 'תרשמי הוצאה');
+    check('★ שדה חסר → שאלה ולא פקודה ממתינה', decision.needsConfirmation === false);
+    check('★ שדה חסר → אפס כתיבות', writes.length === 0,
+          `נרשמו: ${JSON.stringify(writes)}`);
+    check('השאלה נוקבת בשדה החסר', decision.reply?.includes('amount'));
+  }
+
+  // כרטיס אישור
+  {
+    const { decision } = await route(owner, 'שילמתי 860 תלבושות בביתר', { __rpc: { rpc_create_pending_command: 'cmd-9' } });
+    check('כרטיס האישור כולל סכום', decision.reply.includes('₪860'));
+    check('כרטיס האישור כולל סניף', decision.reply.includes('ביתר עילית'));
+    check('כרטיס האישור מסביר איך לאשר', decision.reply.includes('לאישור השיבי: כן'));
+    check('נשמר מזהה הפקודה הממתינה', decision.commandId === 'cmd-9');
+  }
+
+  // פעולה שנחסמה בהרשאות — אין פקודה ממתינה
+  {
+    const { decision, writes } = await route(financeUser, 'תמחקי את שירה כהן');
+    check('★ פעולה שנחסמה אינה נשמרת כממתינה',
+          !writes.some((w) => w.table === 'rpc:rpc_create_pending_command'));
+  }
 }
 
 console.log(fails === 0

@@ -1,0 +1,40 @@
+{
+  "_comment": "30 פקודות עבריות אמיתיות להשוואת מודלים. expected=null פירושו שהשדה אינו רלוונטי או שהערך הנכון הוא null.",
+  "cases": [
+    { "text": "שילמתי 860 תלבושות בביתר", "kind": "ניסוח רגיל", "intent": "expense", "amount": 860, "branch": "ביתר עילית" },
+    { "text": "תרשמי הוצאה של 1200 שכירות אולם במודיעין", "kind": "ניסוח רגיל", "intent": "expense", "amount": 1200, "branch": "מודיעין עילית" },
+    { "text": "שרה כהן שילמה 700 בביט", "kind": "ניסוח רגיל", "intent": "payment", "amount": 700, "branch": null },
+    { "text": "מי חייבת בביתר", "kind": "שאילתה", "intent": "query", "amount": null, "branch": "ביתר עילית" },
+    { "text": "כמה נכנס החודש", "kind": "שאילתה", "intent": "query", "amount": null, "branch": null },
+
+    { "text": "תרשמי 450 הגברה ביתר", "kind": "מרושל", "intent": "expense", "amount": 450, "branch": "ביתר עילית" },
+    { "text": "הוצאה 320 ציוד מודיעין עילית", "kind": "מרושל", "intent": "expense", "amount": 320, "branch": "מודיעין עילית" },
+    { "text": "תרשמי תשלום שירה 700", "kind": "מרושל", "intent": "payment", "amount": 700, "branch": null },
+    { "text": "1240 תפאורה רמות", "kind": "מרושל", "intent": "expense", "amount": 1240, "branch": "ירושלים רמות" },
+    { "text": "בית שמש פרסום 380", "kind": "מרושל", "intent": "expense", "amount": 380, "branch": "בית שמש" },
+
+    { "text": "מלכי שילמה 900", "kind": "שם חלקי", "intent": "payment", "amount": 900, "branch": null },
+    { "text": "תשלום מריקי 700 מזומן", "kind": "שם חלקי", "intent": "payment", "amount": 700, "branch": null },
+    { "text": "אסתי לא הגיעה היום", "kind": "שם חלקי", "intent": "attendance", "amount": null, "branch": null },
+    { "text": "חני שטרן שילמה הכל", "kind": "שם חלקי · סכום חסר", "intent": "payment", "amount": null, "branch": null },
+    { "text": "תוסיפי את תמר לאשדוד", "kind": "שם חלקי", "intent": "new_student", "amount": null, "branch": "אשדוד" },
+
+    { "text": "שילמתי אלף שקל על תלבושות בביתר", "kind": "סכום במילים", "intent": "expense", "amount": 1000, "branch": "ביתר עילית" },
+    { "text": "הוצאה של שמונה מאות וחמישים באשדוד", "kind": "סכום במילים", "intent": "expense", "amount": 850, "branch": "אשדוד" },
+    { "text": "רחלי העבירה אלפיים", "kind": "סכום במילים", "intent": "payment", "amount": 2000, "branch": null },
+    { "text": "תרשמי אלף ומאתיים שכירות", "kind": "סכום במילים", "intent": "expense", "amount": 1200, "branch": null },
+    { "text": "חמש מאות כיבוד בבית שמש", "kind": "סכום במילים", "intent": "expense", "amount": 500, "branch": "בית שמש" },
+
+    { "text": "תעדכני שריקי הפסיקה", "kind": "עדכון", "intent": "update_student", "amount": null, "branch": null },
+    { "text": "תזכירי לרחלי כהן מחר על התשלום", "kind": "תזכורת", "intent": "reminder", "amount": null, "branch": null },
+    { "text": "תשלחי תזכורת לכל החייבות בביתר", "kind": "תזכורת", "intent": "reminder", "amount": null, "branch": "ביתר עילית" },
+    { "text": "נכנסו 5000 חסויות", "kind": "הכנסה", "intent": "income", "amount": 5000, "branch": null },
+    { "text": "מכרנו כרטיסים ב-2300 בירושלים", "kind": "הכנסה", "intent": "income", "amount": 2300, "branch": "ירושלים רמות" },
+
+    { "text": "תרשמי 500", "kind": "דו-משמעי", "intent": "unknown", "amount": null, "branch": null },
+    { "text": "שילמתי", "kind": "דו-משמעי · סכום חסר", "intent": "expense", "amount": null, "branch": null },
+    { "text": "ביתר", "kind": "דו-משמעי", "intent": "unknown", "amount": null, "branch": null },
+    { "text": "מה המצב", "kind": "לא פקודה", "intent": "unknown", "amount": null, "branch": null },
+    { "text": "תודה רבה על הכל 🌸", "kind": "לא פקודה", "intent": "unknown", "amount": null, "branch": null }
+  ]
+}

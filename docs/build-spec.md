@@ -9,6 +9,10 @@
 >   שנגזר מקוד השרת. במקרה של סתירה בין המסמך הזה לחוזה — **החוזה מנצח**,
 >   כי הוא נקרא מהקוד.
 > * `msg_status` צומצם ל-`queued/sent/failed`. לשרת אין אירועי מסירה או קריאה.
+> * **המודל אינו ערך קשיח.** הוא נקבע ב-`ANTHROPIC_MODEL`, וברירת המחדל
+>   היא `claude-sonnet-4-6`. `supabase/tests/model-benchmark.mjs` משווה
+>   מודלים על 30 פקודות עבריות אמיתיות (intent, סכום, סניף) ומכריע
+>   לפי מדידה ולא לפי הערכה.
 
 ---
 
@@ -30,7 +34,7 @@
 | טפסים | React Hook Form + Zod |
 | Backend | Supabase — Postgres, Auth, Storage, Edge Functions, pg_cron |
 | WhatsApp | `whatsapp-hub` (שרת עצמאי) — ראה `docs/whatsapp-contract.md` |
-| AI | Claude API (`claude-sonnet-4-6`) דרך Edge Function בלבד |
+| AI | Claude API דרך Edge Function בלבד. המודל ב-`ANTHROPIC_MODEL`, ברירת מחדל `claude-sonnet-4-6` |
 | גרפים | Recharts |
 | תאריכים | date-fns + `he` locale |
 | אחסון | Netlify (frontend) · Supabase (backend) |
