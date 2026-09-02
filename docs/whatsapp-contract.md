@@ -1,7 +1,13 @@
 # חוזה whatsapp-hub
 
-**מקור:** [`moti-lang/whatsapp-hub`](https://github.com/moti-lang/whatsapp-hub) @ `76a2617`
+**מקור:** [`moti-lang/whatsapp-hub`](https://github.com/moti-lang/whatsapp-hub) **@ `v1.0.0`**
 **נקרא מהקוד, לא מתיעוד.** אם השרת משתנה — זה הקובץ שמשווים מולו.
+
+> `v1.0.0` הוא commit `76a2617`. אם ה-tag עדיין לא נדחף, ה-hash הוא ההצמדה
+> התקפה. מגרסה 1.0.0 ואילך השרת נושא `CHANGELOG.md` ובדיקת חוזה
+> (`test/contract.test.ts`) שנכשלת כשמבנה `message.received`, רשימת
+> האירועים או אלגוריתם החתימה משתנים — כלומר שינוי שובר יתגלה אצלו,
+> לא אצלנו בייצור.
 
 הקבצים שמהם נגזר החוזה:
 
