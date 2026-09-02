@@ -2,11 +2,14 @@
 # מריץ את כל חבילות הבדיקה מול הפוסטגרס המקומי.
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
-for suite in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql; do
+for suite in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql; do
   echo "═══ $suite ═══"
   psql -h /tmp -p 5433 -U postgres -d teichtal -v ON_ERROR_STOP=1 -f "$DIR/$suite" 2>&1 \
     | grep -E '✓|✗|ERROR|═|עברו|עקביים|:$' | sed 's/^psql.*NOTICE:  //'
 done
+
+echo "═══ כיסוי פונקציות ═══"
+node "$DIR/function-coverage.test.mjs" 2>&1 | grep -E "✓|✗|לכל פונקציה|ללא בדיקה"
 
 echo "═══ טוהר ai-command ═══"
 node "$DIR/ai-command-purity.test.mjs" 2>&1 | grep -E "✓|✗|נקייה|נכשלו"

@@ -168,6 +168,48 @@ select assert_no_execute('anon', 'f_general_allocation(uuid)');
 select assert_no_execute('anon', 'rpc_issue_attendance_link(uuid)');
 select assert_no_execute('anon', 'rpc_revoke_attendance_link(uuid)');
 
+-- ═════════ פונקציות העזר עצמן — בדיקה חיובית ═════════
+-- היו להן רק בדיקות חסימה. כל פוליסה במערכת נשענת עליהן, ואם הן
+-- מחזירות ערך שגוי — RLS "עובד" ומחזיר את הנתונים הלא נכונים.
+begin;
+set local role authenticated;
+
+select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
+select assert_true(auth_role() = 'owner', '★ auth_role מחזירה owner לבעלים');
+select assert_eq((select count(*) from my_branches()), 0,
+                 'my_branches ריקה לבעלים — היא רואה הכל דרך התפקיד');
+
+select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
+select assert_true(auth_role() = 'branch_manager', '★ auth_role מחזירה branch_manager');
+select assert_eq((select count(*) from my_branches()), 1, '★ my_branches מחזירה סניף אחד');
+select assert_true((select name = 'ביתר עילית' from branches
+                     where id in (select my_branches())),
+                   '★ my_branches מחזירה את הסניף הנכון');
+
+select set_config('request.jwt.claims', t_claims('accountant'::user_role), true);
+select assert_true(auth_role() = 'accountant', '★ auth_role מחזירה accountant');
+
+-- משתמש שאינו קיים
+select set_config('request.jwt.claims',
+  '{"sub":"00000000-0000-0000-0000-000000000000","role":"authenticated"}', true);
+select assert_true(auth_role() is null, '★ auth_role מחזירה null ל-sub שאינו קיים');
+select assert_eq((select count(*) from my_branches()), 0, 'my_branches ריקה ל-sub לא קיים');
+select assert_eq((select count(*) from branches), 0,
+                 '★ ומשם — sub לא קיים אינו רואה שום סניף');
+
+-- משתמש מושבת
+select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
+rollback;
+
+begin;
+update profiles set is_active = false where role = 'branch_manager';
+set local role authenticated;
+select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
+select assert_true(auth_role() is null, '★ auth_role מחזירה null למשתמש מושבת');
+select assert_eq((select count(*) from branches), 0,
+                 '★ משתמש מושבת אינו רואה דבר');
+rollback;
+
 -- ומה שכן פתוח לו — בדיוק שתי הפונקציות של דף הנוכחות
 select assert_true(has_function_privilege('anon','rpc_attendance_sheet(text)','execute'),
                    'anon יכול להריץ את rpc_attendance_sheet');

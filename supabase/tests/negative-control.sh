@@ -6,6 +6,7 @@ set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 PSQL="psql -h /tmp -p 5433 -U postgres -d teichtal -v ON_ERROR_STOP=1 -q"
 fails=0
+ran=0
 
 SUITE="02_rls_proof.sql"
 
@@ -15,8 +16,9 @@ run_suite() {
 }
 
 expect_pass() {
+  ran=$((ran+1))
   "$DIR/reset.sh" >/dev/null
-  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql; do
+  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql; do
     SUITE="$s"
     if run_suite; then
       echo "  ✓ בסיס נקי: $s עוברת"
@@ -28,6 +30,7 @@ expect_pass() {
 
 # expect_fail <תיאור> <SQL שפותח את החור> [קובץ חבילה]
 expect_fail() {
+  ran=$((ran+1))
   local label="$1" sql="$2"
   SUITE="${3:-02_rls_proof.sql}"
   "$DIR/reset.sh" >/dev/null
@@ -48,6 +51,29 @@ expect_fail() {
   else
     echo "  ✓ $label — החבילה נפלה כמצופה: $(grep -m1 '✗' /tmp/nc-suite.out | sed 's/^ *//')"
   fi
+}
+
+# expect_fail_code <תיאור> <קובץ> <פקודת שינוי> <פקודת בדיקה>
+# פקודת השינוי מקבלת את נתיב הקובץ ב-$F ומשנה אותו במקום.
+expect_fail_code() {
+  ran=$((ran+1))
+  local label="$1" file="$2" mutate="$3" cmd="$4"
+  cp "$file" "$file.bak"
+  if ! (export F="$file"; eval "$mutate") >/dev/null 2>&1; then
+    echo "  ! לא הצלחתי לפתוח את החור: $label"; fails=$((fails+1))
+    mv "$file.bak" "$file"; return
+  fi
+  if cmp -s "$file" "$file.bak"; then
+    echo "  ! השינוי לא שינה את הקובץ: $label"; fails=$((fails+1))
+    mv "$file.bak" "$file"; return
+  fi
+  if (cd "$DIR/../.." && eval "$cmd") >/dev/null 2>&1; then
+    echo "  ✗ $label — החור נפתח והבדיקה עדיין עברה!"
+    fails=$((fails+1))
+  else
+    echo "  ✓ $label — הבדיקה נפלה כמצופה"
+  fi
+  mv "$file.bak" "$file"
 }
 
 echo "בקרת שלילה"
@@ -92,6 +118,31 @@ expect_fail "פתיחת טבלת students בפני anon" \
   "grant select on students to anon" \
   "06_attendance_proof.sql"
 
+expect_fail_code "פונקציה חדשה בלי בדיקה חיובית" \
+  "$DIR/../migrations/0013_function_privileges.sql" \
+  'printf "\\ncreate or replace function rpc_untested_example() returns int language sql as \$\$ select 1 \$\$;\\n" >> "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && node supabase/tests/function-coverage.test.mjs"
+
+expect_fail "פתיחת פונקציית RPC ל-anon" \
+  "grant execute on function rpc_execute_command(uuid) to anon" \
+  "10_portability_proof.sql"
+
+expect_fail "ביטול נעילת search_path בפונקציה security definer" \
+  "alter function rpc_attendance_sheet(text) reset search_path" \
+  "10_portability_proof.sql"
+
+expect_fail "החזרת ההרחבות ל-public (shim לא נאמן)" \
+  "alter extension pgcrypto set schema public" \
+  "10_portability_proof.sql"
+
+expect_fail "ביטול חסימת אישור הצילום" \
+  "drop trigger production_cast_consent on production_cast" \
+  "09_business_rules_proof.sql"
+
+expect_fail "ביטול טריגר updated_at" \
+  "drop trigger students_touch on students" \
+  "09_business_rules_proof.sql"
+
 expect_fail "החזרת התלות ב-pgcrypto בסכמה שאינה קיימת בענן" \
   "\\i $DIR/holes/pgcrypto_search_path.sql" \
   "06_attendance_proof.sql"
@@ -101,27 +152,6 @@ expect_fail "הסרת בדיקת שיוך השיעור לסניף בדיווח �
   "06_attendance_proof.sql"
 
 # ─── חורים ברמת הקוד, לא ברמת המסד ───
-# expect_fail_code <תיאור> <קובץ> <פקודת שינוי> <פקודת בדיקה>
-# פקודת השינוי מקבלת את נתיב הקובץ ב-$F ומשנה אותו במקום.
-expect_fail_code() {
-  local label="$1" file="$2" mutate="$3" cmd="$4"
-  cp "$file" "$file.bak"
-  if ! (export F="$file"; eval "$mutate") >/dev/null 2>&1; then
-    echo "  ! לא הצלחתי לפתוח את החור: $label"; fails=$((fails+1))
-    mv "$file.bak" "$file"; return
-  fi
-  if cmp -s "$file" "$file.bak"; then
-    echo "  ! השינוי לא שינה את הקובץ: $label"; fails=$((fails+1))
-    mv "$file.bak" "$file"; return
-  fi
-  if (cd "$DIR/../.." && eval "$cmd") >/dev/null 2>&1; then
-    echo "  ✗ $label — החור נפתח והבדיקה עדיין עברה!"
-    fails=$((fails+1))
-  else
-    echo "  ✓ $label — הבדיקה נפלה כמצופה"
-  fi
-  mv "$file.bak" "$file"
-}
 
 expect_fail "הסרת מפתח הייחודיות של התזכורות (הצפת הורים)" \
   "drop index reminders_dedupe_idx" \
@@ -217,7 +247,16 @@ expect_fail_code "חיבור ערוץ ההתראות לוואטסאפ" \
   "node supabase/tests/alert-independence.test.mjs"
 
 "$DIR/reset.sh" >/dev/null
+# ★ אימות שהסקריפט עצמו לא בלע בקרה.
+# פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
+# מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה
+# שלמה לא רצה. זה בדיוק הדפוס שאנחנו מחפשים, ברמת הסקריפט.
+expected=$(grep -cE '^expect_(pass|fail|fail_code)( |$)' "$0")
 echo "───────────────────────────────────────────────"
+if [ "$ran" -ne "$expected" ]; then
+  echo "  ✗ רצו $ran בקרות מתוך $expected שמוגדרות בקובץ — אחת נבלעה"
+  fails=$((fails + expected - ran))
+fi
 if [ "$fails" -eq 0 ]; then
   echo "כל בקרות השלילה עברו — כל חור מפיל את החבילה"
 else

@@ -20,7 +20,8 @@
     "test:router": "node supabase/tests/command-router.test.mjs",
     "test:purity": "node supabase/tests/ai-command-purity.test.mjs",
     "bench:model": "node supabase/tests/model-benchmark.mjs",
-    "test:race": "node supabase/tests/command-race.test.mjs"
+    "test:race": "node supabase/tests/command-race.test.mjs",
+    "test:coverage": "node supabase/tests/function-coverage.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
