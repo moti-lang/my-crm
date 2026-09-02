@@ -8,11 +8,12 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "db:reset": "supabase db reset",
+    "db:reset": "supabase db reset && npm run seed:users",
     "db:reset:local": "./supabase/tests/reset.sh",
-    "db:test": "psql -h /tmp -p 5433 -U postgres -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/01_rls_proof.sql",
-    "gen:types": "supabase gen types typescript --local > src/lib/database.types.ts",
-    "gen:types:local": "psql -h /tmp -p 5433 -U postgres -d teichtal -tAqc \"$(cat scripts/introspect.sql)\" | node scripts/gen-types.mjs > src/lib/database.types.ts"
+    "seed:users": "node scripts/seed-users.mjs",
+    "db:test": "./supabase/tests/run.sh",
+    "db:test:negative": "./supabase/tests/negative-control.sh",
+    "gen:types": "node scripts/gen-types.mjs --from-local-postgres > src/lib/database.types.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

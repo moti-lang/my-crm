@@ -40,3 +40,10 @@ do $$ begin
 end $$;
 
 grant usage on schema public to anon, authenticated, service_role;
+
+-- קריטי לנאמנות ה-shim: בסופבייס אמיתי לתפקידים יש גישה לסכמת auth
+-- ולפונקציות שבה. בלי זה כל פוליסה שמשתמשת ב-auth.uid() ישירות נכשלת
+-- ב-"permission denied for schema auth" — כלומר בדיקות עוברות מהסיבה הלא נכונה.
+grant usage on schema auth to anon, authenticated, service_role;
+grant execute on function auth.uid(), auth.role() to anon, authenticated, service_role;
+grant select on auth.users to service_role;

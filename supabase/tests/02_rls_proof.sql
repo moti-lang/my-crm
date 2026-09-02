@@ -65,6 +65,75 @@ do $$ begin
   end;
 end $$;
 
+-- profiles_self משתמשת ב-auth.uid() ישירות בפוליסה. אם הגישה לסכמת auth
+-- שבורה, הבדיקה הזו נופלת — וזו בדיוק הייתה התקלה ב-shim.
+select assert_eq((select count(*) from profiles), 1, 'מנהלת קוראת את הפרופיל של עצמה בלבד');
+select assert_eq((select count(*) from profiles where role = 'branch_manager'), 1,
+                 'הפרופיל שהיא קוראת הוא שלה');
+
+-- ═════════ הסלמת הרשאות: הקטגוריה המסוכנת ═════════
+-- אם אחת מאלה עוברת, כל שאר הבדיקות חסרות ערך: מנהלת סניף
+-- יכולה להפוך את עצמה לבעלים ואז לראות הכל כדין.
+
+-- 1. שינוי התפקיד של עצמה ל-owner
+do $$ declare n int; begin
+  update profiles set role = 'owner' where id = auth.uid();
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception E'\n  ✗ ★ הסלמה! מנהלת שינתה את התפקיד של עצמה ל-owner (% שורות)', n;
+  end if;
+  raise notice '  ✓ ★ הסלמה: שינוי התפקיד העצמי ל-owner שינה 0 שורות';
+exception when insufficient_privilege then
+  raise notice '  ✓ ★ הסלמה: שינוי התפקיד העצמי ל-owner נחסם';
+end $$;
+
+-- 2. שיוך עצמה לסניף שאינו שלה
+do $$ declare n int; begin
+  insert into branch_staff (branch_id, user_id)
+  values ('bbbbbbbb-0000-0000-0000-000000000002', auth.uid());
+  get diagnostics n = row_count;
+  raise exception E'\n  ✗ ★ הסלמה! מנהלת שייכה את עצמה לסניף מודיעין עילית (% שורות)', n;
+exception
+  when insufficient_privilege then
+    raise notice '  ✓ ★ הסלמה: שיוך עצמי לסניף אחר נחסם';
+  when unique_violation then
+    raise exception E'\n  ✗ ★ הסלמה! השיוך לא נחסם ע"י RLS אלא רק ע"י מפתח כפול';
+end $$;
+
+-- 3. גרסאות נוספות של אותה התקפה
+do $$ declare n int; begin
+  -- שינוי התפקיד של משתמשת אחרת
+  update profiles set role = 'branch_manager'
+   where id = 'cccccccc-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception E'\n  ✗ ★ הסלמה! מנהלת שינתה את הפרופיל של הבעלים'; end if;
+  raise notice '  ✓ ★ הסלמה: שינוי הפרופיל של הבעלים שינה 0 שורות';
+exception when insufficient_privilege then
+  raise notice '  ✓ ★ הסלמה: שינוי הפרופיל של הבעלים נחסם';
+end $$;
+
+do $$ declare n int; begin
+  -- הזזת השיוך הקיים שלה לסניף אחר
+  update branch_staff set branch_id = 'bbbbbbbb-0000-0000-0000-000000000002'
+   where user_id = auth.uid();
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception E'\n  ✗ ★ הסלמה! מנהלת הזיזה את השיוך שלה לסניף אחר'; end if;
+  raise notice '  ✓ ★ הסלמה: הזזת השיוך לסניף אחר שינתה 0 שורות';
+exception when insufficient_privilege then
+  raise notice '  ✓ ★ הסלמה: הזזת השיוך לסניף אחר נחסמה';
+end $$;
+
+do $$ begin
+  -- יצירת מספר מורשה חדש = דלת אחורית דרך הוואטסאפ
+  begin
+    insert into authorized_numbers (phone, label, scope, can_delete)
+    values ('972500000000','דלת אחורית','all', true);
+    raise exception E'\n  ✗ ★ הסלמה! מנהלת הוסיפה מספר מורשה לפקודות וואטסאפ';
+  exception when insufficient_privilege then
+    raise notice '  ✓ ★ הסלמה: הוספת מספר מורשה נחסמה';
+  end;
+end $$;
+
 -- עדכון חוצה-סניפים חייב לא לגעת בכלום
 do $$ declare n int; begin
   update students set notes = 'נחדר' where branch_id = 'bbbbbbbb-0000-0000-0000-000000000002';

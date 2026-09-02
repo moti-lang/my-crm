@@ -2,20 +2,10 @@
 -- מזהים קבועים כדי שה-reset יהיה דטרמיניסטי וניתן להשוואה.
 
 -- ═══════════════════════ משתמשים ═══════════════════════
--- שלושה משתמשי בדיקה. הסיסמה לכולם: Teichtal!2026
-insert into auth.users
-  (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
-   raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-values
-  ('00000000-0000-0000-0000-000000000000','cccccccc-0000-0000-0000-000000000001','authenticated','authenticated','hania@teichtal.local',  crypt('Teichtal!2026', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}','{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000','cccccccc-0000-0000-0000-000000000002','authenticated','authenticated','beitar@teichtal.local',  crypt('Teichtal!2026', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}','{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000','cccccccc-0000-0000-0000-000000000003','authenticated','authenticated','books@teichtal.local',   crypt('Teichtal!2026', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}','{}', now(), now())
-on conflict (id) do nothing;
-
-insert into profiles (id, full_name, phone, role) values
-  ('cccccccc-0000-0000-0000-000000000001','הניה טייכטל','972501234567','owner'),
-  ('cccccccc-0000-0000-0000-000000000002','רבקי פרידמן','972521111111','branch_manager'),
-  ('cccccccc-0000-0000-0000-000000000003','שרה לוי','972533333333','accountant');
+-- אין כאן משתמשים בכוונה. כתיבה ישירה ל-auth.users מייצרת משתמשים
+-- שלא מתחברים (חסרה שורה ב-auth.identities), והסכמה משתנה בין גרסאות GoTrue.
+-- המשתמשים נוצרים דרך ה-Admin API:   node scripts/seed-users.mjs
+-- הסקריפט גם כותב profiles, משייך branch_staff וממלא created_by.
 
 -- ═══════════════════════ עונה ═══════════════════════
 insert into seasons (id, name, starts_on, ends_on, is_current) values
@@ -30,9 +20,7 @@ insert into branches (id, name, city, address, supervisor_name, supervisor_phone
   ('bbbbbbbb-0000-0000-0000-000000000004','בית שמש','בית שמש','נהר הירדן 8','אסתי כהן','972541000004','רביעי 17:30','{3}','17:30',1900,900),
   ('bbbbbbbb-0000-0000-0000-000000000005','אשדוד','אשדוד','רובע ז 21','דבורי מזרחי','972541000005','חמישי 16:30','{4}','16:30',1800,850);
 
--- רבקי מנהלת את ביתר עילית בלבד — בסיס לבדיקת ה-RLS.
-insert into branch_staff (branch_id, user_id) values
-  ('bbbbbbbb-0000-0000-0000-000000000001','cccccccc-0000-0000-0000-000000000002');
+-- שיוך רבקי לביתר עילית נעשה ב-scripts/seed-users.mjs (תלוי ב-UUID מה-Admin API).
 
 -- ═══════════════════════ קטגוריות ═══════════════════════
 insert into categories (scope, kind, name, sort_order) values
@@ -108,7 +96,7 @@ insert into payments (student_id, paid_on, amount, method, covers_note) values
 
 -- ═══════════════════════ הוצאות סניף (14) ═══════════════════════
 insert into ledger_entries (season_id, kind, scope, branch_id, entry_date, category, vendor, description, amount, method, is_recurring, recurring_day, created_by)
-select 'aaaaaaaa-0000-0000-0000-000000000001', 'expense', 'branch', b, current_date - d, c, v, ds, a, m, r, rd, 'cccccccc-0000-0000-0000-000000000001'
+select 'aaaaaaaa-0000-0000-0000-000000000001', 'expense', 'branch', b, current_date - d, c, v, ds, a, m, r, rd, null
 from (values
  ('bbbbbbbb-0000-0000-0000-000000000001'::uuid, 80, 'שכירות אולם','מתנ״ס ביתר','שכירות ספטמבר',1200,'transfer'::payment_method,true,5),
  ('bbbbbbbb-0000-0000-0000-000000000001'::uuid, 50, 'שכירות אולם','מתנ״ס ביתר','שכירות אוקטובר',1200,'transfer'::payment_method,true,5),
@@ -128,13 +116,13 @@ from (values
 
 -- ═══════════════ כספים כלליים — שיטות חלוקה שונות ═══════════════
 insert into ledger_entries (season_id, kind, scope, entry_date, category, vendor, description, amount, method, split_method, split_manual, created_by) values
- ('aaaaaaaa-0000-0000-0000-000000000001','expense','general', current_date - 60,'פרסום ארצי','קמפיין מדיה','קמפיין רישום',6000,'transfer','equal',       null,'cccccccc-0000-0000-0000-000000000001'),
- ('aaaaaaaa-0000-0000-0000-000000000001','expense','general', current_date - 45,'הנהלת חשבונות','שרה לוי','ריטיינר רבעוני',3600,'transfer','by_students', null,'cccccccc-0000-0000-0000-000000000001'),
+ ('aaaaaaaa-0000-0000-0000-000000000001','expense','general', current_date - 60,'פרסום ארצי','קמפיין מדיה','קמפיין רישום',6000,'transfer','equal',       null,null),
+ ('aaaaaaaa-0000-0000-0000-000000000001','expense','general', current_date - 45,'הנהלת חשבונות','שרה לוי','ריטיינר רבעוני',3600,'transfer','by_students', null,null),
  ('aaaaaaaa-0000-0000-0000-000000000001','expense','general', current_date - 30,'אתר ומערכות','ספק תוכנה','מערכת ניהול',2400,'credit','manual',
    '{"bbbbbbbb-0000-0000-0000-000000000001":0.3,"bbbbbbbb-0000-0000-0000-000000000002":0.2,"bbbbbbbb-0000-0000-0000-000000000003":0.2,"bbbbbbbb-0000-0000-0000-000000000004":0.15,"bbbbbbbb-0000-0000-0000-000000000005":0.15}'::jsonb,
-   'cccccccc-0000-0000-0000-000000000001'),
- ('aaaaaaaa-0000-0000-0000-000000000001','expense','general', current_date - 20,'ייעוץ','עו״ד כהן','ייעוץ משפטי',1800,'transfer','none',        null,'cccccccc-0000-0000-0000-000000000001'),
- ('aaaaaaaa-0000-0000-0000-000000000001','income','general',  current_date - 35,'חסויות','קרן קהילתית','חסות שנתית',5000,'transfer','none',     null,'cccccccc-0000-0000-0000-000000000001');
+   null),
+ ('aaaaaaaa-0000-0000-0000-000000000001','expense','general', current_date - 20,'ייעוץ','עו״ד כהן','ייעוץ משפטי',1800,'transfer','none',        null,null),
+ ('aaaaaaaa-0000-0000-0000-000000000001','income','general',  current_date - 35,'חסויות','קרן קהילתית','חסות שנתית',5000,'transfer','none',     null,null);
 
 -- ═══════════════════════ הפקות ═══════════════════════
 insert into productions (id, name, year, status, budget, release_date, notes) values
@@ -143,7 +131,7 @@ insert into productions (id, name, year, status, budget, release_date, notes) va
  ('eeeeeeee-0000-0000-0000-000000000003','קול הדממה','תשפ״ה','released',30000, current_date - 500,'הופץ, רווחי');
 
 insert into ledger_entries (season_id, kind, scope, production_id, entry_date, category, vendor, description, amount, method, created_by)
-select 'aaaaaaaa-0000-0000-0000-000000000001', k::entry_kind, 'production', p, current_date - d, c, v, ds, a, m::payment_method, 'cccccccc-0000-0000-0000-000000000001'
+select 'aaaaaaaa-0000-0000-0000-000000000001', k::entry_kind, 'production', p, current_date - d, c, v, ds, a, m::payment_method, null
 from (values
  ('eeeeeeee-0000-0000-0000-000000000001'::uuid,'expense',70,'צלם','אולפני אור','ימי צילום',12000,'transfer'),
  ('eeeeeeee-0000-0000-0000-000000000001'::uuid,'expense',40,'עריכה','סטודיו נועם','עריכה ראשונית',7500,'transfer'),

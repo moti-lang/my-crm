@@ -1,11 +1,32 @@
 #!/usr/bin/env node
 // מחולל src/lib/database.types.ts מהקטלוג של פוסטגרס.
-// עוקף את הצורך ב-`supabase gen types` (שדורש דוקר) בזמן פיתוח מקומי.
-// מול פרויקט Supabase חי אפשר להשתמש ב-`npm run gen:types` הרשמי במקום.
-let raw = '';
-process.stdin.on('data', (c) => (raw += c));
-process.stdin.on('end', () => {
-  const { enums, relations } = JSON.parse(raw);
+//
+// ⚠️ פתרון ביניים בלבד. `supabase gen types` דורש דוקר שאינו זמין כאן.
+// ברגע שנתחבר לפרויקט Supabase אמיתי, המחולל הזה **נמחק** ו-gen:types
+// יצביע על ה-CLI הרשמי. שני מקורות טיפוסים = באג שמחכה לקרות.
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+const FROM_LOCAL = process.argv.includes('--from-local-postgres');
+
+function readInput() {
+  if (!FROM_LOCAL) {
+    return new Promise((resolve) => {
+      let raw = '';
+      process.stdin.on('data', (c) => (raw += c));
+      process.stdin.on('end', () => resolve(raw));
+    });
+  }
+  const sql = readFileSync(new URL('./introspect.sql', import.meta.url), 'utf8');
+  return execFileSync(
+    'psql',
+    ['-h', '/tmp', '-p', '5433', '-U', 'postgres', '-d', 'teichtal', '-tAqc', sql],
+    { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+  );
+}
+
+const main = async () => {
+  const { enums, relations } = JSON.parse(await readInput());
   const enumNames = new Set(enums.map((e) => e.name));
 
   const tsType = (pg) => {
@@ -88,4 +109,9 @@ process.stdin.on('end', () => {
   out.push('export type Enums<T extends keyof Database["public"]["Enums"]> = Database["public"]["Enums"][T];');
   out.push('');
   process.stdout.write(out.join('\n'));
+};
+
+main().catch((e) => {
+  console.error(`\n✗ יצירת הטיפוסים נכשלה: ${e.message}\n`);
+  process.exit(1);
 });

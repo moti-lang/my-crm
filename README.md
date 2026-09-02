@@ -23,14 +23,25 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
 
 ```bash
 supabase link --project-ref <ref>
-supabase db push          # מחיל מיגרציות על הפרויקט המרוחק
-supabase db reset         # מקומי: בונה מאפס + seed
+supabase db push               # מחיל מיגרציות על הפרויקט המרוחק
+npm run db:reset               # מקומי: בונה מאפס + seed + משתמשים
 ```
+
+**משתמשים לא נוצרים ב-SQL.** כתיבה ישירה ל-`auth.users` מייצרת משתמש שנראה תקין
+בטבלה אבל לא מצליח להתחבר — GoTrue דורש שורה תואמת ב-`auth.identities`, והסכמה
+משתנה בין גרסאות. לכן `seed.sql` מכיל נתונים עסקיים בלבד, ואת המשתמשים יוצר:
+
+```bash
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run seed:users
+```
+
+הסקריפט אידמפוטנטי, וגם כותב `profiles`, משייך `branch_staff` וממלא `created_by`.
 
 | קובץ | תוכן |
 |---|---|
 | `supabase/migrations/0001_init.sql` | enums, טבלאות, אינדקסים, views, `f_general_allocation` |
 | `supabase/migrations/0002_rls.sql` | RLS על כל טבלה, פוליסות, תצוגת רואת חשבון |
+| `supabase/migrations/0003_allocation_largest_remainder.sql` | חלוקת הוצאות בשיטת השארית הגדולה |
 | `supabase/seed.sql` | עונה, 5 סניפים, 21 תלמידות, תשלומים, כספים, הפקות, נוכחות, תבניות, הגדרות |
 
 ### אימות בלי Supabase חי
@@ -38,20 +49,26 @@ supabase db reset         # מקומי: בונה מאפס + seed
 הריפו מריץ את כל הסכמה על פוסטגרס מקומי, כדי שאפשר יהיה לאמת בלי לחכות למפתחות:
 
 ```bash
-npm run db:reset:local    # בונה מאפס: shim + מיגרציות + seed
-npm run db:test           # מריץ את הוכחת ה-RLS
+npm run db:reset:local     # בונה מאפס: shim + מיגרציות + seed + משתמשי בדיקה
+npm run db:test            # הוכחת RLS + הוכחת חלוקת הוצאות
+npm run db:test:negative   # בקרת שלילה: פותח כל חור ומוודא שהחבילה נופלת
 ```
 
-`supabase/tests/00_local_auth_shim.sql` מחקה את סכמת `auth` של Supabase. הוא **לא** מיגרציה
-ולא רץ בפרודקשן.
+`supabase/tests/00_local_auth_shim.sql` מחקה את סכמת `auth` של Supabase, ו-`01_local_users.sql`
+ממלא את מקום `seed-users.mjs` היכן שאין GoTrue. שניהם **לא** מיגרציות ולא רצים בפרודקשן.
 
 ## הוכחת ה-RLS
 
-`supabase/tests/01_rls_proof.sql` מריץ שאילתות ישירות בתור `authenticated` עם JWT claims אמיתיים —
+`02_rls_proof.sql` מריץ שאילתות ישירות בתור `authenticated` עם JWT claims אמיתיים —
 בדיוק כמו supabase-js — ומוודא שההפרדה בין הסניפים נאכפת **במסד**, לא בפילטר בצד הלקוח.
+כולל קטגוריית הסלמת הרשאות: ניסיון של מנהלת סניף להפוך את עצמה ל-owner, לשייך את עצמה
+לסניף אחר, או להוסיף מספר מורשה לפקודות וואטסאפ.
 
-הבדיקה נכשלת בקול רם אם נפער חור. בקרת שלילה: `alter table students disable row level security`
-מפילה אותה מיד.
+`03_allocation_proof.sql` מוודא ש-`sum(allocated) = amount` בדיוק, לכל שיטות החלוקה
+ולכל סכום, כולל 12,000 ש"ח לשבעה סניפים.
+
+`negative-control.sh` פותח כל חור בנפרד ומוודא שהחבילה נופלת עליו. בדיקה שתמיד עוברת
+אינה מוכיחה דבר.
 
 ## משתמשי בדיקה (seed)
 
@@ -61,7 +78,17 @@ npm run db:test           # מריץ את הוכחת ה-RLS
 | `beitar@teichtal.local` | מנהלת סניף | ביתר עילית בלבד |
 | `books@teichtal.local` | הנהלת חשבונות | קריאה, בלי טלפונים וכתובות |
 
-סיסמה לכולם: `Teichtal!2026`
+סיסמה לכולם: `Teichtal!2026`. נוצרים ע"י `npm run seed:users`.
+
+## טיפוסי מסד
+
+```bash
+npm run gen:types
+```
+
+⚠️ `scripts/gen-types.mjs` הוא **פתרון ביניים**: `supabase gen types` דורש דוקר שאינו זמין
+בסביבת הפיתוח הנוכחית. ברגע שנתחבר לפרויקט Supabase אמיתי — המחולל נמחק ו-`gen:types`
+יצביע על ה-CLI הרשמי. שני מקורות טיפוסים זה באג שמחכה לקרות.
 
 ## וואטסאפ ו-AI
 
