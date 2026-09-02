@@ -9,14 +9,7 @@
 \set BEITAR   '''bbbbbbbb-0000-0000-0000-000000000001'''
 \set MODIIN   '''bbbbbbbb-0000-0000-0000-000000000002'''
 
-create or replace function assert_eq(actual bigint, expected bigint, label text)
-returns void language plpgsql as $$
-begin
-  if actual is distinct from expected then
-    raise exception E'\n  ✗ %\n    התקבל: %   ציפינו: %', label, actual, expected;
-  end if;
-  raise notice '  ✓ % (%)', label, actual;
-end $$;
+\ir _assert.sql
 
 -- ═════════════ בעלים: רואה הכל ═════════════
 begin;
@@ -72,16 +65,14 @@ select assert_eq((select count(*) from settings where key = 'owner_phone'), 0,
 select assert_eq((select count(*) from authorized_numbers), 0, 'מנהלת אינה רואה מספרים מורשים');
 select assert_eq((select count(*) from audit_log), 0, 'מנהלת אינה רואה יומן ביקורת');
 
--- כתיבה לסניף אחר חייבת להיחסם
-do $$ begin
-  begin
-    insert into students (season_id, branch_id, full_name)
-    values ('aaaaaaaa-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000002','חדירה');
-    raise exception E'\n  ✗ ★ מנהלת הצליחה להוסיף תלמידה לסניף שאינו שלה!';
-  exception when insufficient_privilege then
-    raise notice '  ✓ ★ הוספת תלמידה לסניף אחר נחסמה';
-  end;
-end $$;
+-- כתיבה לסניף אחר: הראיה היא שמספר התלמידות בסניף היעד לא השתנה,
+-- לא איזו שגיאה נזרקה בדרך.
+select assert_no_effect(
+  'הוספת תלמידה לסניף אחר',
+  $a$insert into students (season_id, branch_id, full_name)
+     values ('aaaaaaaa-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000002','חדירה')$a$,
+  $p$select count(*)::text from public.students
+      where branch_id = 'bbbbbbbb-0000-0000-0000-000000000002'$p$);
 
 -- profiles_self משתמשת ב-auth.uid() ישירות בפוליסה. אם הגישה לסכמת auth
 -- שבורה, הבדיקה הזו נופלת — וזו בדיוק הייתה התקלה ב-shim.
@@ -94,71 +85,48 @@ select assert_eq((select count(*) from profiles where role = 'branch_manager'), 
 -- יכולה להפוך את עצמה לבעלים ואז לראות הכל כדין.
 
 -- 1. שינוי התפקיד של עצמה ל-owner
-do $$ declare n int; begin
-  update profiles set role = 'owner' where id = auth.uid();
-  get diagnostics n = row_count;
-  if n <> 0 then
-    raise exception E'\n  ✗ ★ הסלמה! מנהלת שינתה את התפקיד של עצמה ל-owner (% שורות)', n;
-  end if;
-  raise notice '  ✓ ★ הסלמה: שינוי התפקיד העצמי ל-owner שינה 0 שורות';
-exception when insufficient_privilege then
-  raise notice '  ✓ ★ הסלמה: שינוי התפקיד העצמי ל-owner נחסם';
-end $$;
+select assert_no_effect(
+  'הסלמה: שינוי התפקיד העצמי ל-owner',
+  $a$update profiles set role = 'owner' where id = auth.uid()$a$,
+  $p$select role::text from public.profiles
+      where id = 'cccccccc-0000-0000-0000-000000000002'$p$);
 
 -- 2. שיוך עצמה לסניף שאינו שלה
-do $$ declare n int; begin
-  insert into branch_staff (branch_id, user_id)
-  values ('bbbbbbbb-0000-0000-0000-000000000002', auth.uid());
-  get diagnostics n = row_count;
-  raise exception E'\n  ✗ ★ הסלמה! מנהלת שייכה את עצמה לסניף מודיעין עילית (% שורות)', n;
-exception
-  when insufficient_privilege then
-    raise notice '  ✓ ★ הסלמה: שיוך עצמי לסניף אחר נחסם';
-  when unique_violation then
-    raise exception E'\n  ✗ ★ הסלמה! השיוך לא נחסם ע"י RLS אלא רק ע"י מפתח כפול';
-end $$;
+select assert_no_effect(
+  'הסלמה: שיוך עצמי לסניף אחר',
+  $a$insert into branch_staff (branch_id, user_id)
+     values ('bbbbbbbb-0000-0000-0000-000000000002', auth.uid())$a$,
+  $p$select string_agg(branch_id::text, ',' order by branch_id) from public.branch_staff
+      where user_id = 'cccccccc-0000-0000-0000-000000000002'$p$);
 
 -- 3. גרסאות נוספות של אותה התקפה
-do $$ declare n int; begin
-  -- שינוי התפקיד של משתמשת אחרת
-  update profiles set role = 'branch_manager'
-   where id = 'cccccccc-0000-0000-0000-000000000001';
-  get diagnostics n = row_count;
-  if n <> 0 then raise exception E'\n  ✗ ★ הסלמה! מנהלת שינתה את הפרופיל של הבעלים'; end if;
-  raise notice '  ✓ ★ הסלמה: שינוי הפרופיל של הבעלים שינה 0 שורות';
-exception when insufficient_privilege then
-  raise notice '  ✓ ★ הסלמה: שינוי הפרופיל של הבעלים נחסם';
-end $$;
+select assert_no_effect(
+  'הסלמה: שינוי הפרופיל של הבעלים',
+  $a$update profiles set role = 'branch_manager'
+     where id = 'cccccccc-0000-0000-0000-000000000001'$a$,
+  $p$select role::text from public.profiles
+      where id = 'cccccccc-0000-0000-0000-000000000001'$p$);
 
-do $$ declare n int; begin
-  -- הזזת השיוך הקיים שלה לסניף אחר
-  update branch_staff set branch_id = 'bbbbbbbb-0000-0000-0000-000000000002'
-   where user_id = auth.uid();
-  get diagnostics n = row_count;
-  if n <> 0 then raise exception E'\n  ✗ ★ הסלמה! מנהלת הזיזה את השיוך שלה לסניף אחר'; end if;
-  raise notice '  ✓ ★ הסלמה: הזזת השיוך לסניף אחר שינתה 0 שורות';
-exception when insufficient_privilege then
-  raise notice '  ✓ ★ הסלמה: הזזת השיוך לסניף אחר נחסמה';
-end $$;
+select assert_no_effect(
+  'הסלמה: הזזת השיוך הקיים לסניף אחר',
+  $a$update branch_staff set branch_id = 'bbbbbbbb-0000-0000-0000-000000000002'
+     where user_id = auth.uid()$a$,
+  $p$select string_agg(branch_id::text, ',' order by branch_id) from public.branch_staff
+      where user_id = 'cccccccc-0000-0000-0000-000000000002'$p$);
 
-do $$ begin
-  -- יצירת מספר מורשה חדש = דלת אחורית דרך הוואטסאפ
-  begin
-    insert into authorized_numbers (phone, label, scope, can_delete)
-    values ('972500000000','דלת אחורית','all', true);
-    raise exception E'\n  ✗ ★ הסלמה! מנהלת הוסיפה מספר מורשה לפקודות וואטסאפ';
-  exception when insufficient_privilege then
-    raise notice '  ✓ ★ הסלמה: הוספת מספר מורשה נחסמה';
-  end;
-end $$;
+select assert_no_effect(
+  'הסלמה: הוספת מספר מורשה לפקודות וואטסאפ',
+  $a$insert into authorized_numbers (phone, label, scope, can_delete)
+     values ('972500000000','דלת אחורית','all', true)$a$,
+  $p$select count(*)::text from public.authorized_numbers$p$);
 
 -- עדכון חוצה-סניפים חייב לא לגעת בכלום
-do $$ declare n int; begin
-  update students set notes = 'נחדר' where branch_id = 'bbbbbbbb-0000-0000-0000-000000000002';
-  get diagnostics n = row_count;
-  if n <> 0 then raise exception E'\n  ✗ ★ עדכון חוצה-סניפים שינה % שורות!', n; end if;
-  raise notice '  ✓ ★ עדכון תלמידות בסניף אחר שינה 0 שורות';
-end $$;
+select assert_no_effect(
+  'עדכון תלמידות בסניף אחר',
+  $a$update students set notes = 'נחדר'
+     where branch_id = 'bbbbbbbb-0000-0000-0000-000000000002'$a$,
+  $p$select count(*)::text from public.students
+      where branch_id = 'bbbbbbbb-0000-0000-0000-000000000002' and notes = 'נחדר'$p$);
 rollback;
 
 -- ═════════════ רואת חשבון: ללא טלפונים וכתובות ═════════════
@@ -183,26 +151,31 @@ select assert_eq((select round(sum(allocated_amount))::bigint from v_general_all
                  '★ רואת חשבון רואה חלוקה מלאה של 12,000 (לא 8,400)');
 rollback;
 
--- ═════════════ anon: אפס גישה לטבלאות ═════════════
-begin;
-set local role anon;
-do $$ begin
-  begin
-    perform count(*) from students;
-    raise exception E'\n  ✗ ★ anon הצליח לקרוא מטבלת students!';
-  exception when insufficient_privilege then
-    raise notice '  ✓ ★ anon נחסם מטבלת students';
-  end;
-  begin
-    perform count(*) from payments;
-    raise exception E'\n  ✗ ★ anon הצליח לקרוא מטבלת payments!';
-  exception when insufficient_privilege then
-    raise notice '  ✓ ★ anon נחסם מטבלת payments';
-  end;
-end $$;
-rollback;
+-- ═════════════ anon: אפס גישה ═════════════
+-- נבדק ברמת ה-GRANT ולא בתפיסת שגיאה בזמן ריצה. הסיבה: עם grant על
+-- students השאילתה נופלת על "permission denied for function my_branches"
+-- — אותו SQLSTATE 42501, ובדיקה שתופסת אותו הייתה מדווחת ✓ בטעות.
+select assert_no_table_privilege('anon', array[
+  'students','payments','branches','profiles','lessons','attendance',
+  'attendance_links','ledger_entries','reminders','wa_messages','settings',
+  'audit_log','authorized_numbers','commands','conversations','system_alerts',
+  'seasons','productions','production_cast','categories','holidays',
+  'message_templates','faq_entries','unanswered_questions']);
 
-drop function assert_eq(bigint, bigint, text);
+-- גם ההרצה של פונקציות פנימיות סגורה בפניו
+select assert_no_execute('anon', 'auth_role()');
+select assert_no_execute('anon', 'my_branches()');
+select assert_no_execute('anon', 'f_general_allocation(uuid)');
+select assert_no_execute('anon', 'rpc_issue_attendance_link(uuid)');
+select assert_no_execute('anon', 'rpc_revoke_attendance_link(uuid)');
+
+-- ומה שכן פתוח לו — בדיוק שתי הפונקציות של דף הנוכחות
+select assert_true(has_function_privilege('anon','rpc_attendance_sheet(text)','execute'),
+                   'anon יכול להריץ את rpc_attendance_sheet');
+select assert_true(has_function_privilege('anon','rpc_attendance_submit(text,uuid,jsonb)','execute'),
+                   'anon יכול להריץ את rpc_attendance_submit');
+
+select drop_assert_helpers();
 \echo '─────────────────────────────────────────'
 \echo ' כל בדיקות ה-RLS עברו'
 \echo '─────────────────────────────────────────'

@@ -5,6 +5,8 @@
 \set ON_ERROR_STOP on
 \set SEASON '''aaaaaaaa-0000-0000-0000-000000000001'''
 
+\ir _assert.sql
+
 create or replace function assert_money(actual numeric, expected numeric, label text)
 returns void language plpgsql as $$
 begin
@@ -91,6 +93,7 @@ rollback;
 
 drop function t_alloc(numeric, split_method, jsonb);
 drop function assert_money(numeric, numeric, text);
+select drop_assert_helpers();
 \echo '─────────────────────────────────────────'
 \echo ' כל בדיקות חלוקת ההוצאות עברו'
 \echo '─────────────────────────────────────────'

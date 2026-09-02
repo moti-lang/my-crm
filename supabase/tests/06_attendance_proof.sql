@@ -8,21 +8,7 @@
 
 \set ON_ERROR_STOP on
 
-create or replace function assert_eq(actual bigint, expected bigint, label text)
-returns void language plpgsql as $$
-begin
-  if actual is distinct from expected then
-    raise exception E'\n  ✗ %\n    התקבל: %   ציפינו: %', label, actual, expected;
-  end if;
-  raise notice '  ✓ % (%)', label, actual;
-end $$;
-
-create or replace function assert_true(cond boolean, label text)
-returns void language plpgsql as $$
-begin
-  if not coalesce(cond, false) then raise exception E'\n  ✗ %', label; end if;
-  raise notice '  ✓ %', label;
-end $$;
+\ir _assert.sql
 
 begin;
 
@@ -45,45 +31,34 @@ grant select on t to anon;
 -- "permission denied for function my_branches" — אותו קוד שגיאה בדיוק.
 -- בדיקה שתופסת insufficient_privilege הייתה עוברת מהסיבה הלא נכונה.
 \echo 'anon חסום מכל הטבלאות:'
-do $$
-declare tbl text; priv text; granted text[];
-begin
-  foreach tbl in array array['students','branches','lessons','attendance',
-                             'attendance_links','payments','settings','wa_messages',
-                             'profiles','ledger_entries','reminders','audit_log'] loop
-    granted := '{}';
-    foreach priv in array array['select','insert','update','delete'] loop
-      if has_table_privilege('anon', tbl, priv) then
-        granted := granted || priv;
-      end if;
-    end loop;
-    if array_length(granted, 1) > 0 then
-      raise exception E'\n  ✗ ★ ל-anon יש הרשאת % על טבלת %', array_to_string(granted, ', '), tbl;
-    end if;
-    raise notice '  ✓ ★ anon חסום מ-%', tbl;
-  end loop;
-end $$;
+select assert_no_table_privilege('anon', array[
+  'students','branches','lessons','attendance','attendance_links','payments',
+  'settings','wa_messages','profiles','ledger_entries','reminders','audit_log']);
 
--- הגנה בעומק: גם בזמן ריצה, לא רק ברמת ההרשאה
+-- הגנה בעומק: גם בזמן ריצה, לא רק ברמת ההרשאה.
+-- לא תופסים קוד שגיאה מסוים: כל שגיאה = נחסם. ואם *לא* הייתה שגיאה,
+-- הראיה היא שלא חזרה אף שורה — כך שאף סיבת חסימה אחרת לא יכולה
+-- להתחזות להצלחה.
 set local role anon;
-do $$ begin
+do $$
+declare v_rows bigint; v_state text;
+begin
   begin
-    perform count(*) from students;
-    raise exception E'\n  ✗ ★ anon הצליח לקרוא מטבלת students בפועל';
-  exception when insufficient_privilege then
-    raise notice '  ✓ ★ בזמן ריצה גם כן — anon נחסם מ-students';
+    execute 'select count(*) from public.students' into v_rows;
+  exception when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+    raise notice '  ✓ ★ בזמן ריצה — anon נחסם מ-students [%]', v_state;
+    return;
   end;
+  if v_rows <> 0 then
+    raise exception E'\n  ✗ ★ anon קרא % שורות מטבלת students', v_rows;
+  end if;
+  raise notice '  ✓ ★ בזמן ריצה — anon קיבל 0 שורות מ-students';
 end $$;
 
 \echo 'anon אינו יכול להנפיק או לבטל קישורים:'
-do $$ begin
-  begin
-    perform rpc_issue_attendance_link((select beitar_id from t));
-    raise exception E'\n  ✗ ★ anon הנפיק קישור נוכחות!';
-  exception when insufficient_privilege then
-    raise notice '  ✓ ★ הנפקת קישור חסומה בפני anon';
-  end;
-end $$;
+select assert_no_execute('anon', 'rpc_issue_attendance_link(uuid)');
+select assert_no_execute('anon', 'rpc_revoke_attendance_link(uuid)');
 
 -- ═════════ הגיליון ═════════
 \echo 'גיליון הנוכחות:'
@@ -219,8 +194,7 @@ end $$;
 
 rollback;
 
-drop function assert_eq(bigint, bigint, text);
-drop function assert_true(boolean, text);
+select drop_assert_helpers();
 \echo '─────────────────────────────────────────'
 \echo ' כל בדיקות הנוכחות עברו'
 \echo '─────────────────────────────────────────'

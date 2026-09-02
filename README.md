@@ -70,6 +70,32 @@ npm run db:test:negative   # בקרת שלילה: פותח כל חור ומוו�
 `negative-control.sh` פותח כל חור בנפרד ומוודא שהחבילה נופלת עליו. בדיקה שתמיד עוברת
 אינה מוכיחה דבר.
 
+## בדיקות אבטחה — כלל מחייב
+
+**בדיקת אבטחה מוכיחה את ההרשאה או את המצב, לא את קוד השגיאה.**
+
+הכלל הזה נלמד פעמיים, בשני סבבים שונים, כששתי סיבות שונות החזירו
+SQLSTATE זהה ובדיקה דיווחה ✓ בטעות:
+
+| הבדיקה | מה חשבנו שהיא בודקת | מה באמת קרה |
+|---|---|---|
+| מנהלת משנה את התפקיד שלה ל-owner | RLS חוסם | `permission denied for schema auth` — פגם ב-shim |
+| anon חסום מ-`students` | אין GRANT | `permission denied for function my_branches` |
+
+שתיהן `42501`. בדיקה שתפסה `insufficient_privilege` עברה בשני המקרים.
+
+הצורות המותרות, ב-`supabase/tests/_assert.sql`:
+
+* `assert_no_effect(label, action, probe)` — מריץ את הפעולה האסורה, בולע
+  כל שגיאה, ומוכיח ש**המצב לא השתנה**. לא משנה למה היא נחסמה; משנה
+  שהיא לא קרתה. המסר מדווח גם *איך* נחסם (`נחסם (42501)` או `ללא שגיאה`).
+* `assert_no_table_privilege(role, tables[])` — ברמת ה-GRANT, על ארבע
+  הפעולות. grant שנוסף בטעות נתפס גם אם RLS במקרה מסתיר את השורות.
+* `assert_no_execute(role, signature)` — הרשאת הרצה על פונקציה.
+
+`grep "exception when insufficient_privilege" supabase/tests/*.sql` חייב
+לחזור ריק.
+
 ## עקביות דוחות כספיים — כלל מחייב
 
 `05_role_consistency_proof.sql` מוודא שכל דוח כספי מחזיר **אותם מספרים** לבעלים

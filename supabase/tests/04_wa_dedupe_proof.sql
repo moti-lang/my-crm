@@ -4,14 +4,7 @@
 
 \set ON_ERROR_STOP on
 
-create or replace function assert_eq(actual bigint, expected bigint, label text)
-returns void language plpgsql as $$
-begin
-  if actual is distinct from expected then
-    raise exception E'\n  ✗ %\n    התקבל: %   ציפינו: %', label, actual, expected;
-  end if;
-  raise notice '  ✓ % (%)', label, actual;
-end $$;
+\ir _assert.sql
 
 begin;
 
@@ -19,13 +12,14 @@ begin;
 insert into wa_messages (direction, phone, body, status, provider_msg_id)
 values ('in','972521000001','שילמתי 860 תלבושות בביתר','queued','MSG-ABC-001');
 
-do $$ begin
-  insert into wa_messages (direction, phone, body, status, provider_msg_id)
-  values ('in','972521000001','שילמתי 860 תלבושות בביתר','queued','MSG-ABC-001');
-  raise exception E'\n  ✗ ★ כפילות! אותו provider_msg_id נכנס פעמיים';
-exception when unique_violation then
-  raise notice '  ✓ ★ הודעה חוזרת עם אותו מזהה נחסמה ע"י המסד';
-end $$;
+-- הראיה היא שמספר השורות נשאר 1, לא איזה SQLSTATE נזרק:
+-- אילו אינדקס ייחודי אחר היה נופל, תפיסת unique_violation הייתה
+-- מדווחת ✓ בטעות.
+select assert_no_effect(
+  'הודעה חוזרת עם אותו מזהה',
+  $a$insert into wa_messages (direction, phone, body, status, provider_msg_id)
+     values ('in','972521000001','שילמתי 860 תלבושות בביתר','queued','MSG-ABC-001')$a$,
+  $p$select count(*)::text from public.wa_messages where provider_msg_id = 'MSG-ABC-001'$p$);
 
 -- הדפוס שה-webhook משתמש בו: on conflict do nothing, בלי שגיאה
 insert into wa_messages (direction, phone, body, status, provider_msg_id)
@@ -51,18 +45,16 @@ select assert_eq((select count(*) from wa_messages where provider_msg_id like 'M
                  'מזהים שונים נכנסים כרגיל');
 
 -- ═════════ כפילות בתוך אותה פקודת INSERT ═════════
-do $$ begin
-  insert into wa_messages (direction, phone, body, status, provider_msg_id) values
-    ('in','972521000005','כפול','queued','MSG-DUP'),
-    ('in','972521000005','כפול','queued','MSG-DUP');
-  raise exception E'\n  ✗ ★ כפילות בתוך אותה פקודה לא נחסמה';
-exception when unique_violation then
-  raise notice '  ✓ ★ כפילות בתוך אותה פקודה נחסמה';
-end $$;
+select assert_no_effect(
+  'כפילות בתוך אותה פקודה',
+  $a$insert into wa_messages (direction, phone, body, status, provider_msg_id) values
+      ('in','972521000005','כפול','queued','MSG-DUP'),
+      ('in','972521000005','כפול','queued','MSG-DUP')$a$,
+  $p$select count(*)::text from public.wa_messages where provider_msg_id = 'MSG-DUP'$p$);
 
 rollback;
 
-drop function assert_eq(bigint, bigint, text);
+select drop_assert_helpers();
 \echo '─────────────────────────────────────────'
 \echo ' כל בדיקות מניעת הכפילויות עברו'
 \echo '─────────────────────────────────────────'
