@@ -1,0 +1,35 @@
+# פריסת הפרונט. ה-backend כולו בסופבייס.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# ★ ניתוב SPA. בלי זה כל כתובת שאינה "/" מחזירה 404 —
+# כולל /a/:token, הקישור שהאחראית מקבלת בוואטסאפ.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+# נכסים עם hash בשם — אפשר לשמור לנצח
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# ה-HTML עצמו לעולם לא נשמר במטמון, אחרת פריסה חדשה לא מגיעה
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

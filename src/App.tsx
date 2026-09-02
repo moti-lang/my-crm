@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
+import { ErrorBoundary, ConfigError } from '@/components/ErrorBoundary';
+import { supabaseConfigError } from '@/lib/supabase';
 import { Layout } from '@/components/Layout';
 import { Login } from '@/pages/Login';
 import { Dashboard } from '@/pages/Dashboard';
@@ -63,7 +65,11 @@ function Gate() {
 }
 
 export default function App() {
+  // הגדרה חסרה נבדקת לפני הכל: אין טעם לנסות לטעון נתונים.
+  if (supabaseConfigError) return <ConfigError detail={supabaseConfigError} />;
+
   return (
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
@@ -81,5 +87,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
