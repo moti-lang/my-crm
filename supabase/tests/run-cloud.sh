@@ -6,7 +6,11 @@
 # GoTrue אינו משנה.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
-: "${SUPABASE_DB_URL:?חסר SUPABASE_DB_URL}"
+# בלי חיבור Postgres ישיר (פורט 5432 חסום) — אותן חבילות דרך ה-Management API.
+if [ -z "${SUPABASE_DB_URL:-}" ] && [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+  exec node "$DIR/run-cloud-api.mjs"
+fi
+: "${SUPABASE_DB_URL:?חסר SUPABASE_DB_URL (או SUPABASE_ACCESS_TOKEN)}"
 
 fails=0
 for suite in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql \

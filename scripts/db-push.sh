@@ -2,12 +2,15 @@
 #
 # החלת המיגרציות על הענן, בסדר, עצירה במיגרציה הראשונה שנופלת.
 #
-# שני מסלולים:
+# שלושה מסלולים:
 #   1. אם יש SUPABASE_PROJECT_REF + SUPABASE_DB_PASSWORD — דרך ה-CLI (link + db push).
 #   2. אחרת, אם יש SUPABASE_DB_URL — ישירות ב-psql.
+#   3. אחרת, אם יש SUPABASE_ACCESS_TOKEN — דרך ה-Management API (HTTPS בלבד).
 #
 # המסלול השני קיים כי מחרוזת החיבור היא מה שיש ביד, ו-supabase link דורש
-# שני פרטים נוספים. כל מיגרציה רצה בטרנזקציה אחת עם ON_ERROR_STOP, ונרשמת
+# שני פרטים נוספים. השלישי קיים כי יש סביבות שבהן פורט 5432 חסום ורק
+# HTTPS יוצא — שם גם מחרוזת חיבור נכונה לא עוזרת. בכל המסלולים כל מיגרציה
+# רצה בטרנזקציה אחת ועצירה בראשונה שנופלת, ונרשמת
 # ב-supabase_migrations.schema_migrations כדי שה-CLI יישאר מסונכרן בהמשך.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -49,8 +52,13 @@ if [ -n "${SUPABASE_DB_PASSWORD:-}" ]; then
   exec npx supabase db push --password "$SUPABASE_DB_PASSWORD"
 fi
 
+if [ -z "${SUPABASE_DB_URL:-}" ] && [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+  echo "  → מסלול Management API (access token)"
+  exec node scripts/db-push-api.mjs
+fi
+
 if [ -z "${SUPABASE_DB_URL:-}" ]; then
-  echo "  ✗ אין SUPABASE_PROJECT_REF+SUPABASE_DB_PASSWORD ואין SUPABASE_DB_URL"
+  echo "  ✗ אין SUPABASE_PROJECT_REF+SUPABASE_DB_PASSWORD, אין SUPABASE_DB_URL ואין SUPABASE_ACCESS_TOKEN"
   exit 1
 fi
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# סבב האימות — ששת השלבים, בסדר, עצירה בכשל הראשון.
+# סבב האימות — שבעת השלבים, בסדר, עצירה בכשל הראשון.
 #
 # מפעיל את כל מה שעד היום רץ רק מול המנוע המקומי, מול הענן האמיתי.
 # לא מתקן כלום. מדווח מה נשבר ואיפה.
@@ -9,6 +9,12 @@
 #   ./scripts/verify-cloud.sh
 #
 # אפשר להריץ שלב בודד:  ./scripts/verify-cloud.sh 3
+#
+# שני מובילים למסד, לפי מה שיש בסביבה:
+#   SUPABASE_DB_URL       — psql ישיר. הדרך המלאה.
+#   SUPABASE_ACCESS_TOKEN — Management API. קיים לסביבות שבהן פורט 5432
+#                           חסום ורק HTTPS יוצא. מריץ הכול חוץ ממרוץ
+#                           האישורים, שדורש שני חיבורים חיים.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -55,11 +61,33 @@ need() {
 fail() { echo "  ✗ $1"; FAILED=1; [ -z "$ONLY" ] && abort "$STEP"; }
 ok()   { echo "  ✓ $1"; }
 
+# ה-CLI של נטליפיי הוא החבילה netlify-cli. `npx netlify` היה מושך חבילה אחרת.
+netlify_cli() {
+  if command -v netlify >/dev/null 2>&1; then netlify "$@"; else npx --yes netlify-cli "$@"; fi
+}
+
+# ─────────── 0. הפרויקט המתארח (רק עם access token) ───────────
+# לא שלב ממוספר: רץ לפני כל שלב שנבחר, כי המפתחות שהוא מושך משמשים
+# את 3 ו-7. בלי הטוקן — הערכים מגיעים מ-.env.verify כרגיל.
+if [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+  echo ""
+  echo "═══ הפרויקט המתארח (Management API) ═══"
+  if env_out=$(node scripts/supabase-project.mjs env); then
+    eval "$env_out"
+    export SUPABASE_URL SUPABASE_ANON_KEY VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY
+    ok "מפתח ה-anon וכתובת הפרויקט נמשכו מהמקור"
+  else
+    echo "  ✗ משיכת המפתחות נכשלה"; FAILED=1; abort "0"
+  fi
+  # ההגדרה שקובעת בפרויקט מתארח היא בדשבורד. כאן היא נקבעת בקוד.
+  node scripts/supabase-project.mjs auth || { echo "  ✗ סגירת ההרשמה העצמית נכשלה"; FAILED=1; abort "0"; }
+fi
+
 # ─────────── 1. מיגרציות ───────────
 if step 1 "db push — 13 מיגרציות על פרויקט נקי"; then
-  # db-push.sh בוחר בין ה-CLI לבין psql לפי מה שיש בסביבה.
+  # db-push.sh בוחר בין ה-CLI, psql וה-Management API לפי מה שיש בסביבה.
   if [ -z "${SUPABASE_PROJECT_REF:-}" ] && [ -z "${SUPABASE_DB_URL:-}" ]; then
-    echo "  ✗ חסרים משתני סביבה: SUPABASE_DB_URL (או SUPABASE_PROJECT_REF+SUPABASE_DB_PASSWORD)"
+    echo "  ✗ חסרים משתני סביבה: SUPABASE_DB_URL (או SUPABASE_PROJECT_REF עם SUPABASE_DB_PASSWORD / SUPABASE_ACCESS_TOKEN)"
     FAILED=1; [ -z "$ONLY" ] && abort "$STEP"
   else
     ./scripts/db-push.sh \
@@ -68,9 +96,23 @@ if step 1 "db push — 13 מיגרציות על פרויקט נקי"; then
   fi
 fi
 
-# ─────────── 2. משתמשים דרך Admin API ───────────
-if step 2 "seed:users — ההימור על ה-Admin API"; then
+# ─────────── 2. נתוני בסיס ומשתמשים דרך Admin API ───────────
+if step 2 "seed ומשתמשים — ההימור על ה-Admin API"; then
   if need SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY; then
+    # db push אינו מריץ seed. בלעדיו שלב 3 רואה מסד ריק וכל הציפיות נופלות.
+    # seed.sql אינו אידמפוטנטי (מזהים קבועים), ולכן רץ רק כשאין סניפים.
+    if [ -n "${SUPABASE_DB_URL:-}" ]; then
+      if [ "$(psql "$SUPABASE_DB_URL" -tAc 'select count(*) from public.branches')" = "0" ]; then
+        psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q --single-transaction -f supabase/seed.sql \
+          && ok "נתוני הבסיס נטענו" || fail "seed נכשל"
+      else
+        echo "  · כבר יש סניפים — seed.sql לא רץ שוב"
+      fi
+    elif [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+      node scripts/db-push-api.mjs seed && ok "נתוני הבסיס במקום" || fail "seed נכשל"
+    else
+      echo "  ! אין SUPABASE_DB_URL ואין SUPABASE_ACCESS_TOKEN — seed.sql לא נטען"
+    fi
     node scripts/seed-users.mjs \
       && ok "שלושת המשתמשים נוצרו והפרופילים נכתבו" \
       || fail "יצירת המשתמשים נכשלה"
@@ -88,7 +130,10 @@ fi
 
 # ─────────── 4. כל החבילה מול הענן ───────────
 if step 4 "כל הבדיקות מול הענן, עם JWT אמיתיים"; then
-  if need SUPABASE_DB_URL; then
+  if [ -z "${SUPABASE_DB_URL:-}" ] && [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+    echo "  ✗ חסרים משתני סביבה: SUPABASE_DB_URL (או SUPABASE_ACCESS_TOKEN)"
+    FAILED=1; [ -z "$ONLY" ] && abort "$STEP"
+  else
     ./supabase/tests/run-cloud.sh \
       && ok "כל החבילות עברו מול הענן" \
       || fail "בדיקות נפלו מול הענן — הפרש מהמנוע המקומי"
@@ -118,7 +163,7 @@ if step 7 "פרונט בנטליפיי + כתובת חיה"; then
   if need VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; then
     npm run build && ok "בילד עבר, כולל שער הסודות" || fail "בילד נכשל"
     if [ -n "${NETLIFY_AUTH_TOKEN:-}" ] && [ -n "${NETLIFY_SITE_ID:-}" ]; then
-      npx netlify deploy --prod --dir=dist --site "$NETLIFY_SITE_ID" \
+      netlify_cli deploy --prod --dir=dist --site "$NETLIFY_SITE_ID" \
         && ok "נפרס" || fail "פריסה נכשלה"
       if [ -n "${SITE_URL:-}" ]; then
         # ★ הבדיקה שמוכיחה שניתוב ה-SPA עובד: הקישור של האחראית

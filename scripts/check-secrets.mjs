@@ -50,10 +50,14 @@ for (const [name, value] of Object.entries(sources)) {
   // גם אם השם תמים, הערך עשוי להיות סוד
   const v = String(value ?? '');
   if (v.startsWith('sk-ant-')) fail(`${name} מכיל מפתח Anthropic`);
+  if (isAccessToken(v))        fail(`★ ${name} מכיל Personal Access Token של Supabase`);
   if (isServiceRoleJwt(v))     fail(`★ ${name} מכיל JWT של service_role`);
 }
 if (checked === 0) console.log('  (אין משתני VITE_ בסביבה הזו)');
 else if (fails === 0) ok(`${checked} משתני VITE_ נקיים`);
+
+/** Personal Access Token של ה-Management API — מריץ SQL על כל פרויקט בחשבון. */
+function isAccessToken(v) { return /\bsbp_[0-9a-f]{20,}/i.test(v); }
 
 /** JWT של סופבייס עם role=service_role בגוף. */
 function isServiceRoleJwt(v) {
@@ -84,6 +88,7 @@ if (process.argv.includes('--dist')) {
     for (const f of files) {
       const src = readFileSync(f, 'utf8');
       if (src.includes('sk-ant-')) { fail(`★ ${f} מכיל מפתח Anthropic`); found++; }
+      if (isAccessToken(src))     { fail(`★ ${f} מכיל Personal Access Token של Supabase`); found++; }
       // כל JWT בבילד — לבדוק שאינו service_role
       for (const m of src.matchAll(/eyJ[A-Za-z0-9_-]{10,}\.([A-Za-z0-9_-]{10,})\./g)) {
         try {
@@ -93,7 +98,7 @@ if (process.argv.includes('--dist')) {
           }
         } catch { /* לא JWT */ }
       }
-      for (const marker of ['SUPABASE_SERVICE_ROLE_KEY', 'WA_API_KEY', 'WA_WEBHOOK_SECRET']) {
+      for (const marker of ['SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ACCESS_TOKEN', 'WA_API_KEY', 'WA_WEBHOOK_SECRET']) {
         if (src.includes(marker)) { fail(`★ ${f} מזכיר ${marker}`); found++; }
       }
     }

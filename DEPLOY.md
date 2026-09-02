@@ -27,6 +27,41 @@ cp .env.verify.example .env.verify   # ומלא
    שתיקרא תיפול על משתנה חסר.
 4. **פרונט** — אחרון.
 
+## כשפורט 5432 חסום — Management API
+
+יש סביבות (סנדבוקס של סוכן, CI מוגבל) שבהן יוצא רק HTTPS. שם psql
+ו-pg לא מגיעים למסד גם עם מחרוזת חיבור נכונה, ו-`supabase link` לא
+מוריד את הבינארי שלו. המסלול השלישי מריץ את אותם קבצים דרך
+ה-Management API, עם Personal Access Token
+(supabase.com ← Account ← Access Tokens, מתחיל ב-`sbp_`):
+
+```
+SUPABASE_PROJECT_REF=...
+SUPABASE_ACCESS_TOKEN=sbp_...
+```
+
+| מה | איך |
+|---|---|
+| נעילת יעד | `GET /v1/projects/{ref}` חייב להחזיר את ה-ref המדויק, פעיל |
+| מפתח anon | נמשך מ-`api-keys` — לא מועתק ידנית |
+| הרשמה עצמית | `disable_signup=true` נקבע בקוד (`scripts/supabase-project.mjs auth`) |
+| מיגרציות | `scripts/db-push-api.mjs` — כל מיגרציה + הרישום שלה בשאילתה אחת, אטומית |
+| seed | `db-push-api.mjs seed` — רק כשאין סניפים |
+| חבילות SQL | `supabase/tests/run-cloud-api.mjs` — אותם קבצים, עם חיקוי של `\set`/`\ir` |
+
+מה שהמסלול הזה **לא** נותן, ונאמר במפורש בפלט:
+
+* `RAISE NOTICE` אינו מוחזר. ✓ של assert לא נראה; assert שנכשל מרים
+  חריגה והחבילה נופלת עם ההודעה. "עברה" = אף חריגה.
+* מרוץ האישורים (`command-race.test.mjs`) דורש שני חיבורים חיים
+  במקביל. הוא מדולג ומדווח כמדולג. רץ מקומית וב-CI.
+* Edge Functions נפרסות עם ה-CLI בלבד. זה שלב 3 של `deploy.sh`, לא
+  של סבב האימות.
+
+הטוקן הוא סוד ברמת החשבון — כל פרויקט בו. `check-secrets.mjs` עוצר
+בילד שמכיל אותו. המריץ אומת מול פוסטגרס מקומי (`PGURL=…`) לפני
+שנגע בענן, כולל בקרת שלילה שמפילה חבילה אחת בלי לגרור את השאר.
+
 ## דגלי הרצה יבשה נשארים דולקים
 
 `WA_DRY_RUN=true` ו-`AI_DRY_RUN=true` הם ברירת המחדל גם בפריסה.

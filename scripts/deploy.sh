@@ -69,7 +69,7 @@ step "4 · פרונט"
 if need VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; then
   npm run -s build && ok "בילד הצליח" || fail "בילד נכשל"
   if [ -n "${NETLIFY_AUTH_TOKEN:-}" ] && [ -n "${NETLIFY_SITE_ID:-}" ]; then
-    npx netlify deploy --prod --dir=dist --site "$NETLIFY_SITE_ID" \
+    npx --yes netlify-cli deploy --prod --dir=dist --site "$NETLIFY_SITE_ID" \
       && ok "נפרס לנטליפיי" || fail "פריסה לנטליפיי נכשלה"
   else
     echo "  ! אין NETLIFY_AUTH_TOKEN/NETLIFY_SITE_ID — dist/ מוכן לגרירה ידנית"
