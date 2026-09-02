@@ -16,7 +16,7 @@ run_suite() {
 
 expect_pass() {
   "$DIR/reset.sh" >/dev/null
-  for s in 02_rls_proof.sql 03_allocation_proof.sql; do
+  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql; do
     SUITE="$s"
     if run_suite; then
       echo "  ✓ בסיס נקי: $s עוברת"
@@ -62,6 +62,10 @@ expect_fail "רואת חשבון מקבלת גישה ישירה לטבלת stude
 expect_fail "החזרת באג העיגול בחלוקת ההוצאות" \
   "\\i $DIR/holes/old_rounding_allocation.sql" \
   "03_allocation_proof.sql"
+
+expect_fail "הסרת האינדקס שמונע הודעות כפולות" \
+  "drop index wa_messages_provider_msg_id_uniq" \
+  "04_wa_dedupe_proof.sql"
 
 "$DIR/reset.sh" >/dev/null
 echo "───────────────────────────────────────────────"

@@ -54,7 +54,13 @@ select assert_eq((select count(*) from lessons where branch_id <> :BEITAR), 0,
                  '★ שיעורים של סניפים אחרים אינם נראים');
 select assert_eq((select count(*) from attendance_links where branch_id <> :BEITAR), 0,
                  '★ קישורי נוכחות של סניפים אחרים אינם נראים');
-select assert_eq((select count(*) from settings), 0, 'מנהלת אינה רואה הגדרות מערכת');
+-- מנהלת רואה מפתח הגדרות אחד בלבד: מצב חיבור הוואטסאפ, שנחוץ לאינדיקטור.
+-- כל שאר ההגדרות — שעות שקטות, טלפון הבעלים, ספי אישור — סגורות בפניה.
+select assert_eq((select count(*) from settings), 1, 'מנהלת רואה מפתח הגדרות אחד בלבד');
+select assert_eq((select count(*) from settings where key <> 'wa_health'), 0,
+                 '★ המפתח היחיד שהיא רואה הוא wa_health');
+select assert_eq((select count(*) from settings where key = 'owner_phone'), 0,
+                 '★ טלפון הבעלים אינו נגיש למנהלת סניף');
 select assert_eq((select count(*) from authorized_numbers), 0, 'מנהלת אינה רואה מספרים מורשים');
 select assert_eq((select count(*) from audit_log), 0, 'מנהלת אינה רואה יומן ביקורת');
 

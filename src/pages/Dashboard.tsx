@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useBranchPnl, useStudentBalances, useUnreportedToday, useCurrentSeason } from '@/hooks/queries';
 import { formatILS } from '@/lib/format';
 import { CardSkeleton, ErrorState, EmptyState } from '@/components/States';
+import { WaDownBanner } from '@/components/WaHealthBadge';
 
 export function Dashboard() {
   const pnl = useBranchPnl();
@@ -25,6 +26,8 @@ export function Dashboard() {
         <h1 className="text-2xl">דשבורד</h1>
         <p className="text-sm text-soft">{season.data?.name ?? 'טוען עונה…'}</p>
       </header>
+
+      <WaDownBanner />
 
       {(unreported.data?.length ?? 0) > 0 && (
         <Link

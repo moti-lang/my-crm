@@ -7,6 +7,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { Branches } from '@/pages/Branches';
 import { BranchDetail } from '@/pages/BranchDetail';
 import { Students } from '@/pages/Students';
+import { Settings } from '@/pages/Settings';
 import { Placeholder } from '@/pages/Placeholder';
 
 const queryClient = new QueryClient({
@@ -48,7 +49,7 @@ function Gate() {
         <Route path="/agent" element={<Placeholder title="סוכן AI" round="סבב 7" />} />
         <Route path="/commands" element={<Placeholder title="פקודות וואטסאפ" round="סבב 6" />} />
         <Route path="/reports" element={<Placeholder title="דוחות" round="סבב 8" />} />
-        <Route path="/settings" element={<Placeholder title="הגדרות" round="סבב 9" />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

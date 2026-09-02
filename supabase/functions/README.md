@@ -1,28 +1,100 @@
 # Edge Functions
 
+המערכת מדברת עם **whatsapp-hub** — שרת הוואטסאפ העצמאי
+([moti-lang/whatsapp-hub](https://github.com/moti-lang/whatsapp-hub)), לא עם ספק מנוהל.
+
+## החוזה מול השרת
+
+נלקח מהקוד של השרת עצמו, לא מהנחות.
+
+| פעולה | נקודת קצה | גוף | הזדהות |
+|---|---|---|---|
+| שליחה | `POST {WA_SERVER_URL}/api/send` | `{phone, text, source}` | `x-api-key` + `Idempotency-Key` |
+| בריאות | `GET {WA_SERVER_URL}/api/health` | — | `x-api-key` |
+| כניסה | השרת דוחף ל-`wa-webhook` | `{event, timestamp, data}` | `x-hub-signature` (HMAC-SHA256) |
+
+שלוש נקודות שקל לפספס:
+
+* **הפרמטרים הם `phone` ו-`text`**, לא `to` ו-`body`.
+* **`/api/health` מחזיר 503** כשוואטסאפ מנותק — התהליך חי, החיבור לא. שני מצבים שונים.
+* **הכניסה מאומתת בחתימת HMAC**, לא בסוד משותף בכותרת. החתימה היא על **הגוף הגולמי**;
+  אימות מול JSON שעבר פרסור וסריאליזציה מחדש ייכשל. `npm run test:wa` מוודא את זה.
+
+### אירועים שהשרת שולח
+
+`message.received` · `message.sent` · `message.failed` · `connection.changed` ·
+`campaign.finished` · `group.message`
+
+**אין אירוע מסירה או קריאה.** לכן `msg_status` צומצם ל-`queued/sent/failed`
+(מיגרציה 0006) ואין במערכת מצב "נמסר" שאפשר להציג.
+
 ## דגלי הרצה יבשה
 
 | דגל | ברירת מחדל | מה קורה |
 |---|---|---|
-| `WA_DRY_RUN` | `true` | כל לוגיקת השליחה רצה — נרמול, שעות שקטות, ניסיונות חוזרים, רישום ב-`wa_messages` — אבל Green API לא נקרא. ההודעה נרשמת עם `status='queued'`. |
-| `AI_DRY_RUN` | `true` | `ai-command` / `ai-answer` מקבלים תשובה קבועה ותקפה מבחינת סכימה. Claude לא נקרא ולא נצרך תקציב. |
+| `WA_DRY_RUN` | `true` | כל הלוגיקה רצה — בריאות, שעות שקטות, ניסיונות, רישום — והשרת לא נקרא |
+| `AI_DRY_RUN` | `true` | תשובה קבועה ותקפה מבחינת סכימה. Claude לא נקרא |
 
-**ברירת המחדל היא יבש.** כדי לעבור לחי צריך לקבוע במפורש `false` — שכחה לא שולחת הודעות אמיתיות בטעות.
+**ברירת המחדל יבשה.** מעבר לחי מחייב `false` מפורש.
 
-## מעבר לחי (סבב 5)
+## משתני סביבה
 
 ```bash
+supabase secrets set WA_SERVER_URL=https://hub.example.com
+supabase secrets set WA_API_KEY=...              # x-api-key של ה-Hub
+supabase secrets set WA_WEBHOOK_SECRET=...       # מ-POST /api/webhooks בשרת
 supabase secrets set WA_DRY_RUN=false
-supabase secrets set GREEN_API_ID=... GREEN_API_TOKEN=... GREEN_API_URL=https://api.green-api.com
-supabase secrets set ANTHROPIC_API_KEY=...  AI_DRY_RUN=false
+supabase secrets set OWNER_ALERT_WEBHOOK=...     # ערוץ חלופי, ראה למטה
 ```
 
-שתי שורות, בלי נגיעה בקוד. את המספר האמיתי של הניה מחברים רק אחרי שסבב 5 עובר על מספר בדיקה.
+רישום ה-webhook בשרת:
+
+```bash
+curl -X POST "$WA_SERVER_URL/api/webhooks" -H "x-api-key: $WA_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"teichtal-crm","url":"https://<project>.supabase.co/functions/v1/wa-webhook",
+       "events":["message.received","connection.changed","message.sent","message.failed"]}'
+```
+
+הסוד שחוזר בתשובה הוא `WA_WEBHOOK_SECRET`.
+
+## מניעת כפילויות — בשני הכיוונים
+
+שרת עצמאי שולח שוב אחרי ריסטארט. כפילות בפקודה כספית = הוצאה שנרשמת פעמיים.
+
+* **כניסה:** `wa_messages.provider_msg_id` עם אינדקס ייחודי. מסירה חוזרת נופלת על
+  שגיאה `23505` וה-webhook מסיים בשקט. האכיפה במסד ולא בקוד — קוד מפספס מרוצי תהליכים.
+* **יציאה:** כותרת `Idempotency-Key` שה-Hub מכיר. לתזכורת המפתח הוא `reminder-{id}`,
+  אחרת טביעת אצבע של היעד, הטקסט והדקה. ניסיון חוזר מחזיר את התשובה המקורית
+  במקום לשלוח שוב.
+
+## ניטור החיבור
+
+שני מנגנונים, כי אף אחד מהם לבדו אינו מספיק:
+
+1. **`connection.changed`** — מיידי, אבל מגיע רק כשהשרת חי ומספיק בריא כדי לשלוח.
+2. **`cron-wa-health` כל 10 דקות** — תופס את המקרה שבו השרת עצמו מת ואף webhook לא יגיע.
+   **שקט אינו סימן לבריאות.**
+
+כשהחיבור נפול: `wa-send` מחזיר 503, התזכורת נשארת `scheduled` ו**לעולם לא מסומנת
+`sent`**. הודעה שלא יצאה לא תיספר כאילו יצאה.
+
+## הערוץ החלופי
+
+כשהוואטסאפ נפול אי אפשר להתריע בוואטסאפ. כל התראה נכתבת ל-`system_alerts` —
+מזין את הבאנר בדשבורד ואת מסך ההגדרות — ובנוסף נשלחת ל-`OWNER_ALERT_WEBHOOK`
+אם הוגדר (Telegram, Slack, Pushover, כל דבר שמקבל POST).
+
+בלי `OWNER_ALERT_WEBHOOK` ההתראה קיימת רק בתוך המערכת, כלומר מישהי צריכה להיכנס
+כדי לראות אותה. זו הנחה שנשענת על כך שמישהי נכנסת.
 
 ## מבנה
 
-- `_shared/wa.ts` — אדפטר וואטסאפ (`DryRunWaClient` / `GreenApiClient`)
-- `_shared/ai.ts` — אדפטר Claude (`DryRunAiClient` / `ClaudeClient`)
+- `_shared/wa.ts` — `WhatsAppProvider` (`sendText` · `checkHealth` · `parseIncoming`),
+  `DryRunProvider` / `SelfHostedProvider`, ואימות חתימה
+- `_shared/health.ts` — קריאה וכתיבה של `wa_health`, ושער `maySend`
+- `_shared/alerts.ts` — הערוץ החלופי
 - `_shared/quiet-hours.ts` — שעות שקטות, שבת וחגים לפי שעון ישראל
-- `_shared/supabase.ts` — לקוח service_role (צד שרת בלבד)
-- `wa-send/` — שער היציאה היחיד לוואטסאפ
+- `wa-send/` — שער היציאה היחיד
+- `wa-webhook/` — שער הכניסה היחיד
+- `cron-wa-health/` — בדיקה כל 10 דקות

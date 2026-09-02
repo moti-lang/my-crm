@@ -940,6 +940,39 @@ export type Database = {
           },
         ];
       };
+      system_alerts: {
+        Row: {
+          id: string;
+          kind: string;
+          severity: string;
+          title: string;
+          body: string | null;
+          meta: Json | null;
+          acknowledged_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          kind: string;
+          severity?: string;
+          title: string;
+          body?: string | null;
+          meta?: Json | null;
+          acknowledged_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          kind?: string;
+          severity?: string;
+          title?: string;
+          body?: string | null;
+          meta?: Json | null;
+          acknowledged_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       unanswered_questions: {
         Row: {
           id: string;
@@ -982,7 +1015,7 @@ export type Database = {
           phone: string;
           body: string | null;
           status: Database["public"]["Enums"]["msg_status"] | null;
-          green_id: string | null;
+          provider_msg_id: string | null;
           reminder_id: string | null;
           meta: Json | null;
           created_at: string;
@@ -993,7 +1026,7 @@ export type Database = {
           phone: string;
           body?: string | null;
           status?: Database["public"]["Enums"]["msg_status"] | null;
-          green_id?: string | null;
+          provider_msg_id?: string | null;
           reminder_id?: string | null;
           meta?: Json | null;
           created_at?: string;
@@ -1004,7 +1037,7 @@ export type Database = {
           phone?: string;
           body?: string | null;
           status?: Database["public"]["Enums"]["msg_status"] | null;
-          green_id?: string | null;
+          provider_msg_id?: string | null;
           reminder_id?: string | null;
           meta?: Json | null;
           created_at?: string;
@@ -1102,7 +1135,7 @@ export type Database = {
       entry_scope: "branch" | "general" | "production";
       lesson_status: "pending" | "reported" | "cancelled";
       msg_direction: "in" | "out";
-      msg_status: "queued" | "sent" | "delivered" | "read" | "failed";
+      msg_status: "queued" | "sent" | "failed";
       payment_method: "cash" | "transfer" | "bit" | "credit" | "check" | "other";
       production_status: "planning" | "rehearsals" | "filming" | "editing" | "released";
       reminder_kind: "debt" | "followup" | "general" | "attendance" | "owner_summary" | "event";
