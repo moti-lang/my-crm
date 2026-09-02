@@ -115,12 +115,25 @@ console.log('\nפרסור מוצלח:');
   check('שאילתה אינה דורשת אישור', decision.needsConfirmation === false);
 }
 
+// ═════════════ 1ב. עטיפה שאינה כישלון ═════════════
+// המודל אינו מחויב ל-JSON נקי: ה-API דוחה את הסכימה שלנו כ-output_config
+// והמודל אינו תומך ב-prefill. לכן גדר markdown סביב פקודה תקינה חייבת
+// להתקבל — אחרת פקודה כשרה של הניה נזרקת בגלל שלושה תווים.
+{
+  const { decision } = await route(owner, '__FIXTURE_MARKDOWN_WRAPPED__');
+  check('★ JSON עטוף ב-markdown מתקבל', decision.route !== 'command_parse_failed',
+        `התקבל: ${decision.route}`);
+  check('★ ה-intent שרד את החילוץ', decision.parse?.command?.intent === 'expense',
+        `התקבל: ${JSON.stringify(decision.parse?.command?.intent)}`);
+}
+
 // ═════════════ 2. ★ מסלולי כישלון — אפס כתיבות ═════════════
 console.log('\n★ מסלולי כישלון הפרסור:');
 const FAILURES = [
   ['JSON פגום',                '__FIXTURE_MALFORMED_JSON__',           'invalid_json'],
   ['תשובה שאינה JSON',          '__FIXTURE_NOT_JSON__',                 'invalid_json'],
-  ['JSON עטוף ב-markdown',      '__FIXTURE_MARKDOWN_WRAPPED__',         'invalid_json'],
+  // ★ גדר סביב JSON שבור עדיין נכשלת. החילוץ מסיר עטיפה, לא מתקן תוכן.
+  ['גדר סביב JSON שבור',        '__FIXTURE_MARKDOWN_BROKEN__',          'invalid_json'],
   ['שדות חסרים',                '__FIXTURE_MISSING_FIELDS__',           'schema_mismatch'],
   ['intent שאינו בסכימה',       '__FIXTURE_BAD_INTENT__',               'schema_mismatch'],
   ['confidence מחוץ לטווח',      '__FIXTURE_CONFIDENCE_OUT_OF_RANGE__',  'schema_mismatch'],

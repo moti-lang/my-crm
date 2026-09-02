@@ -256,6 +256,17 @@ expect_fail_code "שינוי מנוע התבניות בצד אחד בלבד" \
   'sed -i "s/    .trim();/    ;/" "$F"' \
   "node supabase/tests/template-parity.test.mjs"
 
+# ★ הבקרות של המסלול אל ה-API. שתיהן מכסות באג שעלה 60 קריאות כושלות.
+expect_fail_code "החזרת output_config שה-API דוחה" \
+  "$DIR/../functions/_shared/ai.ts" \
+  'sed -i "s|        messages: \[{ role: .user., content: buildUserMessage(ctx) }\],|        messages: [{ role: \"user\", content: buildUserMessage(ctx) }],\\n        output_config: { format: { type: \"json_schema\", schema: {} } },|" "$F"' \
+  "node supabase/tests/ai-wire.test.mjs"
+
+expect_fail_code "ביטול חילוץ ה-JSON מהעטיפה" \
+  "$DIR/../functions/_shared/command-schema.ts" \
+  'sed -i "s|JSON.parse(extractJson(raw))|JSON.parse(raw)|" "$F"' \
+  "node supabase/tests/command-router.test.mjs"
+
 expect_fail_code "חיבור ערוץ ההתראות לוואטסאפ" \
   "$DIR/../functions/_shared/alerts.ts" \
   'printf "\\nexport async function badAlert(){ await fetch(\"/functions/v1/wa-send\"); }\\n" >> "$F"' \

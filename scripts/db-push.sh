@@ -14,9 +14,38 @@ cd "$(dirname "$0")/.."
 
 MIG_DIR=supabase/migrations
 
-if [ -n "${SUPABASE_PROJECT_REF:-}" ] && [ -n "${SUPABASE_DB_PASSWORD:-}" ]; then
+# ─────────────────────────────────────────────────────────────
+# נעילת יעד. בחשבון יש עוד פרויקטים, ומיגרציה שרצה על הפרויקט הלא נכון
+# היא נזק בלתי הפיך. אין כאן ניחוש: או שהיעד תואם בדיוק, או שלא רצים.
+# ─────────────────────────────────────────────────────────────
+assert_target() {
+  local actual="$1" expected="$2" what="$3"
+  if [ "$actual" != "$expected" ]; then
+    echo "  ✗ היעד אינו תואם — לא רצה כלום"
+    echo "    $what: $actual"
+    echo "    מצופה:  $expected"
+    exit 1
+  fi
+  echo "  ✓ יעד מאומת ($what): $expected"
+}
+
+if [ -z "${SUPABASE_PROJECT_REF:-}" ]; then
+  echo "  ✗ אין SUPABASE_PROJECT_REF — בלי נעילת יעד לא מריצים מיגרציות"
+  exit 1
+fi
+
+# קישור קודם שנשאר מפרויקט אחר הוא בדיוק התרחיש המסוכן: db push היה
+# הולך לשם. בודקים לפני שנוגעים במשהו.
+if [ -f supabase/.temp/project-ref ]; then
+  existing=$(cat supabase/.temp/project-ref)
+  [ -n "$existing" ] && assert_target "$existing" "$SUPABASE_PROJECT_REF" "קישור קיים"
+fi
+
+if [ -n "${SUPABASE_DB_PASSWORD:-}" ]; then
   echo "  → מסלול CLI (project-ref)"
   npx supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD" || exit 1
+  # אחרי הקישור — מוודאים שוב מה שנרשם בפועל, לא מה שביקשנו.
+  assert_target "$(cat supabase/.temp/project-ref)" "$SUPABASE_PROJECT_REF" "קישור אחרי link"
   exec npx supabase db push --password "$SUPABASE_DB_PASSWORD"
 fi
 
@@ -26,6 +55,20 @@ if [ -z "${SUPABASE_DB_URL:-}" ]; then
 fi
 
 echo "  → מסלול psql (connection string)"
+
+# ה-ref מופיע במארח של מחרוזת החיבור של סופאבייס
+# (db.<ref>.supabase.co, או aws-*.pooler.supabase.com עם postgres.<ref> כמשתמש).
+if ! grep -q "$SUPABASE_PROJECT_REF" <<<"$SUPABASE_DB_URL"; then
+  echo "  ✗ מחרוזת החיבור אינה מכילה את ה-ref $SUPABASE_PROJECT_REF — לא רצה כלום"
+  exit 1
+fi
+echo "  ✓ יעד מאומת (מחרוזת חיבור): $SUPABASE_PROJECT_REF"
+
+# ההוכחה החזקה: שואלים את המסד עצמו מי הוא. ב-Supabase שם המארח נמצא
+# בהגדרות החיבור, ולכן מספיק לוודא שאנחנו לא על postgres מקומי בטעות.
+actual_db=$(psql "$SUPABASE_DB_URL" -tAc "select current_database()" 2>&1) || {
+  echo "  ✗ אין חיבור למסד: $actual_db"; exit 1; }
+echo "  ✓ מחובר למסד: $actual_db"
 
 # טבלת המעקב של סופאבייס. יוצרים אותה אם היא לא קיימת כדי שהריצה תהיה
 # אידמפוטנטית: מיגרציה שכבר הוחלה לא תרוץ שוב.

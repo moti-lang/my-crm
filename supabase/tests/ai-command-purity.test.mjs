@@ -42,7 +42,7 @@ check('★ ה-SDK נטען דינמית — מסלול יבש לא טוען או
 // ולידציה — גם היא טהורה
 const schema = stripComments(readFileSync('supabase/functions/_shared/command-schema.ts', 'utf8'));
 check('★ שכבת הוולידציה אינה נוגעת במסד', !/supabase|\.from\(|adminClient/.test(schema));
-check('הסכימה נשלחת ל-API כ-output_config', /COMMAND_JSON_SCHEMA/.test(ai));
+check('אין output_config — הסכימה נדחתה על ידי ה-API (ראה ai-wire.test.mjs)', !/output_config:/.test(ai));
 
 // בדיקות ההרשאה — פונקציה טהורה
 const auth = stripComments(readFileSync('supabase/functions/_shared/authorize.ts', 'utf8'));

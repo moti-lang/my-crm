@@ -12,6 +12,13 @@
  */
 import { readFileSync } from 'node:fs';
 
+// אותה פונקציית חילוץ של הייצור, נטענת מהמקור כדי שלא יהיה עותק שני.
+const extractJson = Function('"use strict"; return (' +
+  readFileSync('supabase/functions/_shared/command-schema.ts', 'utf8')
+    .match(/export function extractJson\(raw: string\): string \{[\s\S]*?\n\}/)[0]
+    .replace('export function extractJson(raw: string): string', 'function extractJson(raw)')
+  + ')')();
+
 const DEFAULT_MODELS = ['claude-sonnet-4-6', 'claude-opus-5'];
 const models = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const MODELS = models.length > 0 ? models : DEFAULT_MODELS;
@@ -46,18 +53,8 @@ const CATEGORIES = ['שכירות אולם', 'שכר מדריכה', 'הגברה 
 const SYSTEM = readFileSync('supabase/functions/_shared/ai.ts', 'utf8')
   .match(/export const COMMAND_SYSTEM_PROMPT = `([\s\S]*?)`;/)[1];
 
-const SCHEMA = {
-  type: 'object',
-  properties: {
-    intent: { type: 'string', enum: ['expense','income','payment','new_student','update_student','reminder','attendance','query','unknown'] },
-    confidence: { type: 'number', minimum: 0, maximum: 1 },
-    fields: { type: 'object', additionalProperties: true },
-    missing: { type: 'array', items: { type: 'string' } },
-    human_summary: { type: 'string' },
-  },
-  required: ['intent','confidence','fields','missing','human_summary'],
-  additionalProperties: false,
-};
+// אין SCHEMA. ההשוואה חייבת למדוד בדיוק את מה שרץ בייצור, ובייצור
+// אין output_config — ראה את ההערה ב-ai.ts.
 
 const client = new Anthropic();
 
@@ -73,7 +70,6 @@ async function run(model, text) {
   const params = {
     model, max_tokens: 800, system: SYSTEM,
     messages: [{ role: 'user', content: userMessage(text) }],
-    output_config: { format: { type: 'json_schema', schema: SCHEMA } },
   };
   // temperature הוסר במודלים החדשים; נשלח רק היכן שהוא נתמך.
   if (model.includes('4-6')) params.temperature = 0;
@@ -82,7 +78,8 @@ async function run(model, text) {
     const res = await client.messages.create(params);
     if (res.stop_reason === 'refusal') return { error: 'refusal' };
     const raw = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-    return { parsed: JSON.parse(raw), usage: res.usage };
+    // אותו חילוץ שבייצור.
+    return { parsed: JSON.parse(extractJson(raw)), usage: res.usage, raw };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
@@ -157,6 +154,19 @@ const ranked = MODELS.map((m) => [m, total(results[m])]).sort((a, b) => b[1] - a
 const maxScore = cases.length + results[MODELS[0]].amountN + results[MODELS[0]].branchN;
 
 for (const [m, t] of ranked) console.log(`  ${m}: ${t}/${maxScore}`);
+
+// ★ אין הכרעה על אפסים. שני מודלים שקיבלו 0 אינם "שקולים" — ההשוואה
+// פשוט לא רצתה. זה בדיוק הדפוס של בדיקה שמשווה שני אפסים ומדווחת הצלחה.
+const totalErrors = MODELS.reduce((a, m) => a + results[m].errors, 0);
+if (totalErrors > 0) {
+  console.log(`\n  ✗ ${totalErrors} קריאות נכשלו. אין כאן מדידה, יש תקלה.`);
+  console.log('    ההודעה הראשונה למעלה. ההשוואה לא הוכרעה.');
+  process.exit(1);
+}
+if (ranked[0][1] === 0) {
+  console.log('\n  ✗ כל המודלים קיבלו 0. אין כאן מדידה. ההשוואה לא הוכרעה.');
+  process.exit(1);
+}
 
 if (ranked.length > 1) {
   const gap = ranked[0][1] - ranked[1][1];

@@ -17,6 +17,9 @@ echo "═══ סודות בצד הלקוח ═══"
 echo "═══ כיסוי פונקציות ═══"
 node "$DIR/function-coverage.test.mjs" 2>&1 | grep -E "✓|✗|לכל פונקציה|ללא בדיקה"
 
+echo "═══ הבקשה ל-API ═══"
+node "$DIR/ai-wire.test.mjs" 2>&1 | grep -E "✓|✗|!|תקינה|נכשלו"
+
 echo "═══ טוהר ai-command ═══"
 node "$DIR/ai-command-purity.test.mjs" 2>&1 | grep -E "✓|✗|נקייה|נכשלו"
 

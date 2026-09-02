@@ -67,18 +67,11 @@ function validateShape(value: unknown): { ok: true; command: ParsedCommand } | {
 }
 
 /** ה-JSON Schema שנשלח ל-API כ-output_config.format — לא רק בקשה בפרומפט. */
-export const COMMAND_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    intent: { type: 'string', enum: [...INTENTS] },
-    confidence: { type: 'number', minimum: 0, maximum: 1 },
-    fields: { type: 'object', additionalProperties: true },
-    missing: { type: 'array', items: { type: 'string' } },
-    human_summary: { type: 'string' },
-  },
-  required: ['intent', 'confidence', 'fields', 'missing', 'human_summary'],
-  additionalProperties: false,
-} as const;
+// אין כאן COMMAND_JSON_SCHEMA. הסכימה נשלחה פעם ל-API כ-output_config
+// ונדחתה בשלוש צורות: minimum/maximum על number, additionalProperties: true
+// על fields, ואז "Schema is too complex" ברגע שכל השדות מנויים במפורש.
+// גם בגדלים שכן התקבלו הבקשה האטה פי 4 ומעלה. החוזה מוגדר היום
+// ב-COMMAND_SYSTEM_PROMPT ונאכף כאן ב-validateShape.
 
 export type ParseOutcome =
   | { ok: true; command: ParsedCommand; dryRun: boolean }
@@ -92,10 +85,29 @@ export const MIN_CONFIDENCE = 0.6;
  * מפרסר ומאמת. **הפונקציה הזו לא נוגעת במסד ולא יכולה.**
  * כל כישלון מוחזר כערך, לא נזרק וגם לא נרשם.
  */
+/**
+ * מחלץ את אובייקט ה-JSON מתוך תשובת המודל.
+ *
+ * הפרומפט מבקש JSON בלבד, אבל אין שום דבר שאוכף את זה: ה-API דוחה את
+ * הסכימה שלנו כ-output_config, ו-claude-sonnet-4-6 אינו תומך ב-prefill
+ * ("This model does not support assistant message prefill"). לכן החילוץ
+ * הוא ההגנה: גדר markdown או משפט פתיחה לא יהפכו פקודה תקינה לכישלון.
+ *
+ * לוקח מהסוגר המסולסל הפותח הראשון עד הסוגר הסוגר האחרון. אין כאן ניסיון
+ * לתקן JSON שבור — רק להסיר עטיפה. מה שנשאר עדיין עובר JSON.parse ואימות מלא.
+ */
+export function extractJson(raw: string): string {
+  const text = raw.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) return text;
+  return text.slice(start, end + 1);
+}
+
 export function validateCommand(raw: string, dryRun: boolean): ParseOutcome {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(extractJson(raw));
   } catch {
     return { ok: false, reason: 'invalid_json', detail: 'המודל לא החזיר JSON תקין', raw, dryRun };
   }

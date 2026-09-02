@@ -73,6 +73,9 @@ export const COMMAND_FIXTURES: Record<string, string> = {
   '__FIXTURE_MALFORMED_JSON__': '{ "intent": "expense", "confidence": 0.9,',
   '__FIXTURE_NOT_JSON__': 'בטח! רשמתי את ההוצאה בשבילך 😊',
   '__FIXTURE_MARKDOWN_WRAPPED__': '```json\n{"intent":"expense","confidence":0.9,"fields":{},"missing":[],"human_summary":"x"}\n```',
+  // גדר markdown סביב JSON שבור: החילוץ מסיר את העטיפה ומה שנשאר
+  // עדיין נופל באימות. הגדר אינו דרך לעקוף בדיקות.
+  '__FIXTURE_MARKDOWN_BROKEN__': '```json\n{"intent":"expense","confidence":\n```',
   '__FIXTURE_MISSING_FIELDS__': JSON.stringify({ intent: 'expense' }),
   '__FIXTURE_BAD_INTENT__': JSON.stringify({
     intent: 'drop_table', confidence: 0.99, fields: {}, missing: [], human_summary: 'x',

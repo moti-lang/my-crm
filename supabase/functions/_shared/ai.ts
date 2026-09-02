@@ -1,5 +1,5 @@
 import { env, requireEnv, AI_DRY_RUN } from './env.ts';
-import { COMMAND_JSON_SCHEMA, validateCommand, type ParseOutcome } from './command-schema.ts';
+import { validateCommand, type ParseOutcome } from './command-schema.ts';
 import { COMMAND_FIXTURES, DEFAULT_FIXTURE } from './ai-fixtures.ts';
 
 /**
@@ -95,9 +95,14 @@ class ClaudeAiProvider implements AiProvider {
         max_tokens: 800,
         system: COMMAND_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: buildUserMessage(ctx) }],
-        // הסכימה נאכפת בצד ה-API ולא רק מתבקשת בפרומפט. זה מה שהופך
-        // "JSON פגום" למקרה נדיר, ולא לדבר שאנחנו סופגים בכל בקשה.
-        output_config: { format: { type: 'json_schema', schema: COMMAND_JSON_SCHEMA } },
+        // אין כאן output_config, ואין prefill. שניהם נוסו מול ה-API ונדחו:
+        //   output_config — הסכימה שלנו נדחית שלוש פעמים (minimum/maximum
+        //   על number, additionalProperties: true על fields, ואז
+        //   "Schema is too complex" כשכל 21 השדות מנויים), ובגדלים שכן
+        //   התקבלו הבקשה מאטה פי 4 ומעלה — לא שמיש לוואטסאפ בזמן אמת.
+        //   prefill — "This model does not support assistant message prefill".
+        // מה שנשאר, ומספיק: הפרומפט מגדיר את החוזה, extractJson מסיר עטיפה,
+        // ו-validateCommand מאמת כל תשובה ומחזיר כישלון כערך.
         // דגימה דטרמיניסטית. נתמך ב-sonnet-4-6; במודלים חדשים יותר
         // הפרמטר הוסר, ולכן הוא נשלח רק כשהמודל מכיר אותו.
         ...(model.includes('4-6') ? { temperature: 0 } : {}),
