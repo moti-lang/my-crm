@@ -79,6 +79,7 @@ function translateAuthError(message: string): string {
   if (/invalid login credentials/i.test(message)) return 'אימייל או סיסמה שגויים.';
   if (/email not confirmed/i.test(message)) return 'המייל טרם אומת.';
   if (/rate limit/i.test(message)) return 'יותר מדי ניסיונות. נסי שוב בעוד כמה דקות.';
+  if (/failed to fetch|network/i.test(message)) return 'אין חיבור לשרת. בדקי את החיבור ונסי שוב.';
   return 'ההתחברות נכשלה. נסי שוב.';
 }
 

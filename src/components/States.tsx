@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { humanError, logError } from '@/lib/errors';
 
 export function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse rounded-field bg-shade ${className}`} aria-hidden />;
@@ -25,7 +26,8 @@ export function EmptyState({ title, hint, action }: { title: string; hint?: stri
 }
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
-  const message = error instanceof Error ? error.message : 'משהו השתבש בטעינת הנתונים.';
+  logError('ErrorState', error);
+  const message = humanError(error);
   return (
     <div className="card border-bad/40 p-6 text-center" role="alert">
       <p className="font-display text-lg text-bad">לא הצלחנו לטעון</p>

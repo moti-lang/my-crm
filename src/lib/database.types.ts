@@ -1046,6 +1046,37 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_student_overview: {
+        Row: {
+          id: string | null;
+          season_id: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          full_name: string | null;
+          grade: string | null;
+          group_name: string | null;
+          parent_name: string | null;
+          parent_phone: string | null;
+          status: Database["public"]["Enums"]["student_status"] | null;
+          joined_on: string | null;
+          stopped_on: string | null;
+          stop_reason: string | null;
+          tuition_total: number | null;
+          discount: number | null;
+          discount_reason: string | null;
+          installments: number | null;
+          photo_consent: boolean | null;
+          notes: string | null;
+          due: number | null;
+          paid: number | null;
+          balance: number | null;
+          last_paid_on: string | null;
+          lessons_attended: number | null;
+          lessons_total: number | null;
+          attendance_pct: number | null;
+        };
+        Relationships: [];
+      };
       v_students_accounting: {
         Row: {
           id: string | null;

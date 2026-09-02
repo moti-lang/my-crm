@@ -5,6 +5,8 @@ import { Layout } from '@/components/Layout';
 import { Login } from '@/pages/Login';
 import { Dashboard } from '@/pages/Dashboard';
 import { Branches } from '@/pages/Branches';
+import { BranchDetail } from '@/pages/BranchDetail';
+import { Students } from '@/pages/Students';
 import { Placeholder } from '@/pages/Placeholder';
 
 const queryClient = new QueryClient({
@@ -35,8 +37,8 @@ function Gate() {
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="/branches" element={<Branches />} />
-        <Route path="/branches/:id" element={<Placeholder title="סניף" round="סבב 2" />} />
-        <Route path="/students" element={<Placeholder title="תלמידות" round="סבב 2" />} />
+        <Route path="/branches/:id" element={<BranchDetail />} />
+        <Route path="/students" element={<Students />} />
         <Route path="/collection" element={<Placeholder title="גבייה" round="סבב 3" />} />
         <Route path="/expenses" element={<Placeholder title="הוצאות" round="סבב 3" />} />
         <Route path="/general" element={<Placeholder title="כספים כלליים" round="סבב 3" />} />

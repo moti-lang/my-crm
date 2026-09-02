@@ -43,6 +43,10 @@ select assert_eq((select count(*) from students where branch_id <> :BEITAR), 0,
 select assert_eq((select count(*) from students), 6, 'מנהלת רואה 6 תלמידות (ביתר בלבד)');
 select assert_eq((select count(*) from v_student_balance where branch_id <> :BEITAR), 0,
                  '★ תצוגת היתרות אינה דולפת סניפים אחרים');
+select assert_eq((select count(*) from v_student_overview where branch_id <> :BEITAR), 0,
+                 '★ תצוגת סקירת התלמידות אינה דולפת סניפים אחרים');
+select assert_eq((select count(*) from v_student_overview), 6,
+                 'מנהלת רואה 6 תלמידות בתצוגת הסקירה');
 select assert_eq((select count(*) from payments), 6, 'מנהלת רואה תשלומים של ביתר בלבד');
 select assert_eq((select count(*) from ledger_entries where branch_id is distinct from :BEITAR), 0,
                  '★ הוצאות של סניפים אחרים אינן נראות');
@@ -149,6 +153,8 @@ set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', :ACCT, 'role','authenticated')::text, true);
 select assert_eq((select count(*) from students), 0,
                  '★ רואת חשבון אינה קוראת מטבלת students ישירות');
+select assert_eq((select count(*) from v_student_overview), 0,
+                 '★ רואת חשבון אינה רואה את תצוגת הסקירה (יש בה טלפונים)');
 select assert_eq((select count(*) from v_students_accounting), 21,
                  'רואת חשבון רואה 21 תלמידות דרך התצוגה המסוננת');
 select assert_eq((select count(*) from information_schema.columns
