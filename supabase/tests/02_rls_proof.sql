@@ -25,6 +25,9 @@ select set_config('request.jwt.claims', json_build_object('sub', :OWNER, 'role',
 select assert_eq((select count(*) from branches), 5, 'בעלים רואה 5 סניפים');
 select assert_eq((select count(*) from students), 21,'בעלים רואה 21 תלמידות');
 select assert_eq((select count(*) from v_branch_pnl), 5, 'בעלים רואה רווחיות של 5 סניפים');
+select assert_eq((select round(sum(allocated_amount))::bigint from v_general_allocation), 12000,
+                 'בעלים רואה חלוקה מלאה של 12,000');
+select assert_eq((select count(*) from v_debtors), 12, 'בעלים רואה 12 חייבות');
 rollback;
 
 -- ═════════════ מנהלת סניף: ביתר עילית בלבד ═════════════
@@ -45,6 +48,11 @@ select assert_eq((select count(*) from v_student_balance where branch_id <> :BEI
                  '★ תצוגת היתרות אינה דולפת סניפים אחרים');
 select assert_eq((select count(*) from v_student_overview where branch_id <> :BEITAR), 0,
                  '★ תצוגת סקירת התלמידות אינה דולפת סניפים אחרים');
+select assert_eq((select count(*) from v_debtors where branch_id <> :BEITAR), 0,
+                 '★ רשימת החייבות אינה דולפת סניפים אחרים');
+select assert_eq((select count(*) from v_debtors), 4, 'מנהלת רואה 4 חייבות בביתר');
+select assert_eq((select count(*) from v_general_allocation), 0,
+                 '★ מנהלת סניף אינה רואה חלוקת הוצאות — עדיף כלום על מספר שגוי');
 select assert_eq((select count(*) from v_student_overview), 6,
                  'מנהלת רואה 6 תלמידות בתצוגת הסקירה');
 select assert_eq((select count(*) from payments), 6, 'מנהלת רואה תשלומים של ביתר בלבד');
@@ -168,6 +176,11 @@ select assert_eq((select count(*) from information_schema.columns
                     and column_name in ('parent_phone','alt_phone','address','email')), 0,
                  '★ התצוגה אינה כוללת טלפון, כתובת או אימייל');
 select assert_eq((select count(*) from branches), 5, 'רואת חשבון רואה את כל הסניפים');
+-- ★ הבאג שהיה כאן: f_general_allocation רצה בהרשאות הקורא, ולרואת חשבון
+-- אין גישה ל-students. משקלי by_students יצאו אפס וההוצאה נעלמה בשקט —
+-- 8,400 במקום 12,000. אותו מספר כספי חייב להיראות זהה לשני התפקידים.
+select assert_eq((select round(sum(allocated_amount))::bigint from v_general_allocation), 12000,
+                 '★ רואת חשבון רואה חלוקה מלאה של 12,000 (לא 8,400)');
 rollback;
 
 -- ═════════════ anon: אפס גישה לטבלאות ═════════════

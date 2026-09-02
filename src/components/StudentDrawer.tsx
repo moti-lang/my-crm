@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStudentPayments, useStudentProductions, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
 import { formatILS, formatDate, formatPhone } from '@/lib/format';
+import { PaymentForm } from '@/components/PaymentForm';
 import type { Views } from '@/lib/database.types';
 
 type Student = Views<'v_student_overview'>;
@@ -12,6 +13,7 @@ const METHOD_LABEL: Record<string, string> = {
 export function StudentDrawer({ student, onClose }: { student: Student | null; onClose: () => void }) {
   const payments = useStudentPayments(student?.id ?? null);
   const productions = useStudentProductions(student?.id ?? null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (!student) return;
@@ -87,6 +89,21 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
               </p>
             )}
 
+            {adding && student.id ? (
+              <div className="mt-3">
+                <PaymentForm
+                  studentId={student.id}
+                  balance={balance}
+                  onDone={() => setAdding(false)}
+                  onCancel={() => setAdding(false)}
+                />
+              </div>
+            ) : (
+              <button type="button" className="btn-ghost mt-3 w-full" onClick={() => setAdding(true)}>
+                + רישום תשלום
+              </button>
+            )}
+
             {payments.isLoading ? (
               <p className="mt-3 text-sm text-soft">טוען תשלומים…</p>
             ) : (payments.data?.length ?? 0) === 0 ? (
@@ -159,7 +176,7 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
 
         <footer className="border-t border-rule p-4">
           <p className="text-xs text-soft">
-            רישום תשלום, שליחת תזכורת והפסקת השתתפות נבנים בסבב 3.
+            שליחת תזכורת נעשית ממסך הגבייה. קביעת מעקב והפסקת השתתפות נבנים בסבב 6.
           </p>
         </footer>
       </aside>

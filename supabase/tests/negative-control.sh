@@ -67,6 +67,9 @@ expect_fail "הסרת האינדקס שמונע הודעות כפולות" \
   "drop index wa_messages_provider_msg_id_uniq" \
   "04_wa_dedupe_proof.sql"
 
+expect_fail "החזרת חלוקת ההוצאות להרשאות הקורא (מספר שגוי לרואת חשבון)" \
+  "alter function f_general_allocation(uuid) security invoker"
+
 # ─── חורים ברמת הקוד, לא ברמת המסד ───
 # expect_fail_code <תיאור> <קובץ> <שורה לזריקה> <פקודת בדיקה>
 expect_fail_code() {

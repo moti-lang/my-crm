@@ -8,6 +8,9 @@ import { Branches } from '@/pages/Branches';
 import { BranchDetail } from '@/pages/BranchDetail';
 import { Students } from '@/pages/Students';
 import { Settings } from '@/pages/Settings';
+import { Collection } from '@/pages/Collection';
+import { Expenses } from '@/pages/Expenses';
+import { General } from '@/pages/General';
 import { Placeholder } from '@/pages/Placeholder';
 
 const queryClient = new QueryClient({
@@ -40,9 +43,9 @@ function Gate() {
         <Route path="/branches" element={<Branches />} />
         <Route path="/branches/:id" element={<BranchDetail />} />
         <Route path="/students" element={<Students />} />
-        <Route path="/collection" element={<Placeholder title="גבייה" round="סבב 3" />} />
-        <Route path="/expenses" element={<Placeholder title="הוצאות" round="סבב 3" />} />
-        <Route path="/general" element={<Placeholder title="כספים כלליים" round="סבב 3" />} />
+        <Route path="/collection" element={<Collection />} />
+        <Route path="/expenses" element={<Expenses />} />
+        <Route path="/general" element={<General />} />
         <Route path="/productions" element={<Placeholder title="הפקות" round="סבב 8" />} />
         <Route path="/attendance" element={<Placeholder title="נוכחות" round="סבב 4" />} />
         <Route path="/reminders" element={<Placeholder title="תזכורות" round="סבב 5" />} />

@@ -1066,6 +1066,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_debtors: {
+        Row: {
+          student_id: string | null;
+          full_name: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          parent_name: string | null;
+          parent_phone: string | null;
+          status: Database["public"]["Enums"]["student_status"] | null;
+          due: number | null;
+          paid: number | null;
+          balance: number | null;
+          last_paid_on: string | null;
+          aging_from: string | null;
+          days_outstanding: number | null;
+          aging_bucket: number | null;
+        };
+        Relationships: [];
+      };
+      v_general_allocation: {
+        Row: {
+          branch_id: string | null;
+          branch_name: string | null;
+          allocated_amount: number | null;
+        };
+        Relationships: [];
+      };
       v_student_balance: {
         Row: {
           student_id: string | null;
