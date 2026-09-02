@@ -13,6 +13,7 @@ import { Expenses } from '@/pages/Expenses';
 import { General } from '@/pages/General';
 import { Attendance } from '@/pages/Attendance';
 import { AttendanceSheet } from '@/pages/AttendanceSheet';
+import { Reminders } from '@/pages/Reminders';
 import { Placeholder } from '@/pages/Placeholder';
 
 const queryClient = new QueryClient({
@@ -50,7 +51,7 @@ function Gate() {
         <Route path="/general" element={<General />} />
         <Route path="/productions" element={<Placeholder title="הפקות" round="סבב 8" />} />
         <Route path="/attendance" element={<Attendance />} />
-        <Route path="/reminders" element={<Placeholder title="תזכורות" round="סבב 5" />} />
+        <Route path="/reminders" element={<Reminders />} />
         <Route path="/agent" element={<Placeholder title="סוכן AI" round="סבב 7" />} />
         <Route path="/commands" element={<Placeholder title="פקודות וואטסאפ" round="סבב 6" />} />
         <Route path="/reports" element={<Placeholder title="דוחות" round="סבב 8" />} />

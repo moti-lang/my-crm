@@ -16,7 +16,7 @@ run_suite() {
 
 expect_pass() {
   "$DIR/reset.sh" >/dev/null
-  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql; do
+  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql; do
     SUITE="$s"
     if run_suite; then
       echo "  ✓ בסיס נקי: $s עוברת"
@@ -87,11 +87,19 @@ expect_fail "הסרת בדיקת שיוך השיעור לסניף בדיווח �
   "06_attendance_proof.sql"
 
 # ─── חורים ברמת הקוד, לא ברמת המסד ───
-# expect_fail_code <תיאור> <קובץ> <שורה לזריקה> <פקודת בדיקה>
+# expect_fail_code <תיאור> <קובץ> <פקודת שינוי> <פקודת בדיקה>
+# פקודת השינוי מקבלת את נתיב הקובץ ב-$F ומשנה אותו במקום.
 expect_fail_code() {
-  local label="$1" file="$2" inject="$3" cmd="$4"
+  local label="$1" file="$2" mutate="$3" cmd="$4"
   cp "$file" "$file.bak"
-  printf '\n%s\n' "$inject" >> "$file"
+  if ! (export F="$file"; eval "$mutate") >/dev/null 2>&1; then
+    echo "  ! לא הצלחתי לפתוח את החור: $label"; fails=$((fails+1))
+    mv "$file.bak" "$file"; return
+  fi
+  if cmp -s "$file" "$file.bak"; then
+    echo "  ! השינוי לא שינה את הקובץ: $label"; fails=$((fails+1))
+    mv "$file.bak" "$file"; return
+  fi
   if (cd "$DIR/../.." && eval "$cmd") >/dev/null 2>&1; then
     echo "  ✗ $label — החור נפתח והבדיקה עדיין עברה!"
     fails=$((fails+1))
@@ -101,9 +109,18 @@ expect_fail_code() {
   mv "$file.bak" "$file"
 }
 
+expect_fail "הסרת מפתח הייחודיות של התזכורות (הצפת הורים)" \
+  "drop index reminders_dedupe_idx" \
+  "07_reminder_queue_proof.sql"
+
+expect_fail_code "שינוי מנוע התבניות בצד אחד בלבד" \
+  "$DIR/../functions/_shared/template.ts" \
+  'sed -i "s/    .trim();/    ;/" "$F"' \
+  "node supabase/tests/template-parity.test.mjs"
+
 expect_fail_code "חיבור ערוץ ההתראות לוואטסאפ" \
   "$DIR/../functions/_shared/alerts.ts" \
-  'export async function badAlert(){ await fetch("/functions/v1/wa-send"); }' \
+  'printf "\\nexport async function badAlert(){ await fetch(\"/functions/v1/wa-send\"); }\\n" >> "$F"' \
   "node supabase/tests/alert-independence.test.mjs"
 
 "$DIR/reset.sh" >/dev/null

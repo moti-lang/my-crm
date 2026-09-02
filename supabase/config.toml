@@ -38,3 +38,18 @@ verify_jwt = false             # נקראת מ-pg_cron
 
 [functions.cron-lessons]
 verify_jwt = false             # נקראת מ-pg_cron
+
+[functions.cron-reminders]
+verify_jwt = false
+
+[functions.cron-debt]
+verify_jwt = false
+
+[functions.cron-attendance-watch]
+verify_jwt = false
+
+[functions.cron-absence]
+verify_jwt = false
+
+[functions.cron-summary]
+verify_jwt = false

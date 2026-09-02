@@ -15,7 +15,8 @@
     "db:test:negative": "./supabase/tests/negative-control.sh",
     "gen:types": "node scripts/gen-types.mjs --from-local-postgres > src/lib/database.types.ts",
     "test:wa": "node supabase/tests/wa-contract.test.mjs",
-    "test:alerts": "node supabase/tests/alert-independence.test.mjs"
+    "test:alerts": "node supabase/tests/alert-independence.test.mjs",
+    "test:template": "node supabase/tests/template-parity.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
