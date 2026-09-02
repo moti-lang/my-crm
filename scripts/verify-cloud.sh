@@ -14,12 +14,14 @@ cd "$(dirname "$0")/.."
 
 ONLY="${1:-}"
 FAILED=0
+STEP=0
 
 [ -f .env.verify ] && set -a && . ./.env.verify && set +a
 
 step() {
   local n="$1" title="$2"
   [ -n "$ONLY" ] && [ "$ONLY" != "$n" ] && return 1
+  STEP="$n"
   echo ""
   echo "═══════════════════════════════════════════════"
   echo " שלב $n — $title"
@@ -27,24 +29,40 @@ step() {
   return 0
 }
 
+# עוצרים בכשל הראשון. שלב שרץ על בסיס נתונים חצי-מוגר מייצר מפל
+# שגיאות שמסתיר את הסיבה האמיתית, וזה בדיוק מה שאנחנו לא רוצים לדווח.
+# ריצה של שלב בודד (ONLY) לא עוצרת — שם ממילא יש רק שלב אחד.
+abort() {
+  echo ""
+  echo "═══════════════════════════════════════════════"
+  echo " עצירה בשלב $1 — השלבים הבאים לא רצו"
+  echo " הסיבה למעלה. אין תיקון בשקט."
+  exit 1
+}
+
 need() {
   local missing=()
   for v in "$@"; do [ -z "${!v:-}" ] && missing+=("$v"); done
   if [ ${#missing[@]} -gt 0 ]; then
     echo "  ✗ חסרים משתני סביבה: ${missing[*]}"
-    FAILED=1; return 1
+    FAILED=1
+    [ -z "$ONLY" ] && abort "$STEP"
+    return 1
   fi
   return 0
 }
 
-fail() { echo "  ✗ $1"; FAILED=1; }
+fail() { echo "  ✗ $1"; FAILED=1; [ -z "$ONLY" ] && abort "$STEP"; }
 ok()   { echo "  ✓ $1"; }
 
 # ─────────── 1. מיגרציות ───────────
 if step 1 "db push — 13 מיגרציות על פרויקט נקי"; then
-  if need SUPABASE_PROJECT_REF SUPABASE_DB_PASSWORD; then
-    npx supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD" \
-      && npx supabase db push --password "$SUPABASE_DB_PASSWORD" \
+  # db-push.sh בוחר בין ה-CLI לבין psql לפי מה שיש בסביבה.
+  if [ -z "${SUPABASE_PROJECT_REF:-}" ] && [ -z "${SUPABASE_DB_URL:-}" ]; then
+    echo "  ✗ חסרים משתני סביבה: SUPABASE_DB_URL (או SUPABASE_PROJECT_REF+SUPABASE_DB_PASSWORD)"
+    FAILED=1; [ -z "$ONLY" ] && abort "$STEP"
+  else
+    ./scripts/db-push.sh \
       && ok "כל המיגרציות הוחלו" \
       || fail "db push נכשל — המיגרציה שנפלה מופיעה למעלה"
   fi

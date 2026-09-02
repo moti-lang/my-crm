@@ -103,7 +103,10 @@ create table students (
 );
 create index students_branch_idx on students(branch_id) where deleted_at is null;
 create index students_phone_idx  on students(parent_phone);
-create index students_name_trgm  on students using gin (full_name gin_trgm_ops);
+-- מחלקת האופרטורים מוסמכת בסכמה במפורש. בלי זה האינדקס תלוי ב-search_path
+-- של הסשן, ובבסיס נתונים טרי (בדיוק כמו פרויקט סופבייס חדש) הוא "$user", public
+-- בלבד — וההגדרה נופלת על "operator class gin_trgm_ops does not exist".
+create index students_name_trgm  on students using gin (full_name extensions.gin_trgm_ops);
 create trigger students_touch before update on students
   for each row execute function f_touch_updated_at();
 

@@ -173,6 +173,43 @@ begin
     '★ קשר יחיד ל-auth.users: המפתח הזר של profiles');
 end $$;
 
+-- ─────────────────────────────────────────────────────────────
+-- ★ ה-search_path של המסד עצמו אינו כולל extensions.
+--
+-- פרויקט סופבייס חדש מתחיל עם "$user", public. כל עוד ה-shim הוסיף
+-- extensions לנתיב של המסד, אזכור לא-מוסמך לאובייקט מסכמת ההרחבות
+-- עבד כאן ונפל בענן. זה בדיוק מה שקרה עם gin_trgm_ops באינדקס
+-- students_name_trgm: 417 בדיקות ירוקות, ומיגרציה 0001 נופלת על מסד טרי.
+--
+-- הבדיקה הזאת נועלת את הקביים: אם מישהו יחזיר את ההקלה, החבילה תיפול.
+-- ─────────────────────────────────────────────────────────────
+do $$
+declare
+  v_path text;
+begin
+  select coalesce(
+    (select setconfig[array_position(
+       (select array_agg(split_part(x, '=', 1)) from unnest(setconfig) x),
+       'search_path')]
+     from pg_db_role_setting s
+     join pg_database d on d.oid = s.setdatabase
+     where d.datname = current_database() and s.setrole = 0),
+    '') into v_path;
+
+  if v_path ~ 'extensions' then
+    raise exception E'\n  ✗ ★ ל-search_path של המסד הוחזרה extensions: %\n    זה מסתיר אזכורים לא-מוסמכים שנופלים על פרויקט סופבייס טרי.', v_path;
+  end if;
+  raise notice '  ✓ ★ search_path של המסד אינו כולל extensions (כמו פרויקט טרי)';
+
+  -- וההוכחה החיובית: ההרחבות באמת יושבות ב-extensions ולא ב-public,
+  -- כלומר האזכורים במיגרציות באמת נאלצו להסמיך בעצמם.
+  perform assert_true(
+    (select count(*) from pg_extension e
+       join pg_namespace n on n.oid = e.extnamespace
+      where e.extname in ('pgcrypto','pg_trgm') and n.nspname = 'extensions') = 2,
+    '★ pgcrypto ו-pg_trgm יושבות ב-extensions');
+end $$;
+
 select drop_assert_helpers();
 \echo '─────────────────────────────────────────'
 \echo ' כל בדיקות הניידות עברו'

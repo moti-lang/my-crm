@@ -145,6 +145,11 @@ expect_fail "החזרת ההרחבות ל-public (shim לא נאמן)" \
   "alter extension pgcrypto set schema public" \
   "10_portability_proof.sql"
 
+# ★ הקביים שהסתירו באג אמיתי: search_path של המסד שכולל extensions.
+expect_fail "החזרת extensions ל-search_path של המסד (מסתיר אזכורים לא-מוסמכים)" \
+  "alter database teichtal set search_path to public, extensions" \
+  "10_portability_proof.sql"
+
 expect_fail "ביטול חסימת אישור הצילום" \
   "drop trigger production_cast_consent on production_cast" \
   "09_business_rules_proof.sql"
@@ -255,6 +260,13 @@ expect_fail_code "חיבור ערוץ ההתראות לוואטסאפ" \
   "$DIR/../functions/_shared/alerts.ts" \
   'printf "\\nexport async function badAlert(){ await fetch(\"/functions/v1/wa-send\"); }\\n" >> "$F"' \
   "node supabase/tests/alert-independence.test.mjs"
+
+# ★ הבאג שהקביים הסתירו: מחלקת אופרטורים לא מוסמכת. על מסד טרי,
+# בדיוק כמו פרויקט סופבייס חדש, מיגרציה 0001 נופלת.
+expect_fail_code "אזכור לא-מוסמך לאובייקט מסכמת extensions" \
+  "$DIR/../migrations/0001_init.sql" \
+  'sed -i "s|full_name extensions\.gin_trgm_ops|full_name gin_trgm_ops|" "$F"' \
+  "./supabase/tests/reset.sh"
 
 "$DIR/reset.sh" >/dev/null
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.

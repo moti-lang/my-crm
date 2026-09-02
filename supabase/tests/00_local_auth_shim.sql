@@ -8,7 +8,11 @@
 create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
 create extension if not exists pg_trgm  with schema extensions;
-alter database teichtal set search_path to public, extensions;
+-- אין כאן alter database ... set search_path. בכוונה.
+-- פרויקט סופבייס חדש מתחיל עם search_path של "$user", public בלבד, ולסמוך
+-- על כך ש-extensions נמצאת בנתיב זה הימור. השורה הזאת הייתה כאן והסתירה
+-- באג אמיתי: אינדקס gin עם gin_trgm_ops לא מוסמך, שנפל על מסד טרי.
+-- כל מיגרציה חייבת להסמיך בעצמה כל אובייקט מסכמת extensions.
 
 create schema if not exists auth;
 
