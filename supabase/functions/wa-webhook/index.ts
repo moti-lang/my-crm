@@ -122,8 +122,30 @@ async function handleIncoming(db: Db, payload: unknown): Promise<Response> {
   );
 
   if (decision.route === 'command_parse_failed') {
-    // לא נכתב דבר. התשובה לשולחת ושמירת הפקודה הן של 6ב.
+    // לא נכתב דבר, ואין תשובה: פרסור שנכשל אינו מצדיק הודעה חוזרת
+    // על כל טקסט אקראי שמגיע למספר.
     console.log(`[wa-webhook] פרסור נכשל (${decision.parse.reason}) — לא נשמר דבר`);
+  }
+
+  // ★ תשובה לשולחת. עד כאן הנתב הכריע ולא נאמר דבר החוצה — סוכן
+  // ששותק אחרי פקודה כספית הוא הכשל הגרוע ביותר במערכת הזאת:
+  // הניה לא יודעת אם ההוצאה נרשמה, ושולחת שוב.
+  const reply = 'reply' in decision ? decision.reply : undefined;
+  if (reply) {
+    // מפתח האידמפוטנטיות נגזר ממזהה ההודעה הנכנסת, כדי שמסירה חוזרת
+    // של אותו אירוע לא תייצר שתי תשובות.
+    const sent = await whatsappProvider()
+      .sendText(phone, reply, `reply:${message.providerMsgId}`);
+    if (!sent.ok) {
+      console.error(`[wa-webhook] התשובה לא יצאה: ${sent.error}`);
+      await alertOwner(db, {
+        kind: 'wa_reply_failed',
+        severity: 'warning',
+        title: 'תשובה לא יצאה בוואטסאפ',
+        body: `מסלול ${decision.route} למספר ${phone}. השולחת נשארה בלי תשובה.`,
+        meta: { route: decision.route, error: sent.error },
+      });
+    }
   }
 
   return json({ ok: true, stored: message.providerMsgId, route: decision.route });

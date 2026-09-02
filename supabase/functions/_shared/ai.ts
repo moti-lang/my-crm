@@ -1,4 +1,4 @@
-import { env, requireEnv, AI_DRY_RUN } from './env.ts';
+import { env, requireEnv, AI_DRY_RUN, AI_TIMEOUT_MS } from './env.ts';
 import { validateCommand, type ParseOutcome } from './command-schema.ts';
 import { COMMAND_FIXTURES, DEFAULT_FIXTURE } from './ai-fixtures.ts';
 
@@ -68,8 +68,18 @@ export function buildUserMessage(ctx: CommandContext): string {
 
 // ─────────────────────────── הרצה יבשה ───────────────────────────
 
+/** הטקסט שמדמה תלייה של המודל, לבדיקת מסלול התקרה בלי לחכות 8 שניות. */
+export const TIMEOUT_FIXTURE = '__FIXTURE_TIMEOUT__';
+
 class DryRunAiProvider implements AiProvider {
   async parseCommand(ctx: CommandContext): Promise<ParseOutcome> {
+    if (ctx.text.trim() === TIMEOUT_FIXTURE) {
+      return await Promise.resolve({
+        ok: false, reason: 'timeout',
+        detail: `הקריאה למודל לא חזרה תוך ${AI_TIMEOUT_MS}ms`,
+        dryRun: true,
+      });
+    }
     const raw = COMMAND_FIXTURES[ctx.text.trim()] ?? DEFAULT_FIXTURE;
     console.log(`[AI_DRY_RUN] "${ctx.text.slice(0, 40)}" → פלט מוקלט`);
     return await Promise.resolve(validateCommand(raw, true));
@@ -83,14 +93,40 @@ class ClaudeAiProvider implements AiProvider {
     // ברירת המחדל מהאפיון. ניתן להחליף בלי נגיעה בקוד.
     const model = env('ANTHROPIC_MODEL') ?? 'claude-sonnet-4-6';
 
+    // מחוץ ל-try בכוונה: ביטול הבקשה עלול להגיע כשגיאה ולא כערך,
+    // וה-catch למטה חייב לדעת להבדיל בין תלייה לבין כשל אמיתי.
+    let timedOut = false;
+    const timeoutOutcome = (): ParseOutcome => ({
+      ok: false, reason: 'timeout',
+      detail: `הקריאה למודל לא חזרה תוך ${AI_TIMEOUT_MS}ms`,
+      dryRun: false,
+    });
+
     try {
       // טעינה דינמית: מסלול ההרצה היבשה לעולם לא מגיע לכאן ולכן גם
       // לא טוען את ה-SDK. זה מה שמאפשר לחבילת הבדיקות לרוץ בלי המפתח
       // ובלי החבילה בכלל.
       const { default: Anthropic } = await import('npm:@anthropic-ai/sdk@0.68.0');
-      const client = new Anthropic({ apiKey: requireEnv('ANTHROPIC_API_KEY') });
+      const client = new Anthropic({
+        apiKey: requireEnv('ANTHROPIC_API_KEY'),
+        // ה-SDK מנסה שוב לבד. ניסיון חוזר בתוך תקרת זמן קשיחה פירושו
+        // שהתקרה נשרפת על הניסיון הראשון — לכן אין ניסיונות חוזרים כאן.
+        maxRetries: 0,
+        timeout: AI_TIMEOUT_MS,
+      });
 
-      const response = await client.messages.create({
+      // ★ תקרת זמן קשיחה. שני מנגנונים, בכוונה:
+      //   AbortController מבטל את הבקשה בפועל כדי שלא תמשיך לרוץ ברקע,
+      //   ו-Promise.race מבטיח שנחזור גם אם הביטול עצמו לא נתמך.
+      //   בלי השני, תלייה בשכבה שמתחת ל-SDK הייתה משאירה את הפונקציה
+      //   תקועה עד ה-timeout של הפלטפורמה, והשולחת בלי שום תשובה.
+      const abort = new AbortController();
+      let timer: number | undefined;
+      const expired = new Promise<'__timeout__'>((resolve) => {
+        timer = setTimeout(() => { timedOut = true; abort.abort(); resolve('__timeout__'); }, AI_TIMEOUT_MS);
+      });
+
+      const response = await Promise.race([expired, client.messages.create({
         model,
         max_tokens: 800,
         system: COMMAND_SYSTEM_PROMPT,
@@ -106,7 +142,9 @@ class ClaudeAiProvider implements AiProvider {
         // דגימה דטרמיניסטית. נתמך ב-sonnet-4-6; במודלים חדשים יותר
         // הפרמטר הוסר, ולכן הוא נשלח רק כשהמודל מכיר אותו.
         ...(model.includes('4-6') ? { temperature: 0 } : {}),
-      } as never);
+      } as never, { signal: abort.signal })]).finally(() => clearTimeout(timer));
+
+      if (response === '__timeout__') return timeoutOutcome();
 
       if (response.stop_reason === 'refusal') {
         return { ok: false, reason: 'provider_error', detail: 'הבקשה נדחתה', dryRun: false };
@@ -119,6 +157,9 @@ class ClaudeAiProvider implements AiProvider {
 
       return validateCommand(text.trim(), false);
     } catch (e) {
+      // ביטול שהגיע כזריקה הוא עדיין תלייה, לא כשל ספק. ההבחנה חשובה:
+      // רק timeout גורר את התשובה "רגע, בודקת" בוואטסאפ.
+      if (timedOut) return timeoutOutcome();
       // גם שגיאת ספק מוחזרת כערך. שום דבר לא נזרק החוצה ושום דבר לא נרשם.
       const detail = e instanceof Error ? e.message : 'שגיאה לא ידועה';
       return { ok: false, reason: 'provider_error', detail, dryRun: false };

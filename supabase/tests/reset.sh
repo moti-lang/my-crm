@@ -8,8 +8,10 @@
 # כאן אין GoTrue, ולכן 01_local_users.sql ממלא את מקום הסקריפט.
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
+# ניתן להצביע על פוסטגרס אחר (CI) בלי לשנות את הסקריפטים.
+PG_HOST="${PGHOST:-/tmp}"; PG_PORT="${PGPORT:-5433}"; PG_USER="${PGUSER:-postgres}"
 export PGOPTIONS="-c client_min_messages=warning"
-PSQL="psql -h /tmp -p 5433 -U postgres -v ON_ERROR_STOP=1 -q"
+PSQL="psql -h $PG_HOST -p $PG_PORT -U $PG_USER -v ON_ERROR_STOP=1 -q"
 $PSQL -d postgres -c "drop database if exists teichtal" >/dev/null
 $PSQL -d postgres -c "create database teichtal" >/dev/null
 echo "  → 00_local_auth_shim.sql"; $PSQL -d teichtal -f "$DIR/00_local_auth_shim.sql"

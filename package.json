@@ -23,7 +23,8 @@
     "test:race": "node supabase/tests/command-race.test.mjs",
     "test:coverage": "node supabase/tests/function-coverage.test.mjs",
     "check:secrets": "node scripts/check-secrets.mjs --dist",
-    "test:public": "node supabase/tests/public-surface.test.mjs"
+    "test:public": "node supabase/tests/public-surface.test.mjs",
+    "test:contract": "node supabase/tests/ai-wire.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

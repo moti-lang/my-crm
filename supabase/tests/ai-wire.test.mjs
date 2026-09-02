@@ -53,9 +53,47 @@ if (/extractJson\(raw\)/.test(bench))
   ok('model-benchmark משתמש באותו חילוץ');
 else bad('★ model-benchmark לא משתמש באותו חילוץ — מודד משהו אחר מהייצור');
 
+// ─── תקרת הזמן ───
+// סוכן שנתקע בשקט הוא הכשל הגרוע ביותר: הניה לא יודעת אם ההוצאה נרשמה.
+// הבדיקה מחפשת מבנים בקוד ולא מילים: "AbortController" מופיע גם בהערה
+// שמעליו, ובקרת השלילה חשפה שהיא עברה בזכות ההערה בלבד.
+const timeoutParts = {
+  'setTimeout עם AI_TIMEOUT_MS': /setTimeout\([\s\S]{0,200}?AI_TIMEOUT_MS\)/,
+  'new AbortController()':       /new AbortController\(\)/,
+  'abort.abort() בפקיעה':        /abort\.abort\(\)/,
+  'signal מועבר לבקשה':          /signal:\s*abort\.signal/,
+  'Promise.race':                /Promise\.race\(/,
+};
+const missing = Object.entries(timeoutParts).filter(([, re]) => !re.test(ai)).map(([n]) => n);
+if (missing.length === 0) ok('ai.ts: תקרת זמן קשיחה עם ביטול בפועל');
+else bad(`★ ai.ts: תקרת הזמן חסרה — ${missing.join(', ')}`);
+
+if (/if \(timedOut\) return timeoutOutcome\(\)/.test(ai))
+  ok('ai.ts: ביטול שנזרק עדיין מסווג כ-timeout');
+else bad('★ ai.ts: ביטול שנזרק ידווח כ-provider_error ולא יפעיל את התשובה');
+
+const router = readFileSync('supabase/functions/_shared/router.ts', 'utf8');
+if (/route: 'command_timeout'/.test(router) && /רגע, בודקת/.test(router))
+  ok('router.ts: תלייה מחזירה תשובה לשולחת');
+else bad('★ router.ts: תלייה לא מייצרת תשובה');
+
+const hook = readFileSync('supabase/functions/wa-webhook/index.ts', 'utf8');
+if (/sendText\(phone, reply/.test(hook))
+  ok('wa-webhook: התשובה באמת נשלחת');
+else bad('★ wa-webhook: התשובה מחושבת ולא נשלחת — הסוכן שותק בפועל');
+
 // ─── שכבה 2: קריאה אמיתית ───
+// זו הבדיקה היחידה שתופסת שינוי בצד ה-API. פיקסצ'רים מוקלטים לא יתפסו
+// אותו לעולם — הם מוקלטים אצלנו. לכן היא רצה בכל ריצת CI, ולא רק ידנית.
+//
+// שלוש קריאות ולא אחת: הסף הוא על החציון. קריאה בודדת איטית היא רעש
+// רשת ולא רגרסיה, וסף שנופל על רעש הופך את ה-CI לרועש ומתעלמים ממנו.
+const MAX_MS = Number(process.env.AI_CONTRACT_MAX_MS ?? '3000');
+const SAMPLES = Number(process.env.AI_CONTRACT_SAMPLES ?? '3');
+
 if (!process.env.ANTHROPIC_API_KEY) {
   console.log('  ! אין ANTHROPIC_API_KEY — הקריאה האמיתית דולגה');
+  if (process.env.CI) bad('★ ב-CI הקריאה האמיתית חובה. חסר ANTHROPIC_API_KEY.');
 } else {
   const SYSTEM = ai.match(/export const COMMAND_SYSTEM_PROMPT = `([\s\S]*?)`;/)[1];
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
@@ -64,6 +102,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
     cs.match(/export function extractJson\(raw: string\): string \{[\s\S]*?\n\}/)[0]
       .replace('export function extractJson(raw: string): string', 'function extractJson(raw)')
     + ')')();
+
   const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6';
   const user = [
     'הודעה: תרשמי 450 הגברה ביתר',
@@ -73,43 +112,55 @@ if (!process.env.ANTHROPIC_API_KEY) {
     'קטגוריות: הגברה ותאורה · שכירות אולם',
   ].join('\n');
 
-  const t0 = Date.now();
-  try {
-    const res = await new Anthropic({ timeout: 60000, maxRetries: 1 }).messages.create({
-      model, max_tokens: 800, system: SYSTEM,
-      messages: [{ role: 'user', content: user }],
-      ...(model.includes('4-6') ? { temperature: 0 } : {}),
-    });
+  const INTENTS = ['expense','income','payment','new_student','update_student',
+                   'reminder','attendance','query','unknown'];
+  const client = new Anthropic({ timeout: 60000, maxRetries: 0 });
+  const times = [];
+
+  for (let i = 1; i <= SAMPLES; i++) {
+    const t0 = Date.now();
+    let res;
+    try {
+      res = await client.messages.create({
+        model, max_tokens: 800, system: SYSTEM,
+        messages: [{ role: 'user', content: user }],
+        ...(model.includes('4-6') ? { temperature: 0 } : {}),
+      });
+    } catch (e) {
+      bad(`★ קריאה ${i} נכשלה: ${String(e.message).slice(0, 200)}`);
+      continue;
+    }
     const ms = Date.now() - t0;
+    times.push(ms);
+
     const rawText = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-    const wrapped = rawText.trim()[0] !== '{';
-    if (wrapped) console.log(`  ! המודל עטף את ה-JSON — החילוץ נדרש`);
-    const raw = extract(rawText);
+    if (rawText.trim()[0] !== '{') console.log('  ! המודל עטף את ה-JSON — החילוץ נדרש');
 
     let parsed;
-    try { parsed = JSON.parse(raw); }
-    catch { bad(`★ המודל לא החזיר JSON תקין: ${raw.slice(0, 160)}`); parsed = null; }
+    try { parsed = JSON.parse(extract(rawText)); }
+    catch { bad(`★ קריאה ${i}: לא JSON תקין — ${rawText.slice(0, 160)}`); continue; }
 
-    if (parsed) {
-      ok(`★ קריאה אמיתית החזירה JSON תקין (${model}, ${ms}ms)`);
-      // אותם כללים בדיוק שב-validateShape בייצור.
-      const INTENTS = ['expense','income','payment','new_student','update_student',
-                       'reminder','attendance','query','unknown'];
-      if (INTENTS.includes(parsed.intent)) ok(`intent חוקי: ${parsed.intent}`);
-      else bad(`★ intent לא חוקי: ${JSON.stringify(parsed.intent)}`);
+    // ★ החוזה. אם ה-API או המודל ישתנו, זה מה שייפול.
+    const problems = [];
+    if (!INTENTS.includes(parsed.intent)) problems.push(`intent=${JSON.stringify(parsed.intent)}`);
+    if (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 1)
+      problems.push(`confidence=${JSON.stringify(parsed.confidence)}`);
+    if (!parsed.fields || typeof parsed.fields !== 'object') problems.push('fields אינו אובייקט');
+    if (!Array.isArray(parsed.missing)) problems.push('missing אינו מערך');
+    if (typeof parsed.human_summary !== 'string') problems.push('human_summary אינו מחרוזת');
 
-      if (typeof parsed.confidence === 'number' && parsed.confidence >= 0 && parsed.confidence <= 1)
-        ok(`confidence בטווח: ${parsed.confidence}`);
-      else bad(`★ confidence מחוץ לטווח: ${JSON.stringify(parsed.confidence)}`);
+    if (problems.length) bad(`★ קריאה ${i}: החוזה נשבר — ${problems.join('; ')}`);
+    else ok(`קריאה ${i}: החוזה מתקבל (${parsed.intent}, ${ms}ms)`);
+  }
 
-      if (parsed.fields && typeof parsed.fields === 'object') ok('fields הוא אובייקט');
-      else bad('★ fields אינו אובייקט');
-
-      if (ms > 8000) bad(`★ ${ms}ms לפקודה — איטי מדי לוואטסאפ בזמן אמת`);
-      else ok(`זמן תגובה סביר: ${ms}ms`);
-    }
-  } catch (e) {
-    bad(`★ הקריאה נכשלה: ${String(e.message).slice(0, 200)}`);
+  if (times.length === 0) {
+    bad('★ אף קריאה לא הצליחה — אין מדידת זמן');
+  } else {
+    const sorted = [...times].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const label = `חציון ${median}ms מתוך ${times.map((t) => `${t}ms`).join(' · ')}`;
+    if (median < MAX_MS) ok(`★ זמן תגובה: ${label} (סף ${MAX_MS}ms)`);
+    else bad(`★ זמן תגובה חרג: ${label} (סף ${MAX_MS}ms)`);
   }
 }
 

@@ -75,7 +75,8 @@ function validateShape(value: unknown): { ok: true; command: ParsedCommand } | {
 
 export type ParseOutcome =
   | { ok: true; command: ParsedCommand; dryRun: boolean }
-  | { ok: false; reason: 'invalid_json' | 'schema_mismatch' | 'provider_error' | 'low_confidence';
+  | { ok: false;
+      reason: 'invalid_json' | 'schema_mismatch' | 'provider_error' | 'low_confidence' | 'timeout';
       detail: string; raw?: string; dryRun: boolean };
 
 /** סף הביטחון. מתחתיו לא מציעים כלום — שואלים מחדש. */

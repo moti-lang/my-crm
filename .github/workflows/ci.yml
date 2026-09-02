@@ -1,0 +1,69 @@
+name: בדיקות
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  suite:
+    name: חבילת הבדיקות
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5433
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: לקוח psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - run: npm ci
+
+      - name: בניית המסד המקומי
+        run: ./supabase/tests/reset.sh
+
+      - name: טיפוסים
+        run: npx tsc --noEmit
+
+      - name: כל החבילות
+        run: ./supabase/tests/run.sh
+        env:
+          # ★ הקריאה האמיתית ל-API רצה בכל ריצה, לא רק ידנית.
+          #    פיקסצ'רים מוקלטים לא יתפסו שינוי בצד ה-API — הם מוקלטים אצלנו.
+          #    ai-wire.test.mjs נכשל אם המפתח חסר כש-CI מוגדר.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          AI_CONTRACT_MAX_MS: ${{ vars.AI_CONTRACT_MAX_MS }}
+
+      - name: בקרות שלילה
+        run: ./supabase/tests/negative-control.sh
+
+      - name: בילד + שער הסודות
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder

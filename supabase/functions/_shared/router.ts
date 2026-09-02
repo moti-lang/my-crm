@@ -17,6 +17,7 @@ export type RouteDecision =
       authorized?: { allowed: boolean; reason?: string; message?: string };
       needsConfirmation?: boolean; commandId?: string; reply?: string }
   | { route: 'command_parse_failed'; caller: AuthorizedNumber; parse: ParseOutcome }
+  | { route: 'command_timeout'; caller: AuthorizedNumber; parse: ParseOutcome; reply: string }
   | { route: 'confirmed'; caller: AuthorizedNumber; result: Record<string, unknown>; reply: string }
   | { route: 'declined'; caller: AuthorizedNumber; reply: string }
   | { route: 'undo'; caller: AuthorizedNumber; result: Record<string, unknown>; reply: string }
@@ -167,6 +168,17 @@ export async function routeIncoming(
   // ─────────── ג. פרסור ───────────
   const ctx = await loadContext(db, text);
   const parse = await aiProvider().parseCommand(ctx);
+
+  // ★ תלייה של המודל אינה כישלון פרסור אלא היעדר תשובה. השולחת חייבת
+  // לדעת שקיבלנו את ההודעה ושאנחנו עובדים עליה — סוכן ששותק משאיר
+  // אותה בלי לדעת אם ההוצאה נרשמה, וזה גרוע מ"לא הצלחתי".
+  // גם כאן: אפס כתיבות. הפקודה לא נשמרה ולא תבוצע.
+  if (!parse.ok && parse.reason === 'timeout') {
+    return {
+      route: 'command_timeout', caller: authorizedNumber, parse,
+      reply: 'רגע, בודקת…',
+    };
+  }
 
   // ★ מסלול כישלון הפרסור. אין כאן ולו כתיבה אחת — לא commands,
   // לא audit_log, ולא לוג חלקי. הכישלון מוחזר לקורא ותו לא.

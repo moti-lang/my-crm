@@ -4,14 +4,16 @@
 # אם חור כלשהו לא מפיל את החבילה — לבדיקה הזו אין ערך והיא צריכה תיקון.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
-PSQL="psql -h /tmp -p 5433 -U postgres -d teichtal -v ON_ERROR_STOP=1 -q"
+# ניתן להצביע על פוסטגרס אחר (CI) בלי לשנות את הסקריפטים.
+PG_HOST="${PGHOST:-/tmp}"; PG_PORT="${PGPORT:-5433}"; PG_USER="${PGUSER:-postgres}"
+PSQL="psql -h $PG_HOST -p $PG_PORT -U $PG_USER -d teichtal -v ON_ERROR_STOP=1 -q"
 fails=0
 ran=0
 
 SUITE="02_rls_proof.sql"
 
 run_suite() {
-  psql -h /tmp -p 5433 -U postgres -d teichtal -v ON_ERROR_STOP=1 \
+  psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d teichtal -v ON_ERROR_STOP=1 \
     -f "$DIR/$SUITE" >/tmp/nc-suite.out 2>&1
 }
 
@@ -255,6 +257,22 @@ expect_fail_code "שינוי מנוע התבניות בצד אחד בלבד" \
   "$DIR/../functions/_shared/template.ts" \
   'sed -i "s/    .trim();/    ;/" "$F"' \
   "node supabase/tests/template-parity.test.mjs"
+
+# ★ בקרות תקרת הזמן. הדרישה: קריאה שלא חוזרת לא משאירה את השולחת בשקט.
+expect_fail_code "ביטול תקרת הזמן בקריאה למודל" \
+  "$DIR/../functions/_shared/ai.ts" \
+  'sed -i "s|const abort = new AbortController();|const abort = { signal: undefined, abort() {} }; // הוסר|" "$F"' \
+  "node supabase/tests/ai-wire.test.mjs"
+
+expect_fail_code "תלייה בלי תשובה לשולחת" \
+  "$DIR/../functions/_shared/router.ts" \
+  "sed -i \"s|      reply: 'רגע, בודקת…',|      reply: '',|\" \"\$F\"" \
+  "node supabase/tests/command-router.test.mjs"
+
+expect_fail_code "התשובה מחושבת אך לא נשלחת" \
+  "$DIR/../functions/wa-webhook/index.ts" \
+  'sed -i "s|      .sendText(phone, reply, \`reply:\${message.providerMsgId}\`);|      .sendText(\"\", reply, \"x\");|" "$F"' \
+  "node supabase/tests/ai-wire.test.mjs"
 
 # ★ הבקרות של המסלול אל ה-API. שתיהן מכסות באג שעלה 60 קריאות כושלות.
 expect_fail_code "החזרת output_config שה-API דוחה" \

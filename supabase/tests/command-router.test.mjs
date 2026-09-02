@@ -127,6 +127,20 @@ console.log('\nפרסור מוצלח:');
         `התקבל: ${JSON.stringify(decision.parse?.command?.intent)}`);
 }
 
+// ═════════════ 1ג. ★ תלייה של המודל ═════════════
+// הדרישה: אם הקריאה לא חוזרת תוך 8 שניות, הסוכן משיב ולא נתקע בשקט.
+{
+  const { decision, writes } = await route(owner, '__FIXTURE_TIMEOUT__');
+  check('★ תלייה מקבלת מסלול משלה', decision.route === 'command_timeout',
+        `התקבל: ${decision.route}`);
+  check('★ הסיבה היא timeout', decision.parse.reason === 'timeout',
+        `התקבל: ${decision.parse.reason}`);
+  check('★ השולחת מקבלת תשובה', decision.reply === 'רגע, בודקת…',
+        `התקבל: ${JSON.stringify(decision.reply)}`);
+  check('★ תלייה אינה כותבת למסד', writes.length === 0,
+        `נכתבו: ${JSON.stringify(writes)}`);
+}
+
 // ═════════════ 2. ★ מסלולי כישלון — אפס כתיבות ═════════════
 console.log('\n★ מסלולי כישלון הפרסור:');
 const FAILURES = [
