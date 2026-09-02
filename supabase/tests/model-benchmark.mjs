@@ -11,15 +11,13 @@
  * דורש ANTHROPIC_API_KEY. הקריאות עולות כסף — 30 פקודות לכל מודל.
  */
 import { readFileSync } from 'node:fs';
+import { loadFromSource } from './_from-source.mjs';
 
-// אותה פונקציית חילוץ של הייצור, נטענת מהמקור כדי שלא יהיה עותק שני.
-const extractJson = Function('"use strict"; return (' +
-  readFileSync('supabase/functions/_shared/command-schema.ts', 'utf8')
-    .match(/export function extractJson\(raw: string\): string \{[\s\S]*?\n\}/)[0]
-    .replace('export function extractJson(raw: string): string', 'function extractJson(raw)')
-  + ')')();
+// שתי הפונקציות של הייצור, נטענות מהמקור כדי שלא יהיו עותקים שניים.
+const extractJson = loadFromSource('command-schema.ts', 'extractJson');
+const supportsTemperature = loadFromSource('ai.ts', 'supportsTemperature');
 
-const DEFAULT_MODELS = ['claude-sonnet-4-6', 'claude-opus-5'];
+const DEFAULT_MODELS = ['claude-haiku-4-5', 'claude-sonnet-4-6'];
 const models = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const MODELS = models.length > 0 ? models : DEFAULT_MODELS;
 
@@ -71,8 +69,9 @@ async function run(model, text) {
     model, max_tokens: 800, system: SYSTEM,
     messages: [{ role: 'user', content: userMessage(text) }],
   };
-  // temperature הוסר במודלים החדשים; נשלח רק היכן שהוא נתמך.
-  if (model.includes('4-6')) params.temperature = 0;
+  // אותה פונקציה של הייצור, מהמקור. תנאי מועתק היה נותן להשוואה למדוד
+  // הגדרות אחרות מאלה שרצות בפועל.
+  if (supportsTemperature(model)) params.temperature = 0;
 
   try {
     const res = await client.messages.create(params);

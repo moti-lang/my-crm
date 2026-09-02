@@ -13,7 +13,8 @@
  * הרצה:  npm run test:coverage
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
+import { codeOf } from './_code.mjs';
 import { join } from 'node:path';
 
 const DIR = 'supabase/tests';
@@ -33,7 +34,8 @@ const functions = execFileSync('psql', [...PSQL, `
 const sources = readdirSync(DIR)
   .filter((f) => f.endsWith('.sql') || f.endsWith('.mjs'))
   .filter((f) => f !== 'function-coverage.test.mjs')
-  .map((f) => readFileSync(join(DIR, f), 'utf8'))
+  // בלי הערות: פונקציה שמוזכרת בהערה אינה מכוסה בבדיקה.
+  .map((f) => codeOf(join(DIR, f)))
   .join('\n');
 
 /** טריגרים אינם נקראים בשם — מריצים אותם דרך INSERT/UPDATE על הטבלה. */

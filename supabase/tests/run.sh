@@ -22,6 +22,12 @@ node "$DIR/function-coverage.test.mjs" 2>&1 | grep -E "✓|✗|לכל פונקצ
 echo "═══ הבקשה ל-API ═══"
 node "$DIR/ai-wire.test.mjs" 2>&1 | grep -E "✓|✗|!|תקינה|נכשלו"
 
+echo "═══ מסירת התשובות ═══"
+node "$DIR/reply-delivery.test.mjs" 2>&1 | grep -E "✓|✗|מגיע לשליחה|נכשלו" | grep -v AI_DRY_RUN
+
+echo "═══ היגיינת הבדיקות ═══"
+node "$DIR/test-hygiene.test.mjs" 2>&1 | grep -E "✗|היגיינת|נכשלו"
+
 echo "═══ טוהר ai-command ═══"
 node "$DIR/ai-command-purity.test.mjs" 2>&1 | grep -E "✓|✗|נקייה|נכשלו"
 

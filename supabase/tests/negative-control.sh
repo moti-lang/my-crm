@@ -258,6 +258,29 @@ expect_fail_code "שינוי מנוע התבניות בצד אחד בלבד" \
   'sed -i "s/    .trim();/    ;/" "$F"' \
   "node supabase/tests/template-parity.test.mjs"
 
+# ★ הבקרה של הממצא: ניתוק החיבור בין ההחלטה לשליחה.
+#    זה בדיוק המצב שהיה בייצור — ההחלטה חושבה ואיש לא שלח אותה.
+expect_fail_code "ניתוק המסירה מ-wa-webhook" \
+  "$DIR/../functions/wa-webhook/index.ts" \
+  'sed -i "s|  const delivery = await deliverReply(|  const delivery = { delivered: false, reason: \"no_reply\" }; const _unused = (|" "$F"' \
+  "node supabase/tests/reply-delivery.test.mjs"
+
+expect_fail_code "deliverReply מפסיקה לשלוח בפועל" \
+  "$DIR/../functions/_shared/reply.ts" \
+  'sed -i "s|  const sent = await wa.sendText(phone, reply, idempotencyKey);|  const sent = { ok: true };|" "$F"' \
+  "node supabase/tests/reply-delivery.test.mjs"
+
+expect_fail_code "מסלול חדש בלי כיסוי מסירה" \
+  "$DIR/../functions/_shared/router.ts" \
+  "sed -i \"s|  const text = message.body.trim();|  const text = message.body.trim();\\n  if (text === '__NEW_ROUTE__') return { route: 'brand_new', caller: authorizedNumber, reply: 'x' } as never;|\" \"\$F\"" \
+  "node supabase/tests/reply-delivery.test.mjs"
+
+# ★ הכלל החדש: בדיקה שמחפשת מחרוזת שיכולה להופיע בהערה.
+expect_fail_code "בדיקה שקוראת מקור בלי להסיר הערות" \
+  "$DIR/ai-command-purity.test.mjs" \
+  "sed -i \"s|import { codeOf } from './_code.mjs';|import { codeOf } from './_code.mjs';\\nimport { readFileSync } from 'node:fs';\\nconst _raw = readFileSync('package.json', 'utf8');|\" \"\$F\"" \
+  "node supabase/tests/test-hygiene.test.mjs"
+
 # ★ בקרות תקרת הזמן. הדרישה: קריאה שלא חוזרת לא משאירה את השולחת בשקט.
 expect_fail_code "ביטול תקרת הזמן בקריאה למודל" \
   "$DIR/../functions/_shared/ai.ts" \
@@ -268,11 +291,6 @@ expect_fail_code "תלייה בלי תשובה לשולחת" \
   "$DIR/../functions/_shared/router.ts" \
   "sed -i \"s|      reply: 'רגע, בודקת…',|      reply: '',|\" \"\$F\"" \
   "node supabase/tests/command-router.test.mjs"
-
-expect_fail_code "התשובה מחושבת אך לא נשלחת" \
-  "$DIR/../functions/wa-webhook/index.ts" \
-  'sed -i "s|      .sendText(phone, reply, \`reply:\${message.providerMsgId}\`);|      .sendText(\"\", reply, \"x\");|" "$F"' \
-  "node supabase/tests/ai-wire.test.mjs"
 
 # ★ הבקרות של המסלול אל ה-API. שתיהן מכסות באג שעלה 60 קריאות כושלות.
 expect_fail_code "החזרת output_config שה-API דוחה" \

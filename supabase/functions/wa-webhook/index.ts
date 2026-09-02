@@ -13,6 +13,7 @@ import { alertOwner } from '../_shared/alerts.ts';
 import { readWaHealth, writeWaHealth } from '../_shared/health.ts';
 import { normalizePhone } from '../_shared/phone.ts';
 import { routeIncoming } from '../_shared/router.ts';
+import { deliverReply } from '../_shared/reply.ts';
 
 type Db = ReturnType<typeof adminClient>;
 
@@ -127,25 +128,13 @@ async function handleIncoming(db: Db, payload: unknown): Promise<Response> {
     console.log(`[wa-webhook] פרסור נכשל (${decision.parse.reason}) — לא נשמר דבר`);
   }
 
-  // ★ תשובה לשולחת. עד כאן הנתב הכריע ולא נאמר דבר החוצה — סוכן
-  // ששותק אחרי פקודה כספית הוא הכשל הגרוע ביותר במערכת הזאת:
-  // הניה לא יודעת אם ההוצאה נרשמה, ושולחת שוב.
-  const reply = 'reply' in decision ? decision.reply : undefined;
-  if (reply) {
-    // מפתח האידמפוטנטיות נגזר ממזהה ההודעה הנכנסת, כדי שמסירה חוזרת
-    // של אותו אירוע לא תייצר שתי תשובות.
-    const sent = await whatsappProvider()
-      .sendText(phone, reply, `reply:${message.providerMsgId}`);
-    if (!sent.ok) {
-      console.error(`[wa-webhook] התשובה לא יצאה: ${sent.error}`);
-      await alertOwner(db, {
-        kind: 'wa_reply_failed',
-        severity: 'warning',
-        title: 'תשובה לא יצאה בוואטסאפ',
-        body: `מסלול ${decision.route} למספר ${phone}. השולחת נשארה בלי תשובה.`,
-        meta: { route: decision.route, error: sent.error },
-      });
-    }
+  // ★ תשובה לשולחת. הלוגיקה ב-_shared/reply.ts כדי שבדיקה תוכל להריץ
+  //   אותה מול ספק מזויף ולהוכיח שכל reply באמת יוצא.
+  const delivery = await deliverReply(
+    db, whatsappProvider(), phone, decision, `reply:${message.providerMsgId}`,
+  );
+  if (delivery.delivered === false && delivery.reason === 'send_failed') {
+    console.error(`[wa-webhook] התשובה לא יצאה: ${delivery.error}`);
   }
 
   return json({ ok: true, stored: message.providerMsgId, route: decision.route });

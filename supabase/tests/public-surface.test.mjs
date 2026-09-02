@@ -8,7 +8,7 @@
  *
  * הרצה:  npm run test:public
  */
-import { readFileSync } from 'node:fs';
+import { codeOf, rawOf } from './_code.mjs';
 
 let fails = 0;
 const check = (label, ok, detail = '') => {
@@ -16,7 +16,7 @@ const check = (label, ok, detail = '') => {
   console.log(`  ${ok ? '✓' : '✗'} ${label}${ok || !detail ? '' : `\n      ${detail}`}`);
 };
 
-const app = readFileSync('src/App.tsx', 'utf8');
+const app = codeOf('src/App.tsx');
 
 // ─── המסלולים שמחוץ ל-AuthProvider ───
 // המבנה: <Routes> ציבורי, ובתוכו route אחד שעוטף את השאר ב-AuthProvider.
@@ -38,7 +38,7 @@ check('★ המסלול "*" עוטף את AuthProvider',
       'בלי זה כל מסך שאינו /a/:token נגיש בלי התחברות');
 
 // ─── דף האחראית אינו נוגע בטבלאות ───
-const sheet = readFileSync('src/pages/AttendanceSheet.tsx', 'utf8')
+const sheet = codeOf('src/pages/AttendanceSheet.tsx')
   .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 check('★ דף האחראית ניגש רק דרך RPC', !/\.from\(/.test(sheet),
       'הוא ניגש לטבלה ישירות — anon חסום מהן, אבל זו כוונה שגויה');
@@ -47,7 +47,9 @@ check('דף האחראית קורא לשתי ה-RPC בלבד',
 check('★ דף האחראית אינו מייבא את AuthProvider', !/AuthProvider|useAuth/.test(sheet));
 
 // ─── הרשמה עצמית סגורה בקונפיג ───
-const cfg = readFileSync('supabase/config.toml', 'utf8');
+// config.toml: הערות מתחילות ב-# — מסירים אותן כדי ש-enable_signup
+// בהערה לא ייחשב הגדרה.
+const cfg = rawOf('supabase/config.toml').replace(/#[^\n]*/g, ' ');
 check('★ enable_signup = false ב-config.toml', /enable_signup\s*=\s*false/.test(cfg));
 check('שתי הופעות (auth ו-auth.email)',
       (cfg.match(/enable_signup\s*=\s*false/g) ?? []).length >= 2);

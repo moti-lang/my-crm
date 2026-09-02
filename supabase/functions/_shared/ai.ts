@@ -56,6 +56,18 @@ query    → question_type: "debtors"|"income"|"profit"|"student_count"|"attenda
 - אם אינך בטוח מה נדרש — intent "unknown" עם confidence נמוך. לעולם אל תנחש סכום.
 - לעולם אל תמציא שמות של תלמידות או סניפים שלא הופיעו בהקשר.`;
 
+/**
+ * האם המודל מקבל temperature.
+ *
+ * הוסר במשפחות החדשות (Opus 5, Opus 4.8/4.7, Sonnet 5, Fable) ומוחזר 400.
+ * נתמך ב-4.6 ובמה שקדם לו, ובכלל זה haiku-4-5 שהוא ברירת המחדל.
+ * רשימת היתר ולא רשימת איסור: מודל חדש שלא מוכר יקבל את התנהגות
+ * ברירת המחדל של השרת במקום 400.
+ */
+export function supportsTemperature(model: string): boolean {
+  return /-4-6|-4-5|-3-/.test(model);
+}
+
 export function buildUserMessage(ctx: CommandContext): string {
   return [
     `הודעה: ${ctx.text}`,
@@ -90,8 +102,11 @@ class DryRunAiProvider implements AiProvider {
 
 class ClaudeAiProvider implements AiProvider {
   async parseCommand(ctx: CommandContext): Promise<ParseOutcome> {
-    // ברירת המחדל מהאפיון. ניתן להחליף בלי נגיעה בקוד.
-    const model = env('ANTHROPIC_MODEL') ?? 'claude-sonnet-4-6';
+    // ברירת המחדל מהאפיון, שנקבעה במדידה: haiku-4-5 החזיר 1,700ms בעקביות
+    // מול 2,500-4,500 של sonnet-4-6, ואיבד נקודה אחת מתוך 60 — בקלט זבל
+    // שנדחה ממילא. הסכומים 100% בשני המודלים.
+    // המשתנה נשאר כדי שאפשר יהיה להחליף בלי נגיעה בקוד אם יתגלו טעויות בשטח.
+    const model = env('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5';
 
     // מחוץ ל-try בכוונה: ביטול הבקשה עלול להגיע כשגיאה ולא כערך,
     // וה-catch למטה חייב לדעת להבדיל בין תלייה לבין כשל אמיתי.
@@ -139,9 +154,10 @@ class ClaudeAiProvider implements AiProvider {
         //   prefill — "This model does not support assistant message prefill".
         // מה שנשאר, ומספיק: הפרומפט מגדיר את החוזה, extractJson מסיר עטיפה,
         // ו-validateCommand מאמת כל תשובה ומחזיר כישלון כערך.
-        // דגימה דטרמיניסטית. נתמך ב-sonnet-4-6; במודלים חדשים יותר
-        // הפרמטר הוסר, ולכן הוא נשלח רק כשהמודל מכיר אותו.
-        ...(model.includes('4-6') ? { temperature: 0 } : {}),
+        // דגימה דטרמיניסטית. הפרמטר הוסר במודלים החדשים ומוחזר 400,
+        // ולכן הוא נשלח רק למשפחות שמכירות אותו. פרסור פקודות כספיות
+        // רוצה את אותה תשובה לאותה הודעה.
+        ...(supportsTemperature(model) ? { temperature: 0 } : {}),
       } as never, { signal: abort.signal })]).finally(() => clearTimeout(timer));
 
       if (response === '__timeout__') return timeoutOutcome();

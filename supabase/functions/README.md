@@ -105,7 +105,7 @@ curl -X POST "$WA_SERVER_URL/api/webhooks" -H "x-api-key: $WA_API_KEY" \
 מפתח Anthropic ובלי לשלם על אף קריאה**. הפלטים כוללים את המקרים
 הפגומים — הם החשובים ביותר.
 
-המודל נקבע ב-`ANTHROPIC_MODEL` (ברירת מחדל `claude-sonnet-4-6` לפי
+המודל נקבע ב-`ANTHROPIC_MODEL` (ברירת מחדל `claude-haiku-4-5` לפי
 האפיון). ה-SDK נטען דינמית, כך שמסלול ההרצה היבשה לא טוען אותו כלל.
 
 מה **לא** נבנה עדיין, ובכוונה: אישור, ביצוע, ו-rollback. אלה 6ב,

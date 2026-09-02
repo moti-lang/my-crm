@@ -8,12 +8,9 @@
  *
  * הרצה:  npm run test:alerts
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-
-/** בודקים קוד, לא הערות. הערה שמזכירה wa-send היא תיעוד, לא תלות. */
-const stripComments = (src) =>
-  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+import { codeOf } from './_code.mjs';
 
 const FUNCTIONS = 'supabase/functions';
 let fails = 0;
@@ -23,7 +20,7 @@ const check = (label, ok, detail = '') => {
 };
 
 // ─── alerts.ts אינו נוגע בוואטסאפ ───
-const alerts = stripComments(readFileSync(join(FUNCTIONS, '_shared/alerts.ts'), 'utf8'));
+const alerts = codeOf(join(FUNCTIONS, '_shared/alerts.ts'));
 check('★ alerts.ts אינו מייבא את wa.ts', !/from\s+['"]\.\/wa\.ts['"]/.test(alerts));
 check('★ alerts.ts אינו קורא ל-wa-send', !/wa-send/.test(alerts));
 check('★ alerts.ts אינו משתמש ב-whatsappProvider', !/whatsappProvider|sendText/.test(alerts));
@@ -43,7 +40,7 @@ function walk(dir) {
 }
 
 for (const file of walk(FUNCTIONS)) {
-  const src = stripComments(readFileSync(file, 'utf8'));
+  const src = codeOf(file);
   if (!/alertOwner/.test(src)) continue;
   const usesWa = /whatsappProvider\(\)\s*\.\s*sendText|fetch\([^)]*wa-send/.test(src);
   check(
@@ -54,7 +51,7 @@ for (const file of walk(FUNCTIONS)) {
 }
 
 // ─── cron-wa-health אינו נשען על הוואטסאפ להתריע ───
-const health = stripComments(readFileSync(join(FUNCTIONS, 'cron-wa-health/index.ts'), 'utf8'));
+const health = codeOf(join(FUNCTIONS, 'cron-wa-health/index.ts'));
 check('★ cron-wa-health מתריע רק דרך alertOwner', !/sendText|wa-send/.test(health));
 check('cron-wa-health קורא checkHealth בלבד מהספק', /checkHealth/.test(health));
 

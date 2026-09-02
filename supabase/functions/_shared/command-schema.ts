@@ -90,7 +90,7 @@ export const MIN_CONFIDENCE = 0.6;
  * מחלץ את אובייקט ה-JSON מתוך תשובת המודל.
  *
  * הפרומפט מבקש JSON בלבד, אבל אין שום דבר שאוכף את זה: ה-API דוחה את
- * הסכימה שלנו כ-output_config, ו-claude-sonnet-4-6 אינו תומך ב-prefill
+ * הסכימה שלנו כ-output_config, והמודלים אינם תומכים ב-prefill
  * ("This model does not support assistant message prefill"). לכן החילוץ
  * הוא ההגנה: גדר markdown או משפט פתיחה לא יהפכו פקודה תקינה לכישלון.
  *

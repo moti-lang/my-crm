@@ -8,10 +8,7 @@
  *
  * הרצה:  npm run test:purity
  */
-import { readFileSync } from 'node:fs';
-
-const stripComments = (src) =>
-  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+import { codeOf } from './_code.mjs';
 
 let fails = 0;
 const check = (label, ok, detail = '') => {
@@ -19,7 +16,7 @@ const check = (label, ok, detail = '') => {
   console.log(`  ${ok ? '✓' : '✗'} ${label}${ok || !detail ? '' : `\n      ${detail}`}`);
 };
 
-const cmd = stripComments(readFileSync('supabase/functions/ai-command/index.ts', 'utf8'));
+const cmd = codeOf('supabase/functions/ai-command/index.ts');
 
 check('★ ai-command אינה מייבאת לקוח מסד',   !/from\s+['"]\.\.\/_shared\/supabase\.ts['"]/.test(cmd));
 check('★ ai-command אינה קוראת ל-adminClient', !/adminClient/.test(cmd));
@@ -30,7 +27,7 @@ check('★ ai-command אינה כותבת ל-commands',    !/\bcommands\b/.test(
 check('ai-command משתמשת בספק המוחלף',         /aiProvider/.test(cmd));
 
 // הספק עצמו — שני המימושים — גם הוא חייב להיות נקי ממסד.
-const ai = stripComments(readFileSync('supabase/functions/_shared/ai.ts', 'utf8'));
+const ai = codeOf('supabase/functions/_shared/ai.ts');
 check('★ שכבת הספק אינה מייבאת לקוח מסד',    !/supabase\.ts|adminClient|createClient/.test(ai));
 check('★ שכבת הספק אינה נוגעת בטבלאות',       !/\.from\(['"]/.test(ai));
 check('הספק תומך בהרצה יבשה כברירת מחדל',     /AI_DRY_RUN/.test(ai));
@@ -40,12 +37,12 @@ check('★ ה-SDK נטען דינמית — מסלול יבש לא טוען או
       /await import\(['"]npm:@anthropic-ai\/sdk/.test(ai));
 
 // ולידציה — גם היא טהורה
-const schema = stripComments(readFileSync('supabase/functions/_shared/command-schema.ts', 'utf8'));
+const schema = codeOf('supabase/functions/_shared/command-schema.ts');
 check('★ שכבת הוולידציה אינה נוגעת במסד', !/supabase|\.from\(|adminClient/.test(schema));
 check('אין output_config — הסכימה נדחתה על ידי ה-API (ראה ai-wire.test.mjs)', !/output_config:/.test(ai));
 
 // בדיקות ההרשאה — פונקציה טהורה
-const auth = stripComments(readFileSync('supabase/functions/_shared/authorize.ts', 'utf8'));
+const auth = codeOf('supabase/functions/_shared/authorize.ts');
 check('★ בדיקות ההרשאה טהורות מרשת וממסד',
       !/supabase|fetch\(|\.from\(|adminClient/.test(auth));
 

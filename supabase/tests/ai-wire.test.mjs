@@ -20,14 +20,17 @@
  *   2. חיה — קריאה אמיתית אחת שעוברת את אותו validateShape של הייצור.
  *      רצה רק עם ANTHROPIC_API_KEY.
  */
-import { readFileSync } from 'node:fs';
+import { codeOf, rawOf } from './_code.mjs';
+import { loadFromSource } from './_from-source.mjs';
+
+const supportsTemperature = loadFromSource('ai.ts', 'supportsTemperature');
 
 let failed = 0;
 const ok  = (m) => console.log(`  ✓ ${m}`);
 const bad = (m) => { console.log(`  ✗ ${m}`); failed++; };
 
-const ai    = readFileSync('supabase/functions/_shared/ai.ts', 'utf8');
-const bench = readFileSync('supabase/tests/model-benchmark.mjs', 'utf8');
+const ai    = codeOf('supabase/functions/_shared/ai.ts');
+const bench = codeOf('supabase/tests/model-benchmark.mjs');
 
 // ─── שכבה 1: הייצור וההשוואה מדברים אותה שפה ───
 for (const [name, src] of [['ai.ts', ai], ['model-benchmark.mjs', bench]]) {
@@ -44,7 +47,7 @@ for (const [name, src] of [['ai.ts', ai], ['model-benchmark.mjs', bench]]) {
 }
 
 // בלי אכיפה בצד ה-API, החילוץ הוא ההגנה היחידה מפני עטיפה.
-const cs = readFileSync('supabase/functions/_shared/command-schema.ts', 'utf8');
+const cs = codeOf('supabase/functions/_shared/command-schema.ts');
 if (/JSON\.parse\(extractJson\(raw\)\)/.test(cs))
   ok('validateCommand מחלץ לפני JSON.parse');
 else bad('★ validateCommand לא מחלץ — גדר markdown תפיל פקודה תקינה');
@@ -72,15 +75,13 @@ if (/if \(timedOut\) return timeoutOutcome\(\)/.test(ai))
   ok('ai.ts: ביטול שנזרק עדיין מסווג כ-timeout');
 else bad('★ ai.ts: ביטול שנזרק ידווח כ-provider_error ולא יפעיל את התשובה');
 
-const router = readFileSync('supabase/functions/_shared/router.ts', 'utf8');
+const router = codeOf('supabase/functions/_shared/router.ts');
 if (/route: 'command_timeout'/.test(router) && /רגע, בודקת/.test(router))
   ok('router.ts: תלייה מחזירה תשובה לשולחת');
 else bad('★ router.ts: תלייה לא מייצרת תשובה');
 
-const hook = readFileSync('supabase/functions/wa-webhook/index.ts', 'utf8');
-if (/sendText\(phone, reply/.test(hook))
-  ok('wa-webhook: התשובה באמת נשלחת');
-else bad('★ wa-webhook: התשובה מחושבת ולא נשלחת — הסוכן שותק בפועל');
+// שליחת התשובה בפועל נבדקת ב-reply-delivery.test.mjs, שמריץ את המסירה
+// האמיתית מול ספק מזויף. אין כאן כפילות.
 
 // ─── שכבה 2: קריאה אמיתית ───
 // זו הבדיקה היחידה שתופסת שינוי בצד ה-API. פיקסצ'רים מוקלטים לא יתפסו
@@ -95,15 +96,11 @@ if (!process.env.ANTHROPIC_API_KEY) {
   console.log('  ! אין ANTHROPIC_API_KEY — הקריאה האמיתית דולגה');
   if (process.env.CI) bad('★ ב-CI הקריאה האמיתית חובה. חסר ANTHROPIC_API_KEY.');
 } else {
-  const SYSTEM = ai.match(/export const COMMAND_SYSTEM_PROMPT = `([\s\S]*?)`;/)[1];
+  const SYSTEM = rawOf('supabase/functions/_shared/ai.ts').match(/export const COMMAND_SYSTEM_PROMPT = `([\s\S]*?)`;/)[1];
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  // אותה פונקציית חילוץ של הייצור, מהמקור.
-  const extract = Function('"use strict"; return (' +
-    cs.match(/export function extractJson\(raw: string\): string \{[\s\S]*?\n\}/)[0]
-      .replace('export function extractJson(raw: string): string', 'function extractJson(raw)')
-    + ')')();
+  const extract = loadFromSource('command-schema.ts', 'extractJson');
 
-  const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6';
+  const model = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5';
   const user = [
     'הודעה: תרשמי 450 הגברה ביתר',
     `התאריך היום: ${new Date().toISOString().slice(0, 10)}`,
@@ -124,7 +121,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
       res = await client.messages.create({
         model, max_tokens: 800, system: SYSTEM,
         messages: [{ role: 'user', content: user }],
-        ...(model.includes('4-6') ? { temperature: 0 } : {}),
+        ...(supportsTemperature(model) ? { temperature: 0 } : {}),
       });
     } catch (e) {
       bad(`★ קריאה ${i} נכשלה: ${String(e.message).slice(0, 200)}`);
