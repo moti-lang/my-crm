@@ -113,6 +113,32 @@ expect_fail "הסרת מפתח הייחודיות של התזכורות (הצפ�
   "drop index reminders_dedupe_idx" \
   "07_reminder_queue_proof.sql"
 
+# ★ הבקרה המרכזית של סבב 6א: כתיבה למסד בתוך מסלול כישלון הפרסור.
+expect_fail_code "כתיבה למסד בתוך מסלול כישלון הפרסור" \
+  "$DIR/../functions/_shared/router.ts" \
+  'sed -i "s|    return { route: .command_parse_failed., caller: authorizedNumber, parse };|    await db.from(\"commands\").insert({ phone: message.phone, raw_text: message.body, status: \"failed\" }); return { route: \"command_parse_failed\", caller: authorizedNumber, parse };|" "$F"' \
+  "node supabase/tests/command-router.test.mjs"
+
+expect_fail_code "לקוח מסד בתוך ai-command" \
+  "$DIR/../functions/ai-command/index.ts" \
+  'sed -i "1i import { adminClient } from \"../_shared/supabase.ts\";" "$F"' \
+  "node supabase/tests/ai-command-purity.test.mjs"
+
+expect_fail_code "ביטול סף הביטחון" \
+  "$DIR/../functions/_shared/command-schema.ts" \
+  'sed -i "s|export const MIN_CONFIDENCE = 0.6;|export const MIN_CONFIDENCE = 0;|" "$F"' \
+  "node supabase/tests/command-router.test.mjs"
+
+expect_fail_code "ביטול בדיקת המחיקה בהרשאות" \
+  "$DIR/../functions/_shared/authorize.ts" \
+  'sed -i "s|if (isDeletion(command) \&\& !caller.can_delete) {|if (false) {|" "$F"' \
+  "node supabase/tests/command-router.test.mjs"
+
+expect_fail_code "ביטול הגבלת scope=finance" \
+  "$DIR/../functions/_shared/authorize.ts" \
+  "sed -i \"s|if (caller.scope === 'finance' \&\& !FINANCE_INTENTS.has(command.intent)) {|if (false) {|\" \"\$F\"" \
+  "node supabase/tests/command-router.test.mjs"
+
 expect_fail_code "שינוי מנוע התבניות בצד אחד בלבד" \
   "$DIR/../functions/_shared/template.ts" \
   'sed -i "s/    .trim();/    ;/" "$F"' \

@@ -8,6 +8,12 @@ for suite in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_
     | grep -E '✓|✗|ERROR|═|עברו|עקביים|:$' | sed 's/^psql.*NOTICE:  //'
 done
 
+echo "═══ טוהר ai-command ═══"
+node "$DIR/ai-command-purity.test.mjs" 2>&1 | grep -E "✓|✗|נקייה|נכשלו"
+
+echo "═══ נתב הפקודות ═══"
+node "$DIR/command-router.test.mjs" 2>&1 | grep -E "✓|✗|עברו|נכשלו" | grep -v AI_DRY_RUN
+
 echo "═══ מנוע התבניות ═══"
 node "$DIR/template-parity.test.mjs" 2>&1 | grep -E "✓|✗|זהים|הבדלים"
 

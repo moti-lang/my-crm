@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.cron-summary]
 verify_jwt = false
+
+[functions.ai-command]
+verify_jwt = true              # נקראת מהמערכת בלבד, לא מהוובהוק הציבורי

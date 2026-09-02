@@ -12,6 +12,7 @@ import { whatsappProvider, verifyHubSignature } from '../_shared/wa.ts';
 import { alertOwner } from '../_shared/alerts.ts';
 import { readWaHealth, writeWaHealth } from '../_shared/health.ts';
 import { normalizePhone } from '../_shared/phone.ts';
+import { routeIncoming } from '../_shared/router.ts';
 
 type Db = ReturnType<typeof adminClient>;
 
@@ -107,13 +108,25 @@ async function handleIncoming(db: Db, payload: unknown): Promise<Response> {
     throw new Error(error.message);
   }
 
-  // ─── 3. עיבוד. הניתוב לפקודות ולסוכן הלקוחות נבנה בסבבים 6 ו-7. ───
   await db.from('conversations').upsert(
     { phone, contact_name: message.contactName, last_message_at: message.receivedAt },
     { onConflict: 'phone' },
   );
 
-  return json({ ok: true, stored: message.providerMsgId });
+  // ─── 3. ניתוב. הלוגיקה עצמה ב-_shared/router.ts כדי שתהיה בדיקה
+  //        שמריצה אותה מול מסד מזויף ומתעדת כל כתיבה. ───
+  const decision = await routeIncoming(
+    db,
+    { alert: (a) => alertOwner(db, a) },
+    { phone, body: message.body },
+  );
+
+  if (decision.route === 'command_parse_failed') {
+    // לא נכתב דבר. התשובה לשולחת ושמירת הפקודה הן של 6ב.
+    console.log(`[wa-webhook] פרסור נכשל (${decision.parse.reason}) — לא נשמר דבר`);
+  }
+
+  return json({ ok: true, stored: message.providerMsgId, route: decision.route });
 }
 
 // ─────────────────────── שינוי מצב החיבור ───────────────────────
