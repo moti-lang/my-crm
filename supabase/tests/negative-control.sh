@@ -67,6 +67,26 @@ expect_fail "הסרת האינדקס שמונע הודעות כפולות" \
   "drop index wa_messages_provider_msg_id_uniq" \
   "04_wa_dedupe_proof.sql"
 
+# ─── חורים ברמת הקוד, לא ברמת המסד ───
+# expect_fail_code <תיאור> <קובץ> <שורה לזריקה> <פקודת בדיקה>
+expect_fail_code() {
+  local label="$1" file="$2" inject="$3" cmd="$4"
+  cp "$file" "$file.bak"
+  printf '\n%s\n' "$inject" >> "$file"
+  if (cd "$DIR/../.." && eval "$cmd") >/dev/null 2>&1; then
+    echo "  ✗ $label — החור נפתח והבדיקה עדיין עברה!"
+    fails=$((fails+1))
+  else
+    echo "  ✓ $label — הבדיקה נפלה כמצופה"
+  fi
+  mv "$file.bak" "$file"
+}
+
+expect_fail_code "חיבור ערוץ ההתראות לוואטסאפ" \
+  "$DIR/../functions/_shared/alerts.ts" \
+  'export async function badAlert(){ await fetch("/functions/v1/wa-send"); }' \
+  "node supabase/tests/alert-independence.test.mjs"
+
 "$DIR/reset.sh" >/dev/null
 echo "───────────────────────────────────────────────"
 if [ "$fails" -eq 0 ]; then
