@@ -11,6 +11,7 @@
     "db:reset": "supabase db reset && npm run seed:users",
     "db:reset:local": "./supabase/tests/reset.sh",
     "seed:users": "node scripts/seed-users.mjs",
+    "seed:rotate": "node scripts/rotate-seed-passwords.mjs",
     "db:test": "./supabase/tests/run.sh",
     "db:test:negative": "./supabase/tests/negative-control.sh",
     "gen:types": "node scripts/gen-types.mjs --from-local-postgres > src/lib/database.types.ts",
