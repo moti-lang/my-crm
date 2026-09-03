@@ -20,7 +20,7 @@ function readInput() {
   const sql = readFileSync(new URL('./introspect.sql', import.meta.url), 'utf8');
   return execFileSync(
     'psql',
-    ['-h', '/tmp', '-p', '5433', '-U', 'postgres', '-d', 'teichtal', '-tAqc', sql],
+    ['-h', process.env.PGHOST ?? '/tmp', '-p', process.env.PGPORT ?? '5433', '-U', process.env.PGUSER ?? 'postgres', '-d', 'teichtal', '-tAqc', sql],
     { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
   );
 }

@@ -18,7 +18,9 @@ import { codeOf } from './_code.mjs';
 import { join } from 'node:path';
 
 const DIR = 'supabase/tests';
-const PSQL = ['-h', '/tmp', '-p', '5433', '-U', 'postgres', '-d', 'teichtal', '-tAc'];
+// אותם משתני סביבה כמו reset.sh ו-run.sh: מקומית סוקט ב-/tmp, ב-CI localhost.
+const PSQL = ['-h', process.env.PGHOST ?? '/tmp', '-p', process.env.PGPORT ?? '5433',
+  '-U', process.env.PGUSER ?? 'postgres', '-d', 'teichtal', '-tAc'];
 
 /** פונקציות הייצור — לא עזרי הבדיקה שנוצרים ונמחקים בתוך ההרצה. */
 const functions = execFileSync('psql', [...PSQL, `
