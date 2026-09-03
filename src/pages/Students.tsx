@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react';
 import { useStudents, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
 import { useBranches } from '@/hooks/queries';
 import { StudentDrawer } from '@/components/StudentDrawer';
+import { ImportStudents } from '@/components/ImportStudents';
+import { exportXlsx } from '@/lib/export';
+import type { Column } from '@/lib/export-core';
 import { formatILS, formatPhone } from '@/lib/format';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
 import type { Views } from '@/lib/database.types';
@@ -22,6 +25,19 @@ const COLUMNS: { key: SortKey | null; label: string }[] = [
   { key: 'attendance_pct', label: 'נוכחות' },
 ];
 
+const EXPORT_COLUMNS: Column<Student>[] = [
+  { label: 'שם', value: (s) => s.full_name },
+  { label: 'סניף', value: (s) => s.branch_name },
+  { label: 'כיתה', value: (s) => s.grade ?? '' },
+  { label: 'הורה', value: (s) => s.parent_name ?? '' },
+  { label: 'טלפון', value: (s) => (s.parent_phone ? formatPhone(s.parent_phone) : '') },
+  { label: 'סטטוס', value: (s) => (s.status ? STATUS_LABEL[s.status as StudentStatus] : '') },
+  { label: 'אמורה', value: (s) => Number(s.due ?? 0), numeric: true },
+  { label: 'שילמה', value: (s) => Number(s.paid ?? 0), numeric: true },
+  { label: 'יתרה', value: (s) => Number(s.balance ?? 0), numeric: true },
+  { label: 'נוכחות %', value: (s) => s.attendance_pct, numeric: true },
+];
+
 export function Students() {
   const students = useStudents();
   const branches = useBranches();
@@ -31,6 +47,7 @@ export function Students() {
   const [status, setStatus] = useState('');
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'full_name', dir: 'asc' });
   const [selected, setSelected] = useState<Student | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -63,10 +80,21 @@ export function Students() {
     <div className="space-y-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-2xl">תלמידות</h1>
-        <p className="text-sm text-soft">
-          {students.isLoading ? 'טוען…' : `${rows.length} מתוך ${students.data?.length ?? 0}`}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-soft">
+            {students.isLoading ? 'טוען…' : `${rows.length} מתוך ${students.data?.length ?? 0}`}
+          </p>
+          <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={rows.length === 0}
+            onClick={() => exportXlsx('תלמידות', [{ name: 'תלמידות', columns: EXPORT_COLUMNS as Column<unknown>[], rows }])}>
+            ייצוא
+          </button>
+          <button type="button" className="btn-primary px-3 py-1 text-xs" onClick={() => setImporting((v) => !v)} aria-pressed={importing}>
+            ייבוא אקסל
+          </button>
+        </div>
       </header>
+
+      {importing && <ImportStudents onClose={() => setImporting(false)} />}
 
       <div className="grid gap-2 sm:grid-cols-3">
         <input

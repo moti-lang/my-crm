@@ -236,6 +236,28 @@ expect_fail_code "wa-webhook מפסיק לנתב לקוחות לסוכן" \
   'sed -i "s/? await answerCustomer(db, { alert: (a) => alertOwner(db, a) }, { phone, body: message.body })/? decision/" "$F"' \
   "node supabase/tests/customer-agent.test.mjs"
 
+# ─── ייבוא תלמידות ───
+
+expect_fail_code "הייבוא מקבל טלפון לא תקין" \
+  "$DIR/../../src/lib/import-core.ts" \
+  'sed -i "s/if (phone \&\& !isIsraeliMobile(phone)) err/if (false) err/" "$F"' \
+  "node supabase/tests/students-import.test.mjs"
+
+expect_fail_code "הייבוא ממציא סניף שאינו קיים" \
+  "$DIR/../../src/lib/import-core.ts" \
+  'sed -i "s/else if (!branch) err(.branch., \`סניף לא מוכר: \"\${raw.branch}\"\`, raw.branch);//" "$F"' \
+  "node supabase/tests/students-import.test.mjs"
+
+expect_fail_code "הייבוא מכניס תלמידה שכבר קיימת" \
+  "$DIR/../../src/lib/import-core.ts" \
+  'sed -i "s/if (existingKeys.has(key)) err/if (false) err/" "$F"' \
+  "node supabase/tests/students-import.test.mjs"
+
+expect_fail_code "הרכיב מייבא גם שורות עם שגיאות" \
+  "$DIR/../../src/components/ImportStudents.tsx" \
+  'sed -i "s/rows: valid.map((p) => ({ line: p.line, row: p.row! }))/rows: parsed.map((p) => ({ line: p.line, row: p.row! }))/" "$F"' \
+  "node supabase/tests/students-import.test.mjs"
+
 expect_fail "JWT בלי פרופיל רואה סניפים" \
   "create policy hole_branches_any_jwt on branches for select using (auth.uid() is not null)" \
   "11_allowlist_proof.sql"

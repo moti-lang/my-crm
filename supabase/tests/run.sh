@@ -46,5 +46,8 @@ node "$DIR/customer-agent.test.mjs" 2>&1 | grep -E "✗|התרחישים|נכש�
 echo "═══ ייצוא הדוחות ═══"
 node "$DIR/reports-export.test.mjs" 2>&1 | grep -E "✗|מייצאים|נכשלו"
 
+echo "═══ ייבוא תלמידות ═══"
+node "$DIR/students-import.test.mjs" 2>&1 | grep -E "✗|ייבוא:|נכשלו"
+
 echo "═══ חוזה whatsapp-hub ═══"
 node "$DIR/wa-contract.test.mjs" 2>&1 | grep -E "✓|✗|עברו|נכשלו"
