@@ -89,7 +89,8 @@ else bad('★ router.ts: תלייה לא מייצרת תשובה');
 //
 // שלוש קריאות ולא אחת: הסף הוא על החציון. קריאה בודדת איטית היא רעש
 // רשת ולא רגרסיה, וסף שנופל על רעש הופך את ה-CI לרועש ומתעלמים ממנו.
-const MAX_MS = Number(process.env.AI_CONTRACT_MAX_MS ?? '3000');
+// || ולא ??: vars שלא הוגדר ב-CI מגיע כמחרוזת ריקה.
+const MAX_MS = Number(process.env.AI_CONTRACT_MAX_MS || '3000');
 const SAMPLES = Number(process.env.AI_CONTRACT_SAMPLES ?? '3');
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -100,7 +101,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const extract = loadFromSource('command-schema.ts', 'extractJson');
 
-  const model = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5';
+  const model = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
   const user = [
     'הודעה: תרשמי 450 הגברה ביתר',
     `התאריך היום: ${new Date().toISOString().slice(0, 10)}`,

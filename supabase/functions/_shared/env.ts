@@ -1,6 +1,9 @@
 /** קריאת משתני סביבה. אין מפתחות בקוד, ואין מפתחות בפרונט. */
 export function env(key: string): string | undefined {
-  return Deno.env.get(key);
+  // סוד ריק שווה לסוד חסר. ב-CI, vars.X שלא הוגדר מגיע כמחרוזת ריקה —
+  // ו-`?? 'ברירת מחדל'` היה שולח model="" ל-API.
+  const v = Deno.env.get(key);
+  return v === undefined || v === '' ? undefined : v;
 }
 
 export function requireEnv(key: string): string {
