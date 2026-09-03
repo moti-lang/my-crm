@@ -12,8 +12,10 @@ import { whatsappProvider, verifyHubSignature } from '../_shared/wa.ts';
 import { alertOwner } from '../_shared/alerts.ts';
 import { readWaHealth, writeWaHealth } from '../_shared/health.ts';
 import { normalizePhone } from '../_shared/phone.ts';
+import { WA_DRY_RUN } from '../_shared/env.ts';
 import { routeIncoming } from '../_shared/router.ts';
 import { deliverReply } from '../_shared/reply.ts';
+import { answerCustomer } from '../_shared/customer.ts';
 
 type Db = ReturnType<typeof adminClient>;
 
@@ -128,16 +130,33 @@ async function handleIncoming(db: Db, payload: unknown): Promise<Response> {
     console.log(`[wa-webhook] פרסור נכשל (${decision.parse.reason}) — לא נשמר דבר`);
   }
 
+  // ─── 4. מסלול הלקוחות (סעיף 4.4). מספר שאינו מורשה מגיע לכאן. ───
+  //   הלוגיקה ב-_shared/customer.ts, מאותה סיבה שהנתב שם: בדיקה מול
+  //   מסד מזויף שמתעדת כל כתיבה.
+  const deliverable = decision.route === 'customer'
+    ? await answerCustomer(db, { alert: (a) => alertOwner(db, a) }, { phone, body: message.body })
+    : decision;
+
   // ★ תשובה לשולחת. הלוגיקה ב-_shared/reply.ts כדי שבדיקה תוכל להריץ
   //   אותה מול ספק מזויף ולהוכיח שכל reply באמת יוצא.
   const delivery = await deliverReply(
-    db, whatsappProvider(), phone, decision, `reply:${message.providerMsgId}`,
+    db, whatsappProvider(), phone, deliverable, `reply:${message.providerMsgId}`,
   );
   if (delivery.delivered === false && delivery.reason === 'send_failed') {
     console.error(`[wa-webhook] התשובה לא יצאה: ${delivery.error}`);
   }
+  // התשובה נרשמת כהודעה יוצאת — זו ההיסטוריה שמסך השיחות מציג, וזה
+  // מה שהסוכן רואה בהודעה הבאה. בלי זה כל הודעה היא "הראשונה בשיחה".
+  if (delivery.delivered) {
+    await db.from('wa_messages').insert({
+      direction: 'out', phone, body: delivery.reply,
+      status: WA_DRY_RUN ? 'queued' : 'sent',
+      meta: { route: deliverable.route, reply_to: message.providerMsgId, dry_run: WA_DRY_RUN },
+    });
+    await db.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('phone', phone);
+  }
 
-  return json({ ok: true, stored: message.providerMsgId, route: decision.route });
+  return json({ ok: true, stored: message.providerMsgId, route: deliverable.route });
 }
 
 // ─────────────────────── שינוי מצב החיבור ───────────────────────

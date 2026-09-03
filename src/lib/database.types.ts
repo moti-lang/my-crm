@@ -380,6 +380,7 @@ export type Database = {
           is_human_takeover: boolean;
           last_message_at: string | null;
           created_at: string;
+          lead_state: Json | null;
         };
         Insert: {
           id?: string;
@@ -389,6 +390,7 @@ export type Database = {
           is_human_takeover?: boolean;
           last_message_at?: string | null;
           created_at?: string;
+          lead_state?: Json | null;
         };
         Update: {
           id?: string;
@@ -398,6 +400,7 @@ export type Database = {
           is_human_takeover?: boolean;
           last_message_at?: string | null;
           created_at?: string;
+          lead_state?: Json | null;
         };
         Relationships: [
           {

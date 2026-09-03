@@ -36,6 +36,21 @@ check('יש שני מימושים לספק',
 check('★ ה-SDK נטען דינמית — מסלול יבש לא טוען אותו',
       /await import\(['"]npm:@anthropic-ai\/sdk/.test(ai));
 
+// ─── סוכן הלקוחות: אותם כללים ───
+const ans = codeOf('supabase/functions/ai-answer/index.ts');
+check('★ ai-answer אינה מייבאת לקוח מסד',   !/from\s+['"]\.\.\/_shared\/supabase\.ts['"]/.test(ans));
+check('★ ai-answer אינה קוראת ל-adminClient', !/adminClient|createClient/.test(ans));
+check('★ ai-answer אינה נוגעת בטבלאות',       !/\.from\(/.test(ans));
+check('ai-answer משתמשת בספק המוחלף',         /answerProvider/.test(ans));
+const answerProviderSrc = codeOf('supabase/functions/_shared/answer.ts');
+check('★ ספק התשובות אינו מייבא לקוח מסד',   !/supabase\.ts|adminClient|createClient/.test(answerProviderSrc));
+check('★ ספק התשובות אינו נוגע בטבלאות',      !/\.from\(['"]/.test(answerProviderSrc));
+check('ספק התשובות: שני מימושים והרצה יבשה',  /class DryRunAnswerProvider/.test(answerProviderSrc) && /class ClaudeAnswerProvider/.test(answerProviderSrc) && /AI_DRY_RUN/.test(answerProviderSrc));
+check('★ ספק התשובות טוען את ה-SDK דינמית',   /await import\(['"]npm:@anthropic-ai\/sdk/.test(answerProviderSrc));
+check('ספק התשובות: אין output_config ואין prefill', !/output_config\s*:/.test(answerProviderSrc) && !/role:\s*'assistant'/.test(answerProviderSrc));
+const answerSchema = codeOf('supabase/functions/_shared/answer-schema.ts');
+check('★ סכימת התשובות טהורה', !/supabase|\.from\(|fetch\(/.test(answerSchema));
+
 // ולידציה — גם היא טהורה
 const schema = codeOf('supabase/functions/_shared/command-schema.ts');
 check('★ שכבת הוולידציה אינה נוגעת במסד', !/supabase|\.from\(|adminClient/.test(schema));

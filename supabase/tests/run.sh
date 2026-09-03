@@ -40,6 +40,9 @@ node "$DIR/command-race.test.mjs" 2>&1 | grep -E "✓|✗|עברו|נכשלו"
 echo "═══ מנוע התבניות ═══"
 node "$DIR/template-parity.test.mjs" 2>&1 | grep -E "✓|✗|זהים|הבדלים"
 
+echo "═══ סוכן הלקוחות ═══"
+node "$DIR/customer-agent.test.mjs" 2>&1 | grep -E "✗|התרחישים|נכשלו"
+
 echo "═══ ייצוא הדוחות ═══"
 node "$DIR/reports-export.test.mjs" 2>&1 | grep -E "✗|מייצאים|נכשלו"
 

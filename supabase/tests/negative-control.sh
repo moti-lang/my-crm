@@ -204,6 +204,38 @@ expect_fail_code "הייצוא מוציא סכום כטקסט מעוצב במק�
   'sed -i "s/{ label: .רווח., value: (r) => n(r.profit), numeric: true },/{ label: \"רווח\", value: (r) => formatILS(n(r.profit)), numeric: true },/" "$F"' \
   "node supabase/tests/reports-export.test.mjs"
 
+# ─── סוכן הלקוחות ───
+
+expect_fail_code "הסרת שומר המחירים מהסוכן" \
+  "$DIR/../../supabase/functions/_shared/customer.ts" \
+  'sed -i "s/if (!mayQuotePrices \&\& quotesPrice(reply)) {/if (false) {/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
+expect_fail_code "הסוכן עונה גם בהשתלטות אנושית" \
+  "$DIR/../../supabase/functions/_shared/customer.ts" \
+  'sed -i "s/if (conversation?.is_human_takeover) {/if (false) {/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
+expect_fail_code "שאלה ללא מענה לא נרשמת ולא מתריעה" \
+  "$DIR/../../supabase/functions/_shared/customer.ts" \
+  'sed -i "s/if (answer.kind === .no_answer.) {/if (answer.kind === \"no_answer\") { return { route: \"customer_no_answer\", phone, reply: NO_ANSWER_REPLY }; }\n  if (false) {/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
+expect_fail_code "תלמידה נוצרת גם כשהליד לא שלם" \
+  "$DIR/../../supabase/functions/_shared/customer.ts" \
+  'sed -i "s/if (!isLeadComplete(merged) || !branch) {/if (!branch) {/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
+expect_fail_code "פלט פגום של המודל מגיע להורה" \
+  "$DIR/../../supabase/functions/_shared/answer-schema.ts" \
+  'sed -i "s/if (typeof v.reply !== .string.) problems.push(.reply: חייב להיות מחרוזת.);/problems.length = 0;/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
+expect_fail_code "wa-webhook מפסיק לנתב לקוחות לסוכן" \
+  "$DIR/../../supabase/functions/wa-webhook/index.ts" \
+  'sed -i "s/? await answerCustomer(db, { alert: (a) => alertOwner(db, a) }, { phone, body: message.body })/? decision/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
 expect_fail "JWT בלי פרופיל רואה סניפים" \
   "create policy hole_branches_any_jwt on branches for select using (auth.uid() is not null)" \
   "11_allowlist_proof.sql"

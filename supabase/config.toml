@@ -64,3 +64,6 @@ verify_jwt = false
 
 [functions.ai-command]
 verify_jwt = true              # נקראת מהמערכת בלבד, לא מהוובהוק הציבורי
+
+[functions.ai-answer]
+verify_jwt = true              # הסימולטור במסך /agent בלבד; המסלול האמיתי רץ בתוך wa-webhook

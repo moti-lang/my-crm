@@ -63,11 +63,16 @@ if need SUPABASE_PROJECT_REF; then
     ${SITE_URL:+SITE_URL="$SITE_URL"} >/dev/null \
     && ok "הסודות נקבעו (WA_DRY_RUN=${WA_DRY_RUN:-true})" || fail "קביעת הסודות נכשלה"
 
-  for fn in wa-send wa-webhook ai-command cron-lessons cron-reminders cron-debt \
-            cron-attendance-watch cron-absence cron-summary cron-wa-health; do
-    npx supabase functions deploy "$fn" --no-verify-jwt >/dev/null 2>&1 \
-      && echo "    ✓ $fn" || { echo "    ✗ $fn"; FAILED=1; }
-  done
+  if [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] && ! command -v supabase >/dev/null 2>&1; then
+    # בלי CLI (סנדבוקס, CI מוגבל): אותן פונקציות דרך ה-Management API.
+    node scripts/functions-deploy-api.mjs || FAILED=1
+  else
+    for fn in wa-send wa-webhook ai-command ai-answer cron-lessons cron-reminders cron-debt \
+              cron-attendance-watch cron-absence cron-summary cron-wa-health; do
+      npx supabase functions deploy "$fn" --no-verify-jwt >/dev/null 2>&1 \
+        && echo "    ✓ $fn" || { echo "    ✗ $fn"; FAILED=1; }
+    done
+  fi
 fi
 
 # ─── 4. פרונט ───

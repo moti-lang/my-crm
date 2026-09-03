@@ -33,7 +33,7 @@
 | דגל | ברירת מחדל | מה קורה |
 |---|---|---|
 | `WA_DRY_RUN` | `true` | כל הלוגיקה רצה — בריאות, שעות שקטות, ניסיונות, רישום — והשרת לא נקרא |
-| `AI_DRY_RUN` | `true` | תשובה קבועה ותקפה מבחינת סכימה. Claude לא נקרא |
+| `AI_DRY_RUN` | `true` | פלטים מוקלטים ותקפים מבחינת סכימה — גם לפקודות וגם לסוכן הלקוחות. Claude לא נקרא |
 
 **ברירת המחדל יבשה.** מעבר לחי מחייב `false` מפורש.
 
@@ -121,3 +121,25 @@ curl -X POST "$WA_SERVER_URL/api/webhooks" -H "x-api-key: $WA_API_KEY" \
 - `wa-send/` — שער היציאה היחיד
 - `wa-webhook/` — שער הכניסה היחיד
 - `cron-wa-health/` — בדיקה כל 10 דקות
+
+
+## סוכן הלקוחות — `ai-answer` ו-`_shared/customer.ts`
+
+אותו דפוס כמו הפקודות: `ai-answer` היא פונקציה טהורה (אין לה לקוח מסד,
+ההקשר מגיע בגוף הבקשה) ומשמשת רק את הסימולטור במסך `/agent`. המסלול
+האמיתי רץ בתוך `wa-webhook`: מספר שאינו מורשה מנותב ל-`answerCustomer`
+ב-`_shared/customer.ts`, שקורא לאותו ספק (`_shared/answer.ts`) וכותב
+את מה שצריך — שאלות ללא מענה, לידים, מונה שימוש — ומחזיר החלטה
+ש-`deliverReply` שולח.
+
+מה שנאכף בקוד ולא בפרומפט: "אין תשובה" מקבל תמיד את המשפט הקבוע,
+תשובה שנוקבת מחיר מוחלפת בהפניה כל עוד `agent_may_quote_prices=false`,
+תלמידה נוצרת רק כשכל חמשת הפרטים ידועים והסניף קיים, ופלט פגום של
+המודל לא מגיע להורה. `supabase/tests/customer-agent.test.mjs`.
+
+## פריסה בלי CLI
+
+`node scripts/functions-deploy-api.mjs [slug…]` פורס דרך ה-Management API
+(עם `SUPABASE_ACCESS_TOKEN`), כולל כל `_shared/` ו-`verify_jwt` מ-config.toml.
+`deploy.sh` בוחר בו אוטומטית כשאין `supabase` בנתיב. אומת: `ai-answer`
+נפרסה כך, עונה בהרצה יבשה, ומחזירה 401 בלי JWT.

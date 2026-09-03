@@ -22,6 +22,7 @@ import { Placeholder } from '@/pages/Placeholder';
 import { Productions } from '@/pages/Productions';
 import { ProductionDetail } from '@/pages/ProductionDetail';
 import { Reports } from '@/pages/Reports';
+import { Agent } from '@/pages/Agent';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false } },
@@ -60,7 +61,7 @@ function Gate() {
         <Route path="/productions/:id" element={<ProductionDetail />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/reminders" element={<Reminders />} />
-        <Route path="/agent" element={<Placeholder title="סוכן AI" round="סבב 7" />} />
+        {profile.role === 'owner' && <Route path="/agent" element={<Agent />} />}
         <Route path="/commands" element={<Placeholder title="פקודות וואטסאפ" round="סבב 6" />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />

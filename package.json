@@ -27,7 +27,8 @@
     "test:public": "node supabase/tests/public-surface.test.mjs",
     "test:contract": "node supabase/tests/ai-wire.test.mjs",
     "test:reply": "node supabase/tests/reply-delivery.test.mjs",
-    "test:reports": "node supabase/tests/reports-export.test.mjs"
+    "test:reports": "node supabase/tests/reports-export.test.mjs",
+    "test:agent": "node supabase/tests/customer-agent.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
