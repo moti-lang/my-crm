@@ -1152,6 +1152,21 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_branch_profitability: {
+        Row: {
+          branch_id: string | null;
+          name: string | null;
+          active_students: number | null;
+          income_students: number | null;
+          income_other: number | null;
+          expenses: number | null;
+          open_debt: number | null;
+          profit_before: number | null;
+          allocated: number | null;
+          profit_after: number | null;
+        };
+        Relationships: [];
+      };
       v_debtors: {
         Row: {
           student_id: string | null;
@@ -1179,6 +1194,17 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_lead_funnel: {
+        Row: {
+          month: string | null;
+          leads: number | null;
+          converted: number | null;
+          pending: number | null;
+          lost: number | null;
+          conversion_pct: number | null;
+        };
+        Relationships: [];
+      };
       v_lesson_summary: {
         Row: {
           lesson_id: string | null;
@@ -1191,6 +1217,38 @@ export type Database = {
           attended: number | null;
           marked: number | null;
           expected: number | null;
+        };
+        Relationships: [];
+      };
+      v_pnl_monthly: {
+        Row: {
+          season_id: string | null;
+          month: string | null;
+          income_students: number | null;
+          income_other: number | null;
+          expenses: number | null;
+          expenses_branch: number | null;
+          expenses_general: number | null;
+          expenses_production: number | null;
+          profit: number | null;
+        };
+        Relationships: [];
+      };
+      v_production_pnl: {
+        Row: {
+          production_id: string | null;
+          name: string | null;
+          year: string | null;
+          status: Database["public"]["Enums"]["production_status"] | null;
+          budget: number | null;
+          release_date: string | null;
+          notes: string | null;
+          expenses: number | null;
+          income: number | null;
+          profit: number | null;
+          budget_used_pct: number | null;
+          cast_count: number | null;
+          created_at: string | null;
         };
         Relationships: [];
       };

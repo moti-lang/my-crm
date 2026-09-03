@@ -81,6 +81,17 @@ select t_roles_agree('חוב 60-89 יום',
 select t_roles_agree('סך המוקצה לסניפים',   'select sum(allocated_amount) from v_general_allocation', 1);
 select t_roles_agree('מספר הסניפים בחלוקה', 'select count(*)::numeric from v_general_allocation', 5);
 
+\echo 'דוחות סבב 8:'
+select t_roles_agree('רווח לפי הפקה — מספר ההפקות', 'select count(*)::numeric from v_production_pnl', 3);
+select t_roles_agree('רווח לפי הפקה — סך הרווח',    'select sum(profit) from v_production_pnl');
+select t_roles_agree('רווח לפי הפקה — סך ההוצאות',  'select sum(expenses) from v_production_pnl', 1);
+select t_roles_agree('רווח והפסד חודשי — הכנסות',   'select sum(income_students + income_other) from v_pnl_monthly', 1);
+select t_roles_agree('רווח והפסד חודשי — הוצאות',   'select sum(expenses) from v_pnl_monthly', 1);
+select t_roles_agree('רווחיות סניפים — לפני הקצאה', 'select sum(profit_before) from v_branch_profitability');
+select t_roles_agree('רווחיות סניפים — אחרי הקצאה', 'select sum(profit_after) from v_branch_profitability');
+select t_roles_agree('רווחיות סניפים — סך ההקצאה',  'select sum(allocated) from v_branch_profitability', 1);
+select t_roles_agree('המרת פניות — לידים',          'select coalesce(sum(leads), 0) from v_lead_funnel');
+
 \echo 'ספר הכספים:'
 select t_roles_agree('סך ההוצאות',
   'select sum(amount) from ledger_entries where kind=''expense'' and deleted_at is null', 1);

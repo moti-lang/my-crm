@@ -16,7 +16,7 @@ fails=0
 for suite in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql \
              05_role_consistency_proof.sql 06_attendance_proof.sql \
              07_reminder_queue_proof.sql 08_command_rollback_proof.sql \
-             11_allowlist_proof.sql; do
+             11_allowlist_proof.sql 12_reports_proof.sql; do
   echo "═══ $suite ═══"
   if PGOPTIONS="-c client_min_messages=warning" \
      psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$DIR/$suite" 2>&1 \

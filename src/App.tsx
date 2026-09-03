@@ -19,6 +19,9 @@ import { Attendance } from '@/pages/Attendance';
 import { AttendanceSheet } from '@/pages/AttendanceSheet';
 import { Reminders } from '@/pages/Reminders';
 import { Placeholder } from '@/pages/Placeholder';
+import { Productions } from '@/pages/Productions';
+import { ProductionDetail } from '@/pages/ProductionDetail';
+import { Reports } from '@/pages/Reports';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false } },
@@ -53,12 +56,13 @@ function Gate() {
         <Route path="/collection" element={<Collection />} />
         <Route path="/expenses" element={<Expenses />} />
         <Route path="/general" element={<General />} />
-        <Route path="/productions" element={<Placeholder title="הפקות" round="סבב 8" />} />
+        <Route path="/productions" element={<Productions />} />
+        <Route path="/productions/:id" element={<ProductionDetail />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/reminders" element={<Reminders />} />
         <Route path="/agent" element={<Placeholder title="סוכן AI" round="סבב 7" />} />
         <Route path="/commands" element={<Placeholder title="פקודות וואטסאפ" round="סבב 6" />} />
-        <Route path="/reports" element={<Placeholder title="דוחות" round="סבב 8" />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
         {/* ניהול משתמשים: הבעלים בלבד. לשאר התפקידים המסלול לא קיים. */}
         {profile.role === 'owner' && <Route path="/users" element={<Users />} />}

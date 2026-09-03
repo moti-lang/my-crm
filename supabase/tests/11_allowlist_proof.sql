@@ -14,8 +14,11 @@
 \ir _assert.sql
 
 -- ═════════════ 1. הדלת: יצירת חשבון ═════════════
+-- הבדיקה מזמינה אימייל משלה. היא אינה תלויה במצב הבעלים מה-seed —
+-- בענן היא כבר נכנסה, מקומית היא ממתינה, ושניהם תקינים.
 \echo 'השער על auth.users:'
 begin;
+insert into allowed_users (email, role) values ('gate.probe@gmail.com', 'accountant');
 
 select assert_no_effect(
   '★ אימייל שאינו ברשימה — אין חשבון, אין פרופיל',
@@ -26,28 +29,25 @@ select assert_no_effect(
 select assert_no_effect(
   '★ אימייל ברשימה אבל בסיסמה (ספק email) — אין חשבון',
   $a$insert into auth.users (email, raw_app_meta_data)
-     values ('moti@automation1.co.il', '{"provider":"email","providers":["email"]}')$a$,
+     values ('gate.probe@gmail.com', '{"provider":"email","providers":["email"]}')$a$,
   $p$select (select count(*) from auth.users)::text || '/' || (select count(*) from public.profiles)$p$);
 
 select assert_no_effect(
   '★ אימייל ברשימה בלי ספק כלל (Admin API ישן) — אין חשבון',
-  $a$insert into auth.users (email) values ('moti@automation1.co.il')$a$,
+  $a$insert into auth.users (email) values ('gate.probe@gmail.com')$a$,
   $p$select (select count(*) from auth.users)::text$p$);
 
-update allowed_users set is_active = false where email = 'moti@automation1.co.il';
+update allowed_users set is_active = false where email = 'gate.probe@gmail.com';
 select assert_no_effect(
   '★ אימייל ברשימה אבל מושבת — אין חשבון',
   $a$insert into auth.users (email, raw_app_meta_data)
-     values ('moti@automation1.co.il', '{"provider":"google","providers":["google"]}')$a$,
+     values ('gate.probe@gmail.com', '{"provider":"google","providers":["google"]}')$a$,
   $p$select (select count(*) from auth.users)::text$p$);
 rollback;
 
 -- ═════════════ 2. הזמנה ממתינה → כניסה ראשונה ═════════════
 \echo 'הזמנה ממתינה:'
 begin;
-select assert_eq((select count(*) from allowed_users where user_id is null), 1,
-                 'הבעלים מה-seed ממתינה — הוזמנה ועדיין לא נכנסה');
-
 -- הבעלים מזמינה מנהלת סניף חדשה למודיעין. השם ריק — יילקח מגוגל.
 insert into allowed_users (email, full_name, role, branch_id)
 values ('  New.Manager@Gmail.com ', '', 'branch_manager', :MODIIN);
@@ -183,8 +183,15 @@ select assert_eq((select count(*) from branch_staff
 rollback;
 
 -- ═════════════ 5. הבעלים האחרונה נעולה ═════════════
+-- מצב הפתיחה נבנה כאן ולא מונח: כל בעלים אחרת מושבתת (מותר, כי הניה
+-- נשארת), ואז הניה היא היחידה שנכנסה.
 \echo 'נעילת הבעלים האחרונה:'
 begin;
+update allowed_users set is_active = false where role = 'owner' and email <> 'hania@teichtal.local';
+select assert_eq((select count(*) from allowed_users where role = 'owner' and is_active and user_id is not null), 1,
+                 'נקודת פתיחה: בעלים אחת שנכנסה');
+insert into allowed_users (email, role) values ('pending.owner@gmail.com', 'owner');
+
 select assert_no_effect(
   '★ הבעלים היחידה שנכנסה אינה מושבתת (ממתינה אינה נספרת)',
   $a$update allowed_users set is_active = false where email = 'hania@teichtal.local'$a$,
@@ -199,8 +206,8 @@ select assert_no_effect(
   $p$select count(*)::text from public.allowed_users where email = 'hania@teichtal.local'$p$);
 
 -- הזמנה ממתינה של בעלים כן ניתנת להסרה כשיש בעלים שנכנסה
-delete from allowed_users where email = 'moti@automation1.co.il';
-select assert_eq((select count(*) from allowed_users where email = 'moti@automation1.co.il'), 0,
+delete from allowed_users where email = 'pending.owner@gmail.com';
+select assert_eq((select count(*) from allowed_users where email = 'pending.owner@gmail.com'), 0,
                  'הזמנה ממתינה ניתנת להסרה כשיש בעלים פעילה אחרת');
 
 -- וכשבעלים שנייה נכנסת — הראשונה משתחררת
@@ -248,7 +255,7 @@ rollback;
 begin;
 set local role authenticated;
 select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
-select assert_eq((select count(*) from allowed_users), 4, 'הבעלים רואה את כל הרשימה (3 שנכנסו + 1 ממתינה)');
+select assert_true((select count(*) from allowed_users) >= 4, 'הבעלים רואה את כל הרשימה (לפחות 3 זהויות + הבעלים מה-seed)');
 insert into allowed_users (email, full_name, role, branch_id, invited_by)
 values ('invited@gmail.com', 'מוזמנת', 'branch_manager', :BEITAR, auth.uid());
 select assert_eq((select count(*) from allowed_users where email = 'invited@gmail.com' and user_id is null), 1,

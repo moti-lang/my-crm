@@ -137,6 +137,7 @@ export function useAddLedgerEntry() {
       kind: Enums<'entry_kind'>;
       scope: Enums<'entry_scope'>;
       branch_id?: string | null;
+      production_id?: string | null;
       entry_date: string;
       category: string;
       vendor?: string | null;

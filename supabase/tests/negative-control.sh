@@ -20,7 +20,7 @@ run_suite() {
 expect_pass() {
   ran=$((ran+1))
   "$DIR/reset.sh" >/dev/null
-  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql 11_allowlist_proof.sql; do
+  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql 11_allowlist_proof.sql 12_reports_proof.sql; do
     SUITE="$s"
     if run_suite; then
       echo "  ✓ בסיס נקי: $s עוברת"
@@ -179,6 +179,30 @@ expect_fail "רשימת המורשים גלויה לכל מחובר" \
 expect_fail "ניטרול RLS על רשימת המורשים" \
   "alter table allowed_users disable row level security" \
   "11_allowlist_proof.sql"
+
+# ─── דוחות סבב 8 ───
+
+expect_fail "רווח הפקה סופר רשומות שנמחקו" \
+  "\\i $DIR/holes/production_pnl_counts_deleted.sql" \
+  "12_reports_proof.sql"
+
+expect_fail "רווח אחרי הקצאה מתעלם מההקצאה" \
+  "\\i $DIR/holes/profit_after_ignores_allocation.sql" \
+  "12_reports_proof.sql"
+
+expect_fail "דוח המרת הפניות נפתח למנהלת סניף" \
+  "create or replace view v_lead_funnel as select date_trunc('month', s.created_at at time zone 'Asia/Jerusalem')::date as month, count(*) as leads, count(*) filter (where s.status='active') as converted, count(*) filter (where s.status='pending') as pending, count(*) filter (where s.status in ('stopped','graduated')) as lost, 0::numeric as conversion_pct from students s where s.source='whatsapp' and s.deleted_at is null group by 1" \
+  "12_reports_proof.sql"
+
+expect_fail_code "דוח מאבד את עמודות הייצוא שלו" \
+  "$DIR/../../src/reports/definitions.ts" \
+  'sed -i "/^export const LEADS/,/^};/ s/^  columns: \[/  columns: [] as never[], _c: [/" "$F"' \
+  "node supabase/tests/reports-export.test.mjs"
+
+expect_fail_code "הייצוא מוציא סכום כטקסט מעוצב במקום מספר" \
+  "$DIR/../../src/reports/definitions.ts" \
+  'sed -i "s/{ label: .רווח., value: (r) => n(r.profit), numeric: true },/{ label: \"רווח\", value: (r) => formatILS(n(r.profit)), numeric: true },/" "$F"' \
+  "node supabase/tests/reports-export.test.mjs"
 
 expect_fail "JWT בלי פרופיל רואה סניפים" \
   "create policy hole_branches_any_jwt on branches for select using (auth.uid() is not null)" \

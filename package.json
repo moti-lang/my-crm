@@ -26,7 +26,8 @@
     "check:secrets": "node scripts/check-secrets.mjs --dist",
     "test:public": "node supabase/tests/public-surface.test.mjs",
     "test:contract": "node supabase/tests/ai-wire.test.mjs",
-    "test:reply": "node supabase/tests/reply-delivery.test.mjs"
+    "test:reply": "node supabase/tests/reply-delivery.test.mjs",
+    "test:reports": "node supabase/tests/reports-export.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -38,6 +39,7 @@
     "react-hook-form": "^7.53.0",
     "react-router-dom": "^6.26.2",
     "recharts": "^2.12.7",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
