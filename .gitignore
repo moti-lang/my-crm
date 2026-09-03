@@ -8,3 +8,4 @@ dist
 supabase/.temp
 .env.verify
 .netlify
+backups/

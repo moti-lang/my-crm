@@ -64,5 +64,8 @@ node_test "reports-export.test.mjs" "✗|מייצאים|נכשלו"
 echo "═══ ייבוא תלמידות ═══"
 node_test "students-import.test.mjs" "✗|ייבוא:|נכשלו"
 
+echo "═══ גיבוי ושחזור ═══"
+node_test "backup-roundtrip.test.mjs" "✗|זהה למקור|נכשלו"
+
 echo "═══ חוזה whatsapp-hub ═══"
 node_test "wa-contract.test.mjs" "✓|✗|עברו|נכשלו"

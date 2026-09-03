@@ -29,7 +29,10 @@
     "test:reply": "node supabase/tests/reply-delivery.test.mjs",
     "test:reports": "node supabase/tests/reports-export.test.mjs",
     "test:agent": "node supabase/tests/customer-agent.test.mjs",
-    "test:import": "node supabase/tests/students-import.test.mjs"
+    "test:import": "node supabase/tests/students-import.test.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs",
+    "test:backup": "node supabase/tests/backup-roundtrip.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
