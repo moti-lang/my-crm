@@ -36,11 +36,17 @@ if need SUPABASE_PROJECT_REF SUPABASE_DB_PASSWORD; then
 fi
 
 # ─── 2. נתוני בסיס ───
-step "2 · seed ומשתמשים"
+step "2 · seed ורשימת המורשים"
 if need SUPABASE_DB_URL SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY; then
-  psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -f supabase/seed.sql \
-    && ok "נתוני הבסיס נטענו" || fail "seed נכשל"
-  node scripts/seed-users.mjs && ok "המשתמשים נוצרו" || fail "יצירת המשתמשים נכשלה"
+  if [ "$(psql "$SUPABASE_DB_URL" -tAc 'select count(*) from public.branches')" = "0" ]; then
+    psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -f supabase/seed.sql \
+      && ok "נתוני הבסיס נטענו" || fail "seed נכשל"
+  else
+    echo "  · כבר יש סניפים — seed.sql לא רץ שוב"
+  fi
+  # הבעלים הראשונה. בלעדיה אין מי שיכנס ואין מי שיזמין.
+  psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -f supabase/seed_allowlist.sql \
+    && ok "הבעלים הראשונה ברשימת המורשים" || fail "seed_allowlist נכשל"
 fi
 
 # ─── 3. סודות ופונקציות ───

@@ -42,6 +42,11 @@ const sources = readdirSync(DIR)
 const TRIGGER_FUNCTIONS = {
   f_touch_updated_at:    /updated_at\s*>\s*v_before|מקדם את updated_at/,
   f_guard_photo_consent: /production_cast|אישור צילום/,
+  // השער על auth.users: מופעל בכל הוספה ל-auth.users בבדיקות
+  f_auth_user_gate:      /insert into auth\.users/,
+  // סנכרון הרשימה: מופעל בכל כתיבה ל-allowed_users
+  f_allowlist_before:    /(insert into|update|delete from) allowed_users/,
+  f_allowlist_after:     /(insert into|update|delete from) allowed_users/,
 };
 
 let fails = 0;

@@ -18,6 +18,7 @@ const NAV: NavItem[] = [
   { to: '/commands', label: 'פקודות', icon: '⌘', roles: ['owner'] },
   { to: '/reports', label: 'דוחות', icon: '▤' },
   { to: '/settings', label: 'הגדרות', icon: '⚙', roles: ['owner'] },
+  { to: '/users', label: 'משתמשים', icon: '⚇', roles: ['owner'] },
 ];
 
 export function Layout() {

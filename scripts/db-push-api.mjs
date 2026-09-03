@@ -3,7 +3,7 @@
  * מיגרציות ו-seed דרך ה-Management API — המסלול השלישי של db-push.sh.
  *
  *   node scripts/db-push-api.mjs            # מיגרציות, בסדר, עצירה בראשונה שנופלת
- *   node scripts/db-push-api.mjs seed       # seed.sql, רק אם המסד ריק מסניפים
+ *   node scripts/db-push-api.mjs seed       # seed.sql רק אם המסד ריק מסניפים; seed_allowlist.sql תמיד
  *
  * אותה סמנטיקה כמו המסלול של psql:
  *   * כל מיגרציה היא שאילתה אחת → טרנזקציה משתמעת אחת. או שכולה
@@ -69,9 +69,16 @@ async function migrate() {
 
 async function seed() {
   const [{ c }] = await ex.run('select count(*)::int as c from public.branches');
-  if (Number(c) > 0) { console.log(`  · כבר יש ${c} סניפים — seed.sql לא רץ שוב`); return; }
-  await ex.run(readFileSync('supabase/seed.sql', 'utf8'));
-  const [{ c: after }] = await ex.run('select count(*)::int as c from public.branches');
-  if (Number(after) === 0) throw new Error('seed.sql רץ בלי שגיאה אבל אין סניפים — משהו לא נכון');
-  console.log(`  → נתוני הבסיס נטענו (${after} סניפים)`);
+  if (Number(c) > 0) { console.log(`  · כבר יש ${c} סניפים — seed.sql לא רץ שוב`); }
+  else {
+    await ex.run(readFileSync('supabase/seed.sql', 'utf8'));
+    const [{ c: after }] = await ex.run('select count(*)::int as c from public.branches');
+    if (Number(after) === 0) throw new Error('seed.sql רץ בלי שגיאה אבל אין סניפים — משהו לא נכון');
+    console.log(`  → נתוני הבסיס נטענו (${after} סניפים)`);
+  }
+  // הבעלים הראשונה: אידמפוטנטי, רץ תמיד.
+  await ex.run(readFileSync('supabase/seed_allowlist.sql', 'utf8'));
+  const owners = await ex.run(`select email from public.allowed_users where role = 'owner' and is_active`);
+  if (owners.length === 0) throw new Error('seed_allowlist.sql רץ אבל אין בעלים פעילה ברשימה');
+  console.log(`  → רשימת המורשים: בעלים ${owners.map((o) => o.email).join(', ')}`);
 }

@@ -8,7 +8,8 @@
 | `SUPABASE_DB_PASSWORD` | הסיסמה שנקבעה ביצירת הפרויקט |
 | `SUPABASE_URL` · `SUPABASE_ANON_KEY` · `SUPABASE_SERVICE_ROLE_KEY` | Settings ← API |
 | `SUPABASE_DB_URL` | Settings ← Database ← Connection string ← URI |
-| `NETLIFY_AUTH_TOKEN` · `NETLIFY_SITE_ID` | אופציונלי. בלעדיהם `dist/` נגרר ידנית |
+| `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | Google Cloud ← APIs & Services ← Credentials ← OAuth client (Web). Redirect URI: `https://<ref>.supabase.co/auth/v1/callback` |
+| `NETLIFY_AUTH_TOKEN` · `NETLIFY_SITE_ID` | אופציונלי. בלעדיהם `dist/` נגרר ידנית. `NETLIFY_SITE_ID` הוא המזהה (UUID), לא השם |
 | `WA_SERVER_URL` · `WA_API_KEY` | שרת ה-whatsapp-hub |
 | `ANTHROPIC_API_KEY` | console.anthropic.com |
 
@@ -21,8 +22,9 @@ cp .env.verify.example .env.verify   # ומלא
 
 0. **בדיקות** — `tsc` וכל החבילות. קוד שנופל לא נפרס.
 1. **מיגרציות** — 13, על פרויקט נקי.
-2. **seed ומשתמשים** — `db push` אינו מריץ seed. בלעדיו הפרונט
+2. **seed והבעלים הראשונה** — `db push` אינו מריץ seed. בלעדיו הפרונט
    עולה מול מסד ריק ונראה שבור, ואין דרך לדעת שזו רק סדר.
+   `seed_allowlist.sql` רץ תמיד: בלי בעלים ברשימת המורשים אין מי שיכנס.
 3. **Edge Functions** — הסודות לפני הפריסה, אחרת הפונקציה הראשונה
    שתיקרא תיפול על משתנה חסר.
 4. **פרונט** — אחרון.
@@ -62,17 +64,13 @@ SUPABASE_ACCESS_TOKEN=sbp_...
 בילד שמכיל אותו. המריץ אומת מול פוסטגרס מקומי (`PGURL=…`) לפני
 שנגע בענן, כולל בקרת שלילה שמפילה חבילה אחת בלי לגרור את השאר.
 
-## לפני מסירה ללקוחה — החלפת סיסמאות ה-seed
+## לפני מסירה ללקוחה
 
-`Teichtal!2026` נמצאת בגיט. אחרי שסבב האימות עבר, ולפני שהכתובת
-נמסרת:
-
-```bash
-npm run seed:rotate
-```
-
-מחליף את שלוש הסיסמאות ומדפיס את החדשות פעם אחת. פירוט ב-README,
-סעיף "משתמשי בדיקה (seed)".
+1. `npm run seed:identities:purge` — מוחק את שלוש זהויות הבדיקה
+   (`@teichtal.local`). הן לא יכולות להיכנס ממילא, אבל אין להן מקום
+   ברשימת המורשים של הלקוחה.
+2. לוודא שהבעלים של הלקוחה מוזמנת במסך המשתמשים **וגם** נוספה כ-test
+   user ב-Google Cloud (ראה README, "הוספת משתמשת דורשת שתי פעולות").
 
 ## דגלי הרצה יבשה נשארים דולקים
 
@@ -117,12 +115,14 @@ npx supabase secrets set AI_DRY_RUN=false
 * מסלול אחד בלבד מחוץ ל-`AuthProvider`, והוא `/a/:token`
 * המסלול `*` עוטף את `AuthProvider` — בלעדיו כל השאר חשוף
 * דף האחראית ניגש דרך שתי RPC בלבד, לא נוגע באף טבלה
-* `enable_signup = false`
+* גוגל בלבד: ספק האימייל כבוי בקונפיג, ואף קריאת כניסה בסיסמה לא קיימת בקוד
+* `Gate` חוסם פרופיל חסר או מושבת, ומסך המשתמשים קיים רק לבעלים
 
 `config.toml` היא הגדרה מקומית. **ההגדרה המחייבת בפרויקט מתארח היא
-בדשבורד** — Authentication ← Providers ← Email ← Allow new users to
-sign up. `verify-login.mjs` מנסה להירשם בפועל ונכשל אם זה מצליח,
-כי זו הדרך היחידה לדעת.
+בדשבורד** — Authentication ← Providers. `scripts/supabase-project.mjs auth`
+קובע אותה בקוד (אימייל כבוי, גוגל דולק, כתובות החזרה), ו-`verify-access.mjs`
+מנסה בפועל להירשם, להיכנס בסיסמה וליצור חשבון לאימייל זר — ונכשל אם
+משהו מזה מצליח, כי זו הדרך היחידה לדעת.
 
 ## אחרי הפריסה
 

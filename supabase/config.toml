@@ -21,11 +21,19 @@ enabled = true
 site_url = "http://localhost:5173"
 additional_redirect_urls = ["http://localhost:5173"]
 jwt_expiry = 3600
-enable_signup = false          # משתמשים נוצרים ע"י הבעלים בלבד, אין הרשמה עצמית
+# הרשמה "פתוחה" ברמת GoTrue, כי כניסה ראשונה בגוגל היא טכנית הרשמה.
+# מה שסוגר את הדלת הוא הטריגר על auth.users (מיגרציה 0014): אימייל
+# שאינו ברשימת המורשים לא מקבל חשבון. ראה 11_allowlist_proof.sql.
+enable_signup = true
 enable_confirmations = false
 
 [auth.email]
-enable_signup = false
+enable_signup = false          # אין אימייל וסיסמה בכלל — גוגל בלבד
+
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
 
 [functions.wa-send]
 verify_jwt = false             # נקראת מ-cron, לא מהדפדפן

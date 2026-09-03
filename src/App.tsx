@@ -5,6 +5,8 @@ import { ErrorBoundary, ConfigError } from '@/components/ErrorBoundary';
 import { supabaseConfigError } from '@/lib/supabase';
 import { Layout } from '@/components/Layout';
 import { Login } from '@/pages/Login';
+import { NoAccess } from '@/pages/NoAccess';
+import { Users } from '@/pages/Users';
 import { Dashboard } from '@/pages/Dashboard';
 import { Branches } from '@/pages/Branches';
 import { BranchDetail } from '@/pages/BranchDetail';
@@ -23,7 +25,7 @@ const queryClient = new QueryClient({
 });
 
 function Gate() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, denied, signOut } = useAuth();
 
   if (loading) {
     return (
@@ -32,13 +34,13 @@ function Gate() {
       </div>
     );
   }
-  if (!session) return <Login />;
-  if (!profile) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-paper px-4 text-center text-sm text-soft">
-        המשתמש מחובר אך אין לו פרופיל במערכת. פני לניהול.
-      </div>
-    );
+  // אין session: או שעוד לא נכנסה, או שגוגל החזיר אותה עם דחייה מהמסד
+  // (האימייל אינו ברשימת המורשים — החשבון לא נוצר בכלל).
+  if (!session) return denied ? <NoAccess onSignOut={() => void signOut()} /> : <Login />;
+  // יש session אבל אין פרופיל פעיל: הוסרה או הושבתה. ה-RLS כבר חוסם;
+  // המסך רק אומר את זה.
+  if (!profile || !profile.is_active) {
+    return <NoAccess email={session.user.email} onSignOut={() => void signOut()} />;
   }
 
   return (
@@ -58,6 +60,8 @@ function Gate() {
         <Route path="/commands" element={<Placeholder title="פקודות וואטסאפ" round="סבב 6" />} />
         <Route path="/reports" element={<Placeholder title="דוחות" round="סבב 8" />} />
         <Route path="/settings" element={<Settings />} />
+        {/* ניהול משתמשים: הבעלים בלבד. לשאר התפקידים המסלול לא קיים. */}
+        {profile.role === 'owner' && <Route path="/users" element={<Users />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

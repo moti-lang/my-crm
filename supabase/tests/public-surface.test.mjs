@@ -9,6 +9,15 @@
  * הרצה:  npm run test:public
  */
 import { codeOf, rawOf } from './_code.mjs';
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+function walk(dir) {
+  return readdirSync(dir).flatMap((f) => {
+    const p = join(dir, f);
+    return statSync(p).isDirectory() ? walk(p) : [p];
+  });
+}
 
 let fails = 0;
 const check = (label, ok, detail = '') => {
@@ -46,18 +55,42 @@ check('דף האחראית קורא לשתי ה-RPC בלבד',
       (sheet.match(/\.rpc\(/g) ?? []).length === 2);
 check('★ דף האחראית אינו מייבא את AuthProvider', !/AuthProvider|useAuth/.test(sheet));
 
-// ─── הרשמה עצמית סגורה בקונפיג ───
-// config.toml: הערות מתחילות ב-# — מסירים אותן כדי ש-enable_signup
-// בהערה לא ייחשב הגדרה.
+// ─── גוגל בלבד בקונפיג ───
+// config.toml: הערות מתחילות ב-# — מסירים אותן כדי שהגדרה בהערה לא תיחשב.
+// [auth] enable_signup נשאר true בכוונה: כניסה ראשונה בגוגל היא טכנית
+// הרשמה, והדלת נסגרת בטריגר על auth.users. מה שחייב להיות סגור הוא
+// ספק האימייל — אין סיסמאות בכלל.
 const cfg = rawOf('supabase/config.toml').replace(/#[^\n]*/g, ' ');
-check('★ enable_signup = false ב-config.toml', /enable_signup\s*=\s*false/.test(cfg));
-check('שתי הופעות (auth ו-auth.email)',
-      (cfg.match(/enable_signup\s*=\s*false/g) ?? []).length >= 2);
+const section = (name) => {
+  const m = cfg.match(new RegExp(`\\[${name.replace(/\./g, '\\.')}\\]([^\\[]*)`));
+  return m ? m[1] : '';
+};
+check('★ [auth.email] enable_signup = false — אין הרשמה באימייל',
+      /enable_signup\s*=\s*false/.test(section('auth.email')));
+check('★ [auth.external.google] enabled = true', /enabled\s*=\s*true/.test(section('auth.external.google')));
+check('סוד גוגל מגיע ממשתנה סביבה, לא מהקובץ',
+      /secret\s*=\s*"env\(GOOGLE_CLIENT_SECRET\)"/.test(section('auth.external.google')));
+
+// ─── אין כניסה בסיסמה בקוד הלקוח ───
+// לא רק שהשדות הוסרו מהמסך: אף קריאה כזו לא קיימת בקוד, בשום קובץ.
+const srcFiles = walk('src').filter((f) => /\.(ts|tsx)$/.test(f));
+const passwordCalls = srcFiles.filter((f) =>
+  /\.auth\.(signInWithPassword|signUp|signInWithOtp|resetPasswordForEmail|updateUser)\s*\(/.test(codeOf(f)));
+check('★ אף קובץ בקוד הלקוח אינו מתחבר בסיסמה', passwordCalls.length === 0,
+      `נמצא ב: ${passwordCalls.join(', ')}`);
+const auth = codeOf('src/auth/AuthProvider.tsx');
+check('★ הכניסה היא signInWithOAuth עם google', /signInWithOAuth\(\{\s*provider:\s*'google'/.test(auth));
+check('★ שגיאת חזרה מ-OAuth נתפסת (חשבון שנדחה במסד)', /oauthErrorFromUrl\(/.test(auth));
 
 // ─── שום מסך אחר אינו נטען בלי session ───
 const gate = app.slice(app.indexOf('function Gate()'), app.indexOf('export default'));
-check('★ Gate מציג Login כשאין session', /if \(!session\) return <Login \/>/.test(gate));
-check('★ Gate חוסם גם כשאין פרופיל', /if \(!profile\)/.test(gate));
+check('★ Gate מציג Login כשאין session, ו-NoAccess כשגוגל החזיר דחייה',
+      /if \(!session\) return denied \? <NoAccess[^;]*: <Login \/>;/.test(gate));
+check('★ Gate חוסם כשאין פרופיל או כשהוא מושבת',
+      /if \(!profile \|\| !profile\.is_active\)/.test(gate));
+check('★ Gate מציג מסך "אין הרשאה" ולא את המערכת', /<NoAccess/.test(gate));
+check('★ מסך ניהול המשתמשים נגיש לבעלים בלבד',
+      /profile\.role === 'owner' && <Route path="\/users"/.test(gate));
 
 console.log(fails === 0
   ? '\nמשטח ציבורי: דף אחד, RPC בלבד'

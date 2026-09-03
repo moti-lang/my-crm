@@ -20,7 +20,7 @@ run_suite() {
 expect_pass() {
   ran=$((ran+1))
   "$DIR/reset.sh" >/dev/null
-  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql; do
+  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql 11_allowlist_proof.sql; do
     SUITE="$s"
     if run_suite; then
       echo "  ✓ בסיס נקי: $s עוברת"
@@ -125,10 +125,64 @@ expect_fail_code "חשיפת מסך נוסף מחוץ לשער ההתחברות"
   'sed -i "s|<Route path=\"/a/:token\" element={<AttendanceSheet />} />|<Route path=\"/a/:token\" element={<AttendanceSheet />} />\\n          <Route path=\"/students\" element={<Students />} />|" "$F"' \
   "node supabase/tests/public-surface.test.mjs"
 
-expect_fail_code "פתיחת הרשמה עצמית" \
+expect_fail_code "פתיחת הרשמה באימייל וסיסמה בקונפיג" \
   "$DIR/../config.toml" \
-  'sed -i "s|enable_signup = false|enable_signup = true|g" "$F"' \
+  'sed -i "/^\[auth.email\]/,/^\[/ s|enable_signup = false|enable_signup = true|" "$F"' \
   "node supabase/tests/public-surface.test.mjs"
+
+expect_fail_code "כיבוי ספק גוגל בקונפיג" \
+  "$DIR/../config.toml" \
+  'sed -i "/^\[auth.external.google\]/,/^\[/ s|enabled = true|enabled = false|" "$F"' \
+  "node supabase/tests/public-surface.test.mjs"
+
+expect_fail_code "החזרת כניסה בסיסמה לקוד הלקוח" \
+  "$DIR/../../src/auth/AuthProvider.tsx" \
+  'sed -i "s|signOut: async () => {|signInLegacy: async (e: string, p: string) => { await supabase.auth.signInWithPassword({ email: e, password: p }); },\n    signOut: async () => {|" "$F"' \
+  "node supabase/tests/public-surface.test.mjs"
+
+expect_fail_code "Gate מכניס פרופיל מושבת" \
+  "$DIR/../../src/App.tsx" \
+  'sed -i "s/if (!profile || !profile.is_active)/if (!profile)/" "$F"' \
+  "node supabase/tests/public-surface.test.mjs"
+
+expect_fail_code "מסך המשתמשים נפתח לכל תפקיד" \
+  "$DIR/../../src/App.tsx" \
+  'sed -i "s/{profile.role === .owner. \&\& <Route path=\"\/users\"/{<Route path=\"\/users\"/" "$F"' \
+  "node supabase/tests/public-surface.test.mjs"
+
+# ─── רשימת המורשים: הדלת עצמה ───
+
+expect_fail "הסרת השער מ-auth.users (כל אימייל בגוגל מקבל חשבון)" \
+  "drop trigger auth_user_gate on auth.users" \
+  "11_allowlist_proof.sql"
+
+expect_fail "השער מתעלם מהספק (סיסמה למורשה עוברת)" \
+  "\\i $DIR/holes/gate_no_provider_check.sql" \
+  "11_allowlist_proof.sql"
+
+expect_fail "auth_role מחזירה תפקיד גם למושבתת" \
+  "\\i $DIR/holes/auth_role_ignores_inactive.sql" \
+  "11_allowlist_proof.sql"
+
+expect_fail "ניתוק הסנכרון רשימה → פרופיל (שינוי תפקיד לא נאכף)" \
+  "drop trigger allowed_users_after on allowed_users" \
+  "11_allowlist_proof.sql"
+
+expect_fail "הסרת נעילת הבעלים האחרונה (נעילה בחוץ)" \
+  "\\i $DIR/holes/no_last_owner_lock.sql" \
+  "11_allowlist_proof.sql"
+
+expect_fail "רשימת המורשים גלויה לכל מחובר" \
+  "create policy hole_allowlist_read on allowed_users for select using (true)" \
+  "11_allowlist_proof.sql"
+
+expect_fail "ניטרול RLS על רשימת המורשים" \
+  "alter table allowed_users disable row level security" \
+  "11_allowlist_proof.sql"
+
+expect_fail "JWT בלי פרופיל רואה סניפים" \
+  "create policy hole_branches_any_jwt on branches for select using (auth.uid() is not null)" \
+  "11_allowlist_proof.sql"
 
 expect_fail_code "פונקציה חדשה בלי בדיקה חיובית" \
   "$DIR/../migrations/0013_function_privileges.sql" \

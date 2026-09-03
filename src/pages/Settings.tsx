@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { useOpenAlerts, useWaHealth } from '@/hooks/system';
 import { WaHealthBadge } from '@/components/WaHealthBadge';
 import { supabase } from '@/lib/supabase';
@@ -77,7 +78,8 @@ export function Settings() {
       <section className="card p-4">
         <h2 className="mb-2 text-lg">שאר ההגדרות</h2>
         <p className="text-sm text-soft">
-          משתמשים והרשאות · עונות · קטגוריות · תבניות · שעות שקטות וחגים · גיבוי — נבנים בסבב 9.
+          משתמשים והרשאות — במסך <Link to="/users" className="text-plum underline">משתמשים</Link>.
+          עונות · קטגוריות · תבניות · שעות שקטות וחגים · גיבוי — נבנים בסבב 9.
         </p>
       </section>
     </div>

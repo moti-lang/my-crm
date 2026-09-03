@@ -2,10 +2,11 @@
 -- מזהים קבועים כדי שה-reset יהיה דטרמיניסטי וניתן להשוואה.
 
 -- ═══════════════════════ משתמשים ═══════════════════════
--- אין כאן משתמשים בכוונה. כתיבה ישירה ל-auth.users מייצרת משתמשים
--- שלא מתחברים (חסרה שורה ב-auth.identities), והסכמה משתנה בין גרסאות GoTrue.
--- המשתמשים נוצרים דרך ה-Admin API:   node scripts/seed-users.mjs
--- הסקריפט גם כותב profiles, משייך branch_staff וממלא created_by.
+-- אין כאן משתמשים בכוונה. חשבון נוצר רק בכניסה בגוגל של אימייל
+-- שברשימת המורשים (allowed_users, מיגרציה 0014). הבעלים הראשונה
+-- נמצאת ב-seed_allowlist.sql, שרץ אחרי הקובץ הזה ואידמפוטנטי.
+-- זהויות הבדיקה: supabase/tests/01_local_users.sql (מקומי) או
+-- scripts/seed-identities.mjs (ענן).
 
 -- ═══════════════════════ עונה ═══════════════════════
 insert into seasons (id, name, starts_on, ends_on, is_current) values
@@ -20,7 +21,7 @@ insert into branches (id, name, city, address, supervisor_name, supervisor_phone
   ('bbbbbbbb-0000-0000-0000-000000000004','בית שמש','בית שמש','נהר הירדן 8','אסתי כהן','972541000004','רביעי 17:30','{3}','17:30',1900,900),
   ('bbbbbbbb-0000-0000-0000-000000000005','אשדוד','אשדוד','רובע ז 21','דבורי מזרחי','972541000005','חמישי 16:30','{4}','16:30',1800,850);
 
--- שיוך רבקי לביתר עילית נעשה ב-scripts/seed-users.mjs (תלוי ב-UUID מה-Admin API).
+-- שיוך רבקי לביתר עילית נגזר מ-allowed_users.branch_id (ראה 01_local_users.sql).
 
 -- ═══════════════════════ קטגוריות ═══════════════════════
 insert into categories (scope, kind, name, sort_order) values

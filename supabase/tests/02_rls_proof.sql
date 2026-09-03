@@ -202,9 +202,11 @@ select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), t
 rollback;
 
 begin;
+-- ה-claims נקבעים לפני ההשבתה: t_user מסננת פרופילים פעילים, ואחריה
+-- הייתה מחזירה null — ו-auth_role() "עוברת" מהסיבה הלא נכונה.
+select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
 update profiles set is_active = false where role = 'branch_manager';
 set local role authenticated;
-select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
 select assert_true(auth_role() is null, '★ auth_role מחזירה null למשתמש מושבת');
 select assert_eq((select count(*) from branches), 0,
                  '★ משתמש מושבת אינו רואה דבר');

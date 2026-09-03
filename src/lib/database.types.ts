@@ -6,6 +6,70 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      allowed_users: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string;
+          role: Database["public"]["Enums"]["user_role"];
+          branch_id: string | null;
+          is_active: boolean;
+          user_id: string | null;
+          invited_by: string | null;
+          invited_at: string;
+          joined_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          full_name?: string;
+          role?: Database["public"]["Enums"]["user_role"];
+          branch_id?: string | null;
+          is_active?: boolean;
+          user_id?: string | null;
+          invited_by?: string | null;
+          invited_at?: string;
+          joined_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          full_name?: string;
+          role?: Database["public"]["Enums"]["user_role"];
+          branch_id?: string | null;
+          is_active?: boolean;
+          user_id?: string | null;
+          invited_by?: string | null;
+          invited_at?: string;
+          joined_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "allowed_users_branch_id_fkey";
+            columns: ["branch_id"];
+            isOneToOne: false;
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "allowed_users_invited_by_fkey";
+            columns: ["invited_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "allowed_users_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       attendance: {
         Row: {
           lesson_id: string;
@@ -275,6 +339,7 @@ export type Database = {
           error: string | null;
           confirmed_at: string | null;
           created_at: string;
+          expires_at: string | null;
         };
         Insert: {
           id?: string;
@@ -288,6 +353,7 @@ export type Database = {
           error?: string | null;
           confirmed_at?: string | null;
           created_at?: string;
+          expires_at?: string | null;
         };
         Update: {
           id?: string;
@@ -301,6 +367,7 @@ export type Database = {
           error?: string | null;
           confirmed_at?: string | null;
           created_at?: string;
+          expires_at?: string | null;
         };
         Relationships: [];
       };
@@ -699,6 +766,7 @@ export type Database = {
           role: Database["public"]["Enums"]["user_role"];
           is_active: boolean;
           created_at: string;
+          email: string | null;
         };
         Insert: {
           id: string;
@@ -707,6 +775,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"];
           is_active?: boolean;
           created_at?: string;
+          email?: string | null;
         };
         Update: {
           id?: string;
@@ -715,6 +784,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"];
           is_active?: boolean;
           created_at?: string;
+          email?: string | null;
         };
         Relationships: [
           {
@@ -741,6 +811,7 @@ export type Database = {
           error: string | null;
           created_by: string | null;
           created_at: string;
+          dedupe_key: string | null;
         };
         Insert: {
           id?: string;
@@ -756,6 +827,7 @@ export type Database = {
           error?: string | null;
           created_by?: string | null;
           created_at?: string;
+          dedupe_key?: string | null;
         };
         Update: {
           id?: string;
@@ -771,6 +843,7 @@ export type Database = {
           error?: string | null;
           created_by?: string | null;
           created_at?: string;
+          dedupe_key?: string | null;
         };
         Relationships: [
           {
@@ -1054,6 +1127,19 @@ export type Database = {
       };
     };
     Views: {
+      v_absence_streaks: {
+        Row: {
+          student_id: string | null;
+          full_name: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          parent_name: string | null;
+          parent_phone: string | null;
+          absent_streak: number | null;
+          last_absent_on: string | null;
+        };
+        Relationships: [];
+      };
       v_branch_pnl: {
         Row: {
           branch_id: string | null;
@@ -1198,6 +1284,33 @@ export type Database = {
           p_token: string;
           p_lesson: string;
           p_marks: Json;
+        };
+        Returns: Json;
+      };
+      rpc_cancel_command: {
+        Args: {
+          p_command_id: string;
+        };
+        Returns: Json;
+      };
+      rpc_cancel_last_command: {
+        Args: {
+          p_phone: string;
+        };
+        Returns: Json;
+      };
+      rpc_create_pending_command: {
+        Args: {
+          p_phone: string;
+          p_raw_text: string;
+          p_parsed: Json;
+          p_intent: string;
+        };
+        Returns: string;
+      };
+      rpc_execute_command: {
+        Args: {
+          p_command_id: string;
         };
         Returns: Json;
       };

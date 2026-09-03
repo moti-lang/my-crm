@@ -9,19 +9,47 @@ type AuthValue = {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  /** הודעת דחייה שחזרה מגוגל/GoTrue — בדרך כלל: האימייל אינו ברשימת המורשים. */
+  denied: string | null;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
 
+/**
+ * GoTrue מחזיר שגיאת OAuth בכתובת החזרה — ב-hash (implicit) או ב-query
+ * (PKCE): error, error_code, error_description. כשהטריגר במסד דוחה את
+ * יצירת החשבון, זו הדרך היחידה שבה הדפדפן שומע על זה.
+ */
+export function oauthErrorFromUrl(): string | null {
+  const sources = [
+    new URLSearchParams(window.location.hash.replace(/^#/, '')),
+    new URLSearchParams(window.location.search),
+  ];
+  for (const p of sources) {
+    const desc = p.get('error_description') ?? p.get('error');
+    if (desc) return desc;
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
+
+    const err = oauthErrorFromUrl();
+    if (err) {
+      setDenied(err);
+      // מנקים את הכתובת כדי שרענון לא יציג את אותה שגיאה שוב.
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       if (!alive) return;
       setSession(data.session);
@@ -63,11 +91,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     profile,
     loading,
-    signIn: async (email, password) => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+    denied,
+    signInWithGoogle: async () => {
+      setDenied(null);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
       if (error) throw new Error(translateAuthError(error.message));
     },
     signOut: async () => {
+      setDenied(null);
       await supabase.auth.signOut();
     },
   };
@@ -76,10 +110,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 function translateAuthError(message: string): string {
-  if (/invalid login credentials/i.test(message)) return 'אימייל או סיסמה שגויים.';
-  if (/email not confirmed/i.test(message)) return 'המייל טרם אומת.';
   if (/rate limit/i.test(message)) return 'יותר מדי ניסיונות. נסי שוב בעוד כמה דקות.';
   if (/failed to fetch|network/i.test(message)) return 'אין חיבור לשרת. בדקי את החיבור ונסי שוב.';
+  if (/provider is not enabled|unsupported provider/i.test(message)) return 'הכניסה בגוגל אינה מופעלת בפרויקט. פני לניהול.';
   return 'ההתחברות נכשלה. נסי שוב.';
 }
 

@@ -4,7 +4,7 @@
 # ה-shim מחקה את סופבייס גם במבנה הסכמות — הרחבות ב-extensions ולא
 # ב-public — כדי שכשל שתלוי בכך ייתפס כאן ולא בענן.
 #
-# בענן הזרימה היא:  supabase db push  →  node scripts/seed-users.mjs
+# בענן הזרימה היא:  supabase db push  →  seed_allowlist.sql  →  node scripts/seed-identities.mjs
 # כאן אין GoTrue, ולכן 01_local_users.sql ממלא את מקום הסקריפט.
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -19,5 +19,6 @@ for f in "$DIR"/../migrations/*.sql; do
   echo "  → $(basename "$f")"; $PSQL -d teichtal -f "$f"
 done
 echo "  → seed.sql";            $PSQL -d teichtal -f "$DIR/../seed.sql"
+echo "  → seed_allowlist.sql";  $PSQL -d teichtal -f "$DIR/../seed_allowlist.sql"
 echo "  → 01_local_users.sql";  $PSQL -d teichtal -f "$DIR/01_local_users.sql"
 echo "db reset OK"

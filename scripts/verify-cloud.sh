@@ -80,11 +80,17 @@ if [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
     echo "  ✗ משיכת המפתחות נכשלה"; FAILED=1; abort "0"
   fi
   # ההגדרה שקובעת בפרויקט מתארח היא בדשבורד. כאן היא נקבעת בקוד.
-  node scripts/supabase-project.mjs auth || { echo "  ✗ סגירת ההרשמה העצמית נכשלה"; FAILED=1; abort "0"; }
+  node scripts/supabase-project.mjs auth || { echo "  ✗ הגדרת גוגל-בלבד נכשלה"; FAILED=1; abort "0"; }
+  # מפתח service_role לשלבים 2 ו-3, אם לא ניתן ידנית.
+  if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+    SUPABASE_SERVICE_ROLE_KEY=$(node scripts/supabase-project.mjs service-key) && export SUPABASE_SERVICE_ROLE_KEY \
+      && ok "מפתח service_role נמשך מהמקור (לא נשמר בשום מקום)" \
+      || { echo "  ✗ משיכת מפתח service_role נכשלה"; FAILED=1; abort "0"; }
+  fi
 fi
 
 # ─────────── 1. מיגרציות ───────────
-if step 1 "db push — 13 מיגרציות על פרויקט נקי"; then
+if step 1 "db push — 14 מיגרציות על פרויקט נקי"; then
   # db-push.sh בוחר בין ה-CLI, psql וה-Management API לפי מה שיש בסביבה.
   if [ -z "${SUPABASE_PROJECT_REF:-}" ] && [ -z "${SUPABASE_DB_URL:-}" ]; then
     echo "  ✗ חסרים משתני סביבה: SUPABASE_DB_URL (או SUPABASE_PROJECT_REF עם SUPABASE_DB_PASSWORD / SUPABASE_ACCESS_TOKEN)"
@@ -96,11 +102,15 @@ if step 1 "db push — 13 מיגרציות על פרויקט נקי"; then
   fi
 fi
 
-# ─────────── 2. נתוני בסיס ומשתמשים דרך Admin API ───────────
-if step 2 "seed ומשתמשים — ההימור על ה-Admin API"; then
-  if need SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY; then
+# ─────────── 2. נתוני בסיס, הבעלים הראשונה, זהויות הבדיקה ───────────
+if step 2 "seed, רשימת המורשים וזהויות הבדיקה"; then
+  if [ -z "${SUPABASE_DB_URL:-}" ] && [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+    echo "  ✗ חסרים משתני סביבה: SUPABASE_DB_URL (או SUPABASE_ACCESS_TOKEN)"
+    FAILED=1; [ -z "$ONLY" ] && abort "$STEP"
+  else
     # db push אינו מריץ seed. בלעדיו שלב 3 רואה מסד ריק וכל הציפיות נופלות.
     # seed.sql אינו אידמפוטנטי (מזהים קבועים), ולכן רץ רק כשאין סניפים.
+    # seed_allowlist.sql (הבעלים הראשונה) אידמפוטנטי ורץ תמיד.
     if [ -n "${SUPABASE_DB_URL:-}" ]; then
       if [ "$(psql "$SUPABASE_DB_URL" -tAc 'select count(*) from public.branches')" = "0" ]; then
         psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q --single-transaction -f supabase/seed.sql \
@@ -108,23 +118,27 @@ if step 2 "seed ומשתמשים — ההימור על ה-Admin API"; then
       else
         echo "  · כבר יש סניפים — seed.sql לא רץ שוב"
       fi
+      psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -f supabase/seed_allowlist.sql \
+        && ok "הבעלים הראשונה ברשימת המורשים" || fail "seed_allowlist נכשל"
     elif [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
-      node scripts/db-push-api.mjs seed && ok "נתוני הבסיס במקום" || fail "seed נכשל"
+      node scripts/db-push-api.mjs seed && ok "נתוני הבסיס והבעלים הראשונה במקום" || fail "seed נכשל"
     else
-      echo "  ! אין SUPABASE_DB_URL ואין SUPABASE_ACCESS_TOKEN — seed.sql לא נטען"
+      echo "  ! אין SUPABASE_DB_URL ואין SUPABASE_ACCESS_TOKEN — seed לא נטען"
     fi
-    node scripts/seed-users.mjs \
-      && ok "שלושת המשתמשים נוצרו והפרופילים נכתבו" \
-      || fail "יצירת המשתמשים נכשלה"
+    # זהויות הבדיקה עוברות באותו טריגר שעוברת כניסה אמיתית. אם הוא
+    # נשבר — אף אחת לא נוצרת, וזה נראה כאן ולא בשלב 4.
+    PGURL="${PGURL:-${SUPABASE_DB_URL:-}}" node scripts/seed-identities.mjs \
+      && ok "שלוש זהויות הבדיקה נוצרו דרך השער" \
+      || fail "יצירת זהויות הבדיקה נכשלה"
   fi
 fi
 
-# ─────────── 3. התחברות אמיתית ───────────
-if step 3 "התחברות בשלושת התפקידים מול GoTrue"; then
-  if need SUPABASE_URL SUPABASE_ANON_KEY; then
-    node scripts/verify-login.mjs \
-      && ok "שלושת התפקידים התחברו וקיבלו JWT" \
-      || fail "התחברות נכשלה"
+# ─────────── 3. הדלת: גוגל בלבד, רשימה בלבד ───────────
+if step 3 "השער מול GoTrue האמיתי — אין סיסמה, אין זר"; then
+  if need SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY; then
+    PGURL="${PGURL:-${SUPABASE_DB_URL:-}}" node scripts/verify-access.mjs \
+      && ok "זר נדחה במסד, סיסמה נדחית, מוזמנת מקבלת את תפקידה" \
+      || fail "הדלת פתוחה — ראה למעלה"
   fi
 fi
 
