@@ -81,13 +81,23 @@ try {
     if (['allowed_users', 'profiles'].includes(t)) continue;
     await insertRows(`public.${t}`, data[`public.${t}`] ?? []);
   }
-  // ─── 5. הקישורים של הרשימה, עכשיו כשהכול קיים. הטריגר מסנכרן branch_staff. ───
-  await ex.run(`update public.allowed_users a set user_id = p.id from public.profiles p where p.email = a.email`);
-  for (const r of (data['public.allowed_users'] ?? []).filter((r) => r.invited_by || r.branch_id)) {
-    await ex.run(`update public.allowed_users set
-        invited_by = case when exists (select 1 from public.profiles where id = ${lit(r.invited_by)}::uuid) then ${lit(r.invited_by)}::uuid else null end,
-        branch_id = ${lit(r.branch_id)}::uuid
-      where id = ${lit(r.id)}`);
+  // ─── 5. הקישורים של הרשימה, עכשיו כשהכול קיים. ───
+  // הטריגרים של הרשימה כבויים לרגע: branch_staff כבר שוחזר מהגיבוי, ואין
+  // צורך שהסנכרון ידרוס אותו; ו-updated_at חוזר לערך המקורי ולא ל-now().
+  await ex.run(`alter table public.allowed_users disable trigger allowed_users_before;
+                alter table public.allowed_users disable trigger allowed_users_after;`);
+  try {
+    for (const r of (data['public.allowed_users'] ?? [])) {
+      await ex.run(`update public.allowed_users set
+          user_id = (select id from public.profiles where email = ${lit(r.email)}),
+          invited_by = case when exists (select 1 from public.profiles where id = ${lit(r.invited_by)}::uuid) then ${lit(r.invited_by)}::uuid else null end,
+          branch_id = ${lit(r.branch_id)}::uuid,
+          updated_at = ${lit(r.updated_at)}::timestamptz
+        where id = ${lit(r.id)}`);
+    }
+  } finally {
+    await ex.run(`alter table public.allowed_users enable trigger allowed_users_before;
+                  alter table public.allowed_users enable trigger allowed_users_after;`);
   }
 
   // ─── אימות ───

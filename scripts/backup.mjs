@@ -37,13 +37,17 @@ try {
 
   const data = {};
   const counts = {};
+  // row_to_json בצד המסד: חותמות זמן במיקרו-שניות ומספרים כפי שהם. דרך
+  // הדרייבר של pg חותמת זמן הופכת ל-Date ומאבדת מיקרו-שניות — והשחזור
+  // לא היה זהה למקור.
+  const dump = async (sql) => (await ex.run(`select row_to_json(x) as r from (${sql}) x`)).map((r) => r.r);
   for (const t of tables) {
-    const rows = await ex.run(`select * from public.${quote(t)}`);
+    const rows = await dump(`select * from public.${quote(t)}`);
     data[`public.${t}`] = rows; counts[`public.${t}`] = rows.length;
     console.log(`  · public.${t.padEnd(22)} ${rows.length}`);
   }
   for (const t of authTables) {
-    const rows = await ex.run(`select * from auth.${t}`);
+    const rows = await dump(`select * from auth.${t}`);
     data[`auth.${t}`] = rows; counts[`auth.${t}`] = rows.length;
     console.log(`  · auth.${t.padEnd(24)} ${rows.length}`);
   }
