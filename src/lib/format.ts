@@ -5,8 +5,10 @@ export function formatILS(value: number | string | null | undefined): string {
   const n = typeof value === 'string' ? Number(value) : (value ?? 0);
   if (!Number.isFinite(n)) return '₪0';
   const rounded = Math.round(n);
-  // המינוס לפני סימן השקל: '₪-1,770' מוצג הפוך ב-RTL.
-  return `${rounded < 0 ? '-' : ''}₪${Math.abs(rounded).toLocaleString('he-IL')}`;
+  // המינוס לפני סימן השקל, וסימן LRM לפניו: בלי זה פסקה RTL מציגה
+  // '₪23,700-' — המינוס קופץ לסוף. נבדק בצילום מסך של 390px.
+  const text = `₪${Math.abs(rounded).toLocaleString('he-IL')}`;
+  return rounded < 0 ? `\u200E-${text}` : text;
 }
 
 /** dd/MM/yyyy — פורמט התצוגה היחיד לתאריכים. */

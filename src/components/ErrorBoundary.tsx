@@ -1,3 +1,4 @@
+import { humanError } from '@/lib/errors';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 /**
@@ -41,7 +42,7 @@ export class ErrorBoundary extends Component<
           <details className="mt-4 text-right">
             <summary className="cursor-pointer text-xs text-soft">פרטים טכניים</summary>
             <pre className="mt-2 overflow-x-auto rounded-field bg-shade p-2 text-left text-xs" dir="ltr">
-              {this.state.error.message}
+              {humanError(this.state.error)}
             </pre>
           </details>
         </div>

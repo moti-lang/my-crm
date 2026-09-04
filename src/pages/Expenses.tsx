@@ -1,3 +1,4 @@
+import { humanError } from '@/lib/errors';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -264,7 +265,7 @@ function QuickAddForm({
 
       {error != null && (
         <p className="text-sm text-bad" role="alert">
-          {error instanceof Error ? error.message : 'השמירה נכשלה.'}
+          {humanError(error)}
         </p>
       )}
 

@@ -18,7 +18,7 @@ export function humanError(error: unknown): string {
   for (const [pattern, message] of PATTERNS) {
     if (pattern.test(raw)) return message;
   }
-  return 'משהו השתבש בטעינת הנתונים.';
+  return 'משהו השתבש. נסי שוב.';
 }
 
 /** הפרטים הטכניים — לקונסול ולדיווח תקלות, לא למסך. */

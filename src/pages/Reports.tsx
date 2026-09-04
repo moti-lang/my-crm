@@ -74,6 +74,15 @@ function ReportPanel({ def, rows, isLoading, isError, error, onRetry }: {
   def: ReportDef<unknown>; rows: unknown[]; isLoading: boolean; isError: boolean; error: unknown; onRetry: () => void;
 }) {
   const chartData = useMemo(() => def.toChart(rows), [def, rows]);
+  // Recharts כותב fill כמאפיין SVG, ומשתני CSS אינם תקפים שם — העמודות
+  // יצאו שקופות. פותרים את המשתנה לצבע ממשי מה-:root (גם במצב כהה).
+  const series = useMemo(() => {
+    const css = getComputedStyle(document.documentElement);
+    return def.chart.series.map((s) => ({
+      ...s,
+      color: s.color.startsWith('var(') ? css.getPropertyValue(s.color.slice(4, -1)).trim() || '#5b2a57' : s.color,
+    }));
+  }, [def]);
   const totals = useMemo(() => columnTotals(def.columns, rows), [def, rows]);
 
   if (isError) return <ErrorState error={error} onRetry={onRetry} />;
@@ -113,7 +122,7 @@ function ReportPanel({ def, rows, isLoading, isError, error, onRetry }: {
                   formatter={(v: number, name: string) => [isMoneyReport(def.id) ? formatILS(v) : String(v), name]}
                 />
                 <Legend wrapperStyle={{ direction: 'rtl' }} />
-                {def.chart.series.map((s) => (
+                {series.map((s) => (
                   <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]} />
                 ))}
               </BarChart>

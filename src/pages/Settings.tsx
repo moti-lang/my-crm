@@ -115,8 +115,8 @@ function BackupCard() {
             </dl>
           )}
           <p className="mt-3 border-t border-rule pt-3 text-xs text-soft">
-            רץ כל יום ב-22:00 ונשמר ב-Storage (30 האחרונים). כשל מופיע גם בהתראות המערכת למטה.
-            הורדה: <code>npm run backup:pull</code>.
+            רץ כל יום ב-22:00 ונשמר בענן (30 האחרונים). כשל מופיע גם בהתראות המערכת למטה.
+            להורדה או שחזור — פנייה למנהל המערכת.
           </p>
         </>
       )}

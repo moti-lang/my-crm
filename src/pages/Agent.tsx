@@ -111,7 +111,7 @@ function Simulator() {
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {turns.length === 0 && (
           <p className="text-sm text-soft">
-            כתבי כמו הורה. הסימולטור מריץ את <code>ai-answer</code> האמיתי מול המאגר, ולא כותב דבר —
+            כתבי כמו הורה. הסימולטור מריץ את הסוכן האמיתי מול המאגר, ולא כותב דבר —
             לא שאלות ללא מענה ולא לידים. במצב הרצה יבשה התשובות מוקלטות.
           </p>
         )}

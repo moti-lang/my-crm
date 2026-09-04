@@ -1,3 +1,4 @@
+import { humanError } from '@/lib/errors';
 import { useMemo, useState } from 'react';
 import { useDebtors, useTemplates, useCreateReminders } from '@/hooks/finance';
 import { useBranches } from '@/hooks/queries';
@@ -224,11 +225,11 @@ function PreviewDialog({
         <footer className="border-t border-rule p-4">
           {error != null && (
             <p className="mb-2 text-sm text-bad" role="alert">
-              {error instanceof Error ? error.message : 'השמירה נכשלה.'}
+              {humanError(error)}
             </p>
           )}
           <p className="mb-3 text-xs text-soft">
-            התזכורות נשמרות בתור. השליחה בפועל מתבצעת ע"י cron-reminders, ומכבדת שעות שקטות.
+            התזכורות נשמרות בתור ונשלחות אוטומטית כל רבע שעה, בכפוף לשעות השקטות.
           </p>
           <div className="flex gap-2">
             <button type="button" className="btn-primary flex-1" onClick={onConfirm} disabled={busy}>

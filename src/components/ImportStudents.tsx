@@ -103,8 +103,12 @@ export function ImportStudents({ onClose }: { onClose: () => void }) {
       {step === 'upload' && (
         <div className="space-y-3 text-sm">
           <p>קובץ xlsx או csv עם שורת כותרות. חובה: <b>שם התלמידה</b> ו<b>סניף</b> (בשם המדויק כמו במערכת). השאר אופציונלי.</p>
-          <input type="file" accept=".xlsx,.xls,.csv" className="field" aria-label="בחירת קובץ"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); }} />
+          {/* הקלט המקורי מוסתר: הדפדפן מציג עליו "Choose File" באנגלית. */}
+          <label className="btn-primary cursor-pointer">
+            בחירת קובץ
+            <input type="file" accept=".xlsx,.xls,.csv" className="sr-only" aria-label="בחירת קובץ"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); }} />
+          </label>
           <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={downloadTemplate}>הורדת תבנית לדוגמה</button>
         </div>
       )}
