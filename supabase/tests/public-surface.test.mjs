@@ -81,6 +81,8 @@ check('★ אף קובץ בקוד הלקוח אינו מתחבר בסיסמה', 
 const auth = codeOf('src/auth/AuthProvider.tsx');
 check('★ הכניסה היא signInWithOAuth עם google', /signInWithOAuth\(\{\s*provider:\s*'google'/.test(auth));
 check('★ שגיאת חזרה מ-OAuth נתפסת (חשבון שנדחה במסד)', /oauthErrorFromUrl\(/.test(auth));
+check('★ הפרופיל נבדק מחדש בחזרה לפוקוס (משתמשת שהושבתה תוך כדי)',
+      /addEventListener\('visibilitychange'/.test(auth) && /\}, \[session, profileTick\]\);/.test(auth));
 
 // ─── שום מסך אחר אינו נטען בלי session ───
 const gate = app.slice(app.indexOf('function Gate()'), app.indexOf('export default'));

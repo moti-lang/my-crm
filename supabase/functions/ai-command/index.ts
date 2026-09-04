@@ -9,11 +9,16 @@
 //
 // ההחלטה מה לעשות עם התוצאה — אישור, ביצוע, ביטול — היא של 6ב.
 import { aiProvider, type CommandContext } from '../_shared/ai.ts';
+import { requireUserJwt } from '../_shared/guard.ts';
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
 
 Deno.serve(async (req) => {
+  // verify_jwt מקבל גם את מפתח ה-anon הציבורי. כאן: משתמשת מחוברת בלבד.
+  const denied = requireUserJwt(req);
+  if (denied) return denied;
+
   if (req.method !== 'POST') return json({ error: 'שיטה לא נתמכת' }, 405);
 
   let input: Partial<CommandContext>;

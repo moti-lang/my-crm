@@ -4,6 +4,7 @@
 // והצעת הודעה להורה. ההודעה להורה לא נשלחת אוטומטית: זו שיחה רגישה,
 // והבעלים צריכה להחליט אם לשלוח אותה או להרים טלפון.
 import { adminClient } from '../_shared/supabase.ts';
+import { requireCronSecret } from '../_shared/guard.ts';
 import { loadTemplates, readSetting, automationEnabled } from '../_shared/reminders.ts';
 import { renderTemplate } from '../_shared/template.ts';
 import { alertOwner } from '../_shared/alerts.ts';
@@ -11,7 +12,10 @@ import { alertOwner } from '../_shared/alerts.ts';
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
+
   const db = adminClient();
 
   try {

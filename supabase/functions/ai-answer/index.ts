@@ -7,11 +7,16 @@
 // הקוראת היחידה מהדפדפן היא הסימולטור במסך /agent (verify_jwt=true):
 // הוא מריץ את אותו ספק ואותו פרומפט מול המאגר האמיתי, בלי לכתוב דבר.
 import { answerProvider, type AnswerContext } from '../_shared/answer.ts';
+import { requireUserJwt } from '../_shared/guard.ts';
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
 
 Deno.serve(async (req) => {
+  // verify_jwt מקבל גם את מפתח ה-anon הציבורי. כאן: משתמשת מחוברת בלבד.
+  const denied = requireUserJwt(req);
+  if (denied) return denied;
+
   if (req.method !== 'POST') return json({ error: 'שיטה לא נתמכת' }, 405);
 
   let input: Partial<AnswerContext>;

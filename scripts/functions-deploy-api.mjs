@@ -43,6 +43,19 @@ function walk(dir) {
   });
 }
 
+/** אין פריסה בלי שומר. אותו כלל כמו function-guards.test.mjs. */
+const GUARD = { 'wa-webhook': 'verifyHubSignature', 'ai-answer': 'requireUserJwt', 'ai-command': 'requireUserJwt' };
+function guardOf(slug) {
+  const src = readFileSync(join(ROOT, slug, 'index.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const want = GUARD[slug] ?? 'requireCronSecret';
+  return src.includes(`${want}(`) ? want : null;
+}
+const unguarded = slugs.filter((s) => !guardOf(s));
+if (unguarded.length) {
+  console.error(`  ✗ לא פורסים פונקציה בלי שומר: ${unguarded.join(', ')} (ראה _shared/guard.ts)`);
+  process.exit(1);
+}
+
 const call = api(token);
 const project = await assertTarget(call, ref);
 console.log(`  ✓ יעד מאומת: ${project.name} · ${ref}`);

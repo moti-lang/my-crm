@@ -20,7 +20,7 @@ run_suite() {
 expect_pass() {
   ran=$((ran+1))
   "$DIR/reset.sh" >/dev/null
-  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql 11_allowlist_proof.sql 12_reports_proof.sql; do
+  for s in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql 11_allowlist_proof.sql 12_reports_proof.sql 13_attendance_link_hardening.sql; do
     SUITE="$s"
     if run_suite; then
       echo "  ✓ בסיס נקי: $s עוברת"
@@ -274,6 +274,48 @@ expect_fail_code "הקובץ היומי בלי auth.users" \
   "$DIR/../../supabase/migrations/0017_backup_dump.sql" \
   "sed -i \"s/relname in ('users', 'identities')/relname in ('identities')/\" \"\$F\"" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && node supabase/tests/backup-roundtrip.test.mjs"
+
+# ─── סבב האבטחה (SECURITY.md) ───
+
+expect_fail_code "פונקציית cron בלי שומר" \
+  "$DIR/../../supabase/functions/cron-debt/index.ts" \
+  'sed -i "/const denied = requireCronSecret(req);/d; /if (denied) return denied;/d" "$F"' \
+  "node supabase/tests/function-guards.test.mjs"
+
+expect_fail_code "ai-answer מקבלת את מפתח ה-anon" \
+  "$DIR/../../supabase/functions/ai-answer/index.ts" \
+  'sed -i "/const denied = requireUserJwt(req);/d; /if (denied) return denied;/d" "$F"' \
+  "node supabase/tests/function-guards.test.mjs"
+
+expect_fail_code "הפריסה לא בודקת שומר" \
+  "$DIR/../../scripts/functions-deploy-api.mjs" \
+  'sed -i "s/const unguarded = slugs.filter((s) => !guardOf(s));/const unguarded = [];/" "$F"' \
+  "node supabase/tests/function-guards.test.mjs"
+
+expect_fail_code "הזרקת נוסחאות: ההגנה מוסרת מהייצוא" \
+  "$DIR/../../src/lib/export-core.ts" \
+  'sed -i "s/columns.map((c) => neutralizeCell(c.value(r)))/columns.map((c) => c.value(r))/" "$F"' \
+  "node supabase/tests/reports-export.test.mjs"
+
+expect_fail_code "עזר בדיקה נשאר בסכמה אחרי הניקוי" \
+  "$DIR/_assert.sql" \
+  'sed -i "s/  drop function if exists drop_assert_helpers();//" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/10_portability_proof.sql"
+
+expect_fail_code "קישור נוכחות בלי תפוגה" \
+  "$DIR/../migrations/0018_attendance_link_hardening.sql" \
+  "sed -i \"s/and coalesce(p_link.last_used_at, p_link.created_at) > now() - interval '90 days'//\" \"\$F\"" \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/13_attendance_link_hardening.sql"
+
+expect_fail_code "הצפת קישור נוכחות בלי התראה" \
+  "$DIR/../migrations/0018_attendance_link_hardening.sql" \
+  'sed -i "s/if v_hour_hits > 30 and not exists/if v_hour_hits > 1000000 and not exists/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/13_attendance_link_hardening.sql"
+
+expect_fail_code "הפרופיל לא נבדק מחדש בחזרה לפוקוס" \
+  "$DIR/../../src/auth/AuthProvider.tsx" \
+  'sed -i "s/}, \[session, profileTick\]);/}, [session]);/" "$F"' \
+  "node supabase/tests/public-surface.test.mjs"
 
 expect_fail "JWT בלי פרופיל רואה סניפים" \
   "create policy hole_branches_any_jwt on branches for select using (auth.uid() is not null)" \

@@ -193,6 +193,15 @@ if step 7 "פרונט בנטליפיי + כתובת חיה"; then
   fi
 fi
 
+# ─────────── 8. כל פונקציה פרוסה מסרבת בלי טוקן ───────────
+if step 8 "Edge Functions — כולן מסרבות בלי טוקן ולמפתח anon"; then
+  if need SUPABASE_ACCESS_TOKEN SUPABASE_ANON_KEY; then
+    node scripts/verify-functions.mjs \
+      && ok "אף פונקציה אינה פתוחה" \
+      || fail "פונקציה פתוחה — ראה למעלה"
+  fi
+fi
+
 echo ""
 echo "═══════════════════════════════════════════════"
 if [ "$FAILED" -eq 0 ]; then

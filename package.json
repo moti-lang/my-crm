@@ -34,6 +34,8 @@
     "restore": "node scripts/restore.mjs",
     "test:backup": "node supabase/tests/backup-roundtrip.test.mjs",
     "test:backup-mail": "node supabase/tests/backup-mail.test.mjs",
+    "test:guards": "node supabase/tests/function-guards.test.mjs",
+    "security": "./scripts/security-round.sh",
     "backup:pull": "node scripts/backup-pull.mjs",
     "backup:schedule": "node scripts/schedule-backup.mjs"
   },

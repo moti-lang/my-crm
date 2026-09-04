@@ -3,6 +3,10 @@
 המערכת מדברת עם **whatsapp-hub** — שרת הוואטסאפ העצמאי
 ([moti-lang/whatsapp-hub](https://github.com/moti-lang/whatsapp-hub)), לא עם ספק מנוהל.
 
+## השומר — חובה בכל פונקציה
+
+המשפט הראשון ב-handler של כל פונקציה הוא שומר מ-`_shared/guard.ts`: `requireCronSecret(req)` (cron-* ו-`wa-send`), `requireUserJwt(req)` (`ai-answer`, `ai-command`), או `verifyHubSignature` (`wa-webhook`). `function-guards.test.mjs` בודק את זה, ו-`scripts/functions-deploy-api.mjs` מסרב לפרוס פונקציה בלעדיו. ראה [SECURITY.md](../../SECURITY.md).
+
 ## החוזה מול השרת
 
 נלקח מהקוד של השרת עצמו, לא מהנחות.

@@ -7,6 +7,7 @@
 // rpc_attendance_sheet יוצר שיעור בעצמו אם הוא חסר — הרשת השנייה,
 // למקרה שה-cron לא רץ. עדיף שהאחראית תדווח מאשר שתיתקל במסך ריק.
 import { adminClient } from '../_shared/supabase.ts';
+import { requireCronSecret } from '../_shared/guard.ts';
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
@@ -23,7 +24,10 @@ function jerusalemDate(d: Date): string {
   }).format(d);
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
+
   const db = adminClient();
 
   try {

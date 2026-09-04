@@ -39,6 +39,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState<string | null>(null);
+  // הפרופיל נבדק מחדש כשהחלון חוזר לפוקוס — לא בטיימר. משתמשת שהושבתה
+  // תוך כדי עבודה: המסד כבר חוסם אותה (auth_role בודק is_active בכל
+  // שאילתה); זה רק מחליף מסך ריק במסך "אין הרשאה", בלי תעבורה קבועה.
+  const [profileTick, setProfileTick] = useState(0);
+  useEffect(() => {
+    const bump = () => { if (document.visibilityState === 'visible') setProfileTick((t) => t + 1); };
+    document.addEventListener('visibilitychange', bump);
+    window.addEventListener('focus', bump);
+    return () => { document.removeEventListener('visibilitychange', bump); window.removeEventListener('focus', bump); };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -85,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session]);
+  }, [session, profileTick]);
 
   const value: AuthValue = {
     session,

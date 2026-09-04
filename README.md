@@ -96,6 +96,10 @@ SQLSTATE זהה ובדיקה דיווחה ✓ בטעות:
 `grep "exception when insufficient_privilege" supabase/tests/*.sql` חייב
 לחזור ריק.
 
+## סבב האבטחה — לפני כל מסירה
+
+שש קטגוריות, תהליך קבוע ולא בדיקה חד-פעמית: [SECURITY.md](SECURITY.md). מריצים `npm run security`, `negative-control.sh` ושלב 8 של סבב האימות (`verify-cloud.sh 8` — כל פונקציה מסרבת בלי טוקן).
+
 ## סבב האימות מול הענן
 
 ```bash

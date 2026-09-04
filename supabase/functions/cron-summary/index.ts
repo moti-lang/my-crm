@@ -6,6 +6,7 @@
 // הסיכום נכנס לתור התזכורות כמו כל הודעה אחרת: הוא מכבד שעות שקטות,
 // והוא לא יוצא כשהחיבור נפול. סיכום שלא יצא יישאר בתור.
 import { adminClient } from '../_shared/supabase.ts';
+import { requireCronSecret } from '../_shared/guard.ts';
 import { loadTemplates, readSetting, automationEnabled, queueReminder, formatILS } from '../_shared/reminders.ts';
 
 const json = (payload: unknown, status = 200) =>
@@ -18,6 +19,9 @@ function jerusalemDate(d = new Date()): string {
 }
 
 Deno.serve(async (req) => {
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
+
   const db = adminClient();
   const period = new URL(req.url).searchParams.get('period') === 'weekly' ? 'weekly' : 'daily';
 

@@ -126,6 +126,9 @@ select assert_no_privilege_on_any_view('anon');
 do $$
 -- עזרי הבדיקה (t_*, assert_*) נוצרים ונמחקים בתוך ההרצה ואינם
 -- חלק מהסכמה. נבדקות רק פונקציות הייצור.
+-- עזרי הבדיקה (t_*, assert_*) נקראים בחבילות גם בתור anon ונמחקים בסוף
+-- הריצה. drop_assert_helpers אינו מוחרג: הוא נמצא בענן עם הרשאת הרצה
+-- ל-anon בדיוק בגלל ההחרגה שהייתה כאן.
 declare fn record; allowed text[] := array['rpc_attendance_sheet','rpc_attendance_submit'];
         n int := 0;
 begin
@@ -133,7 +136,6 @@ begin
     select p.proname, p.oid as fnoid
     from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace and ns.nspname = 'public'
     where p.prokind = 'f' and p.proname not like 't\_%' and p.proname not like 'assert\_%'
-      and p.proname not like 'drop_assert%'
   loop
     if has_function_privilege('anon', fn.fnoid, 'execute') then
       if not (fn.proname = any(allowed)) then
@@ -211,6 +213,15 @@ begin
 end $$;
 
 select drop_assert_helpers();
+-- ★ אחרי הניקוי לא נשאר אף עזר בדיקה — כולל המנקה עצמו.
+do $$
+declare n int;
+begin
+  select count(*) into n from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace and ns.nspname = 'public'
+   where p.proname like 't\_%' or p.proname like 'assert\_%' or p.proname = 'drop_assert_helpers';
+  if n > 0 then raise exception E'\n  ✗ ★ % עזרי בדיקה נשארו בסכמה אחרי drop_assert_helpers()', n; end if;
+  raise notice '  ✓ ★ אף עזר בדיקה לא נשאר בסכמה';
+end $$;
 \echo '─────────────────────────────────────────'
 \echo ' כל בדיקות הניידות עברו'
 \echo '─────────────────────────────────────────'

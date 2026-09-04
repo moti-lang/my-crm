@@ -6,12 +6,16 @@
 // כשההורה משלמת, last_paid_on משתנה והמונה מתאפס — מחזור חוב חדש
 // יקבל תזכורות, וחוב ישן לא יוצף.
 import { adminClient } from '../_shared/supabase.ts';
+import { requireCronSecret } from '../_shared/guard.ts';
 import { loadTemplates, readSetting, automationEnabled, queueReminder, formatILS } from '../_shared/reminders.ts';
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
+
   const db = adminClient();
 
   try {

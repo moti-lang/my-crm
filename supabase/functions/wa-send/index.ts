@@ -6,6 +6,7 @@
 // כלל שאין ממנו חריגה: אין כשל שקט. כל מסלול מסתיים ברישום מפורש —
 // sent, failed עם השגיאה, או deferred עם הזמן החדש.
 import { adminClient } from '../_shared/supabase.ts';
+import { requireCronSecret } from '../_shared/guard.ts';
 import { whatsappProvider } from '../_shared/wa.ts';
 import { normalizePhone, isValidIsraeliMobile } from '../_shared/phone.ts';
 import { isBlocked, nextAllowedTime } from '../_shared/quiet-hours.ts';
@@ -28,6 +29,9 @@ const json = (payload: unknown, status = 200) =>
 const RETRY_BACKOFF_MS = [1_000, 3_000];   // אחרי הניסיון הראשון והשני
 
 Deno.serve(async (req) => {
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
+
   if (req.method !== 'POST') return json({ error: 'שיטה לא נתמכת' }, 405);
 
   let input: Body;

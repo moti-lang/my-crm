@@ -6,6 +6,7 @@
 // כשהחיבור נפול: לא שולחים ולא מסמנים. התזכורות נשארות scheduled
 // ויוצאות כשהחיבור יחזור. הודעה שלא יצאה לא תיספר כאילו יצאה.
 import { adminClient } from '../_shared/supabase.ts';
+import { requireCronSecret } from '../_shared/guard.ts';
 import { readWaHealth, maySend } from '../_shared/health.ts';
 import { requireEnv } from '../_shared/env.ts';
 
@@ -15,7 +16,10 @@ const json = (payload: unknown, status = 200) =>
 /** תקרה לסבב אחד — כדי שתור שהצטבר לא ייצור פרץ שליחות. */
 const BATCH = 40;
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
+
   const db = adminClient();
 
   try {
@@ -39,7 +43,8 @@ Deno.serve(async () => {
     if (!due || due.length === 0) return json({ sent: 0, due: 0 });
 
     const base = requireEnv('SUPABASE_URL');
-    const key = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+    // wa-send מוגנת ב-CRON_SECRET, לא במפתח service_role.
+    const key = requireEnv('CRON_SECRET');
 
     let sent = 0, deferred = 0, failed = 0;
 

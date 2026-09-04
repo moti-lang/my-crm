@@ -50,7 +50,7 @@ check('פורמט זר נופל', !core.verifyBackupText(JSON.stringify({ manife
 
 console.log('\nמבני:');
 const fn = codeOf('supabase/functions/cron-backup/index.ts');
-check('★ מוגן: Authorization חייב להיות CRON_SECRET', /Bearer \$\{requireEnv\('CRON_SECRET'\)\}/.test(fn));
+check('★ מוגן: requireCronSecret לפני כל דבר', /requireCronSecret\(req\)/.test(fn));
 check('★ הגיבוי מגיע מ-rpc_backup_dump', /rpc\('rpc_backup_dump'\)/.test(fn));
 check('★ אחרי ההעלאה: הורדה בחזרה ואימות', /\.download\(name\)/.test(fn) && /verifyBackupText\(/.test(fn));
 check('★ upsert=false — לא דורסים גיבוי קיים', /upsert:\s*false/.test(fn));

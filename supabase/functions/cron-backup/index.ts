@@ -13,7 +13,8 @@
 // הקריאה מוגנת: Authorization חייב להיות CRON_SECRET — סוד ייעודי שמנפיק
 // scripts/schedule-backup.mjs. אף אחד אחר לא אמור להפעיל גיבוי ולשלוח מיילים.
 import { adminClient } from '../_shared/supabase.ts';
-import { env, requireEnv } from '../_shared/env.ts';
+import { env } from '../_shared/env.ts';
+import { requireCronSecret } from '../_shared/guard.ts';
 import { alertOwner } from '../_shared/alerts.ts';
 import { sendMail } from '../_shared/mail.ts';
 import {
@@ -35,8 +36,8 @@ async function recordRun(db: ReturnType<typeof adminClient>, run: Record<string,
 }
 
 Deno.serve(async (req) => {
-  const auth = req.headers.get('authorization') ?? '';
-  if (auth !== `Bearer ${requireEnv('CRON_SECRET')}`) return json({ error: 'unauthorized' }, 401);
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
 
   const url = new URL(req.url);
   const force = url.searchParams.get('force') === '1';

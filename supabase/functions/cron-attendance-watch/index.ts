@@ -4,6 +4,7 @@
 // תזכורת לאחראית עם הקישור. אחרי 4 שעות → התראה לבעלים, כי אם
 // האחראית לא הגיבה לתזכורת, מישהי צריכה להתקשר.
 import { adminClient } from '../_shared/supabase.ts';
+import { requireCronSecret } from '../_shared/guard.ts';
 import { loadTemplates, readSetting, automationEnabled, queueReminder } from '../_shared/reminders.ts';
 import { alertOwner } from '../_shared/alerts.ts';
 import { env } from '../_shared/env.ts';
@@ -13,7 +14,10 @@ const json = (payload: unknown, status = 200) =>
 
 const OWNER_ALERT_AFTER_MINUTES = 240;
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
+
   const db = adminClient();
 
   try {

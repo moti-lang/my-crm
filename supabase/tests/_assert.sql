@@ -156,6 +156,10 @@ begin
   raise notice '  ✓ ★ ל-% אין הרשאה על אף אחת מ-% התצוגות', p_role, n;
 end $$;
 
+-- ★ המנקה אינו חלק מהסכמה ואסור שיהיה ניתן להרצה על ידי anon — בסופבייס
+-- ברירת המחדל מעניקה execute ל-anon על כל פונקציה חדשה, וכך הוא נמצא בענן.
+-- (שאר העזרים חיים רק בזמן הריצה ונמחקים בסופה; החבילות קוראות להם גם
+-- בתור anon, ולכן הם נשארים פתוחים בזמן הריצה.)
 create or replace function drop_assert_helpers() returns void language plpgsql as $$
 begin
   drop function if exists assert_eq(bigint, bigint, text);
@@ -167,4 +171,8 @@ begin
   drop function if exists assert_no_execute(text, text);
   drop function if exists t_claims(user_role);
   drop function if exists t_user(user_role);
+  drop function if exists t_roles_agree(text, text, numeric);
+  -- ומוחקת גם את עצמה: נמצאה בענן, אחרי סבב אימות, עם הרשאת הרצה ל-anon.
+  drop function if exists drop_assert_helpers();
 end $$;
+revoke all on function drop_assert_helpers() from public, anon;

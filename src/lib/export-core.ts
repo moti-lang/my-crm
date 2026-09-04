@@ -27,8 +27,19 @@ export function sheetName(name: string): string {
   return name.replace(/[\\/?*[\]:]/g, ' ').trim().slice(0, 31) || 'דוח';
 }
 
+/**
+ * ★ הזרקת נוסחאות. תא שמתחיל ב-= + - @ (או טאב/שורה חדשה) מתפרש
+ * כנוסחה כשהקובץ נפתח באקסל, בעיקר מ-CSV. שם תלמידה מגיע מאדם זר
+ * (ייבוא, ליד מהסוכן), ולכן כל תא טקסט בכל ייצוא עובר כאן: גרש בתחילת
+ * התא הופך אותו לטקסט. מספרים לא נוגעים — הם נשארים מספרים.
+ */
+export function neutralizeCell(v: CellValue): CellValue {
+  if (typeof v !== 'string') return v;
+  return /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+}
+
 export function toAoa<T>(columns: Column<T>[], rows: T[]): CellValue[][] {
-  return [columns.map((c) => c.label), ...rows.map((r) => columns.map((c) => c.value(r)))];
+  return [columns.map((c) => c.label), ...rows.map((r) => columns.map((c) => neutralizeCell(c.value(r))))];
 }
 
 export function buildWorkbook(sheets: Sheet[]): XLSX.WorkBook {

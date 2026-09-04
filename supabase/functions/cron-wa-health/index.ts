@@ -4,6 +4,7 @@
 // אבל כשהשרת עצמו מת — נפילת מכונה, קריסת תהליך, ניתוק רשת — שום webhook
 // לא יגיע. שקט אינו סימן לבריאות. ה-cron הוא מי שמבדיל בין השניים.
 import { adminClient } from '../_shared/supabase.ts';
+import { requireCronSecret } from '../_shared/guard.ts';
 import { whatsappProvider } from '../_shared/wa.ts';
 import { alertOwner } from '../_shared/alerts.ts';
 import { readWaHealth, writeWaHealth } from '../_shared/health.ts';
@@ -14,7 +15,10 @@ const json = (payload: unknown, status = 200) =>
 /** מתריעים אחרי שתי בדיקות כושלות רצופות — כדי לא להקפיץ על גמגום רגעי. */
 const FAILURES_BEFORE_ALERT = 2;
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
+
   const db = adminClient();
 
   try {

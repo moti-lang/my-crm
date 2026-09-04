@@ -39,7 +39,7 @@ const SUITES = [
   '02_rls_proof.sql', '03_allocation_proof.sql', '04_wa_dedupe_proof.sql',
   '05_role_consistency_proof.sql', '06_attendance_proof.sql',
   '07_reminder_queue_proof.sql', '08_command_rollback_proof.sql',
-  '11_allowlist_proof.sql', '12_reports_proof.sql',
+  '11_allowlist_proof.sql', '12_reports_proof.sql', '13_attendance_link_hardening.sql',
 ];
 
 /** ערך של \set לפי כללי psql: הארגומנטים משורשרים, '...' עם '' כבריחה. */

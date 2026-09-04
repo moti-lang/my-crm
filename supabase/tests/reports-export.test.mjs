@@ -81,6 +81,25 @@ for (const def of defs.ALL_REPORTS) {
   check('PDF: הערך המעוצב (₪) מופיע ולא הגולמי', def.columns.some((c) => c.numeric) ? /₪|%/.test(html) : true);
 }
 
+// ─── ★ הזרקת נוסחאות: תא שמתחיל ב-= + - @ יוצא כטקסט, בכל ייצוא ───
+console.log('\nהזרקת נוסחאות:');
+{
+  const cols = [{ label: 'שם', value: (r) => r.name }, { label: 'סכום', value: (r) => r.amount, numeric: true }];
+  const rows = [
+    { name: '=HYPERLINK("http://evil","לחצי")', amount: 100 },
+    { name: '+1+1', amount: -5 }, { name: '-2+3', amount: 0 }, { name: '@SUM(1)', amount: 7 },
+    { name: '\t=cmd', amount: 1 }, { name: 'שירה כהן', amount: 2 },
+  ];
+  const csv = core.toCsv(cols, rows);
+  const lines = csv.split('\n').slice(1);
+  check('★ CSV: כל תא שמתחיל בתו נוסחה מקבל גרש', lines.slice(0, 5).every((l) => /^"?'/.test(l)), lines.slice(0, 5).join(' | '));
+  check('שם רגיל לא נוגעים בו', /^שירה כהן/.test(lines[5]));
+  const back = core.sheetToAoa(core.readWorkbook(new Uint8Array(core.workbookToBuffer(core.buildWorkbook([{ name: 'x', columns: cols, rows }])))));
+  check('★ אקסל: אותה הגנה, והתא נשאר טקסט', back[1][0] === "'=HYPERLINK(\"http://evil\",\"לחצי\")" && typeof back[1][0] === 'string');
+  check('★ מספר שלילי נשאר מספר (לא "-5" כטקסט)', back[2][1] === -5 && typeof back[2][1] === 'number');
+  check('neutralizeCell קיים ומיושם ב-toAoa', /neutralizeCell\(c\.value\(r\)\)/.test(codeOf('src/lib/export-core.ts')));
+}
+
 // ─── הדף משתמש בהגדרות, לא בעותק שלהן ───
 console.log('\nהדף:');
 const page = codeOf('src/pages/Reports.tsx');
