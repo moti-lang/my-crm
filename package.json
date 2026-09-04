@@ -37,6 +37,8 @@
     "test:guards": "node supabase/tests/function-guards.test.mjs",
     "security": "./scripts/security-round.sh",
     "backup:pull": "node scripts/backup-pull.mjs",
+    "restore:drill": "./scripts/restore-drill.sh",
+    "restore:verify": "node scripts/restore-verify.mjs",
     "backup:schedule": "node scripts/schedule-backup.mjs"
   },
   "dependencies": {

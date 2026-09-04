@@ -31,7 +31,7 @@ const ex = await makeExecutor();
 try {
   const tables = (await ex.run(`
     select tablename from pg_tables where schemaname = 'public' order by tablename`)).map((r) => r.tablename);
-  // auth.identities קיימת בסופבייס; ה-shim המקומי מספק רק auth.users.
+  // auth.identities קיימת בסופבייס; ה-shim המקומי מספק את שתיהן, כמו הענן.
   const authTables = (await ex.run(`select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
     where n.nspname='auth' and c.relkind='r' and relname in ('users','identities') order by 1 desc`)).map((r) => r.relname);
 

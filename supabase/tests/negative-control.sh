@@ -292,6 +292,16 @@ expect_fail_code "הפריסה לא בודקת שומר" \
   'sed -i "s/const unguarded = slugs.filter((s) => !guardOf(s));/const unguarded = [];/" "$F"' \
   "node supabase/tests/function-guards.test.mjs"
 
+expect_fail_code "שחזור שמדלג על טבלה (טוקני הנוכחות) — תרגיל השחזור חייב ליפול" \
+  "$DIR/../../scripts/restore.mjs" \
+  'sed -i "s/if (\[.allowed_users., .profiles.\].includes(t)) continue;/if ([\x27allowed_users\x27, \x27profiles\x27, \x27attendance_links\x27].includes(t)) continue;/" "$F"' \
+  "./scripts/restore-drill.sh"
+
+expect_fail_code "אימות השחזור סופר שורות בלבד (שם תלמידה שגוי עובר)" \
+  "$DIR/../../scripts/restore-verify.mjs" \
+  'sed -i "s/const got = (await ex.run(/const got = want.size ? [...want.keys()] : (await ex.run(/" "$F"' \
+  "./scripts/restore-drill.sh >/dev/null && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal_drill -qc \"update students set full_name = full_name || \x27 X\x27 where id = (select id from students limit 1)\" && PGURL=postgresql://\${PGUSER:-postgres}@localhost:\${PGPORT:-5433}/teichtal_drill?host=\${PGHOST:-/tmp} node scripts/restore-verify.mjs \$(ls backups/teichtal-*.json | sort | tail -1)"
+
 expect_fail_code "הזרקת נוסחאות: ההגנה מוסרת מהייצוא" \
   "$DIR/../../src/lib/export-core.ts" \
   'sed -i "s/columns.map((c) => neutralizeCell(c.value(r)))/columns.map((c) => c.value(r))/" "$F"' \

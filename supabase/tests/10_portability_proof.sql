@@ -171,7 +171,8 @@ begin
       join pg_class t on t.oid = c.conrelid
       join pg_class f on f.oid = c.confrelid
       join pg_namespace fn2 on fn2.oid = f.relnamespace
-     where fn2.nspname = 'auth' and c.contype = 'f') = 1,
+      join pg_namespace tn2 on tn2.oid = t.relnamespace
+     where fn2.nspname = 'auth' and tn2.nspname = 'public' and c.contype = 'f') = 1,
     '★ קשר יחיד ל-auth.users: המפתח הזר של profiles');
 end $$;
 

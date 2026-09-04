@@ -326,6 +326,8 @@ npm run restore -- backups/teichtal-<תאריך>.json          # הרצה יבש
 npm run restore -- backups/teichtal-<תאריך>.json --yes    # מוחק את היעד ומשחזר. אין ביטול.
 ```
 
+**תרגיל שחזור** — `npm run restore:drill` — הנוהל, הזמנים שנמדדו ומה לא מכוסה: [docs/RESTORE.md](docs/RESTORE.md). גיבוי שלא שוחזר מעולם הוא לא גיבוי.
+
 **להריץ פעם בשבוע, ידנית.** הגיבוי מכיל את כל הטבלאות ב-public ואת
 `auth.users` + `auth.identities` — בלעדיהם המשתמשות לא נכנסות אחרי שחזור.
 הקובץ מכיל טלפונים, כתובות וכספים: הוא ב-`.gitignore`, ושומרים אותו במקום
