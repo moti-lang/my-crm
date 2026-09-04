@@ -57,7 +57,8 @@ check('★ upsert=false — לא דורסים גיבוי קיים', /upsert:\s*f
 check('★ 30 האחרונים דרך pruneList', /pruneList\(/.test(fn) && /KEEP/.test(fn));
 check('★ קישור חתום כשגדול, צרופה כשקטן', /createSignedUrl\(/.test(fn) && /attachments:/.test(fn));
 check('★ כשל → alertOwner ומייל התראה', /backup_failed/.test(fn) && /הגיבוי היומי נכשל/.test(fn));
-check('★ מייל שלא יצא → alertOwner (לא שקט)', /backup_mail_failed/.test(fn));
+check('★ מייל מחובר שלא יצא → alertOwner (לא שקט)', /backup_mail_failed/.test(fn) && /!mail\.ok && to\.length/.test(fn));
+check('★ הריצה נרשמת ב-settings.last_backup, בהצלחה ובכשל', (fn.match(/recordRun\(/g) ?? []).length >= 3 && /last_backup/.test(fn));
 const mail = codeOf('supabase/functions/_shared/mail.ts');
 check('בלי RESEND_API_KEY המייל מוחזר ככשל, לא נבלע', /אין RESEND_API_KEY/.test(mail));
 check('mail.ts אינו נוגע בוואטסאפ', !/wa\.ts|sendText/.test(mail));

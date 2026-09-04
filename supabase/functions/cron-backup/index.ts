@@ -29,6 +29,11 @@ function b64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
+/** settings.last_backup — מה שמסך ההגדרות מציג. נכתב גם בהצלחה וגם בכשל. */
+async function recordRun(db: ReturnType<typeof adminClient>, run: Record<string, unknown>) {
+  await db.from('settings').upsert({ key: 'last_backup', value: run }, { onConflict: 'key' });
+}
+
 Deno.serve(async (req) => {
   const auth = req.headers.get('authorization') ?? '';
   if (auth !== `Bearer ${requireEnv('CRON_SECRET')}`) return json({ error: 'unauthorized' }, 401);
@@ -89,7 +94,9 @@ Deno.serve(async (req) => {
       `שחזור: npm run restore -- <קובץ> --yes (ראה README).`,
     ].join('\n');
 
-    let mail: Awaited<ReturnType<typeof sendMail>> = { ok: false, error: 'אין BACKUP_MAIL_TO' };
+    // המייל מחובר בשלב האחרון לפני מסירה. כל עוד אין BACKUP_MAIL_TO — הגיבוי
+    // ל-Storage הוא המוצר, וזה נרשם כמצב ולא כהתראה יומית.
+    let mail: Awaited<ReturnType<typeof sendMail>> = { ok: false, error: 'המייל לא מחובר (אין BACKUP_MAIL_TO)' };
     if (to.length) {
       mail = await sendMail({
         to, subject: `גיבוי טייכטל ${jerusalemDate()} — ${verified.rows} שורות`,
@@ -97,12 +104,16 @@ Deno.serve(async (req) => {
         attachments: plan.mode === 'attach' ? [{ filename: name, content: b64(bytes) }] : undefined,
       });
     }
-    if (!mail.ok) {
+    if (!mail.ok && to.length) {
       // הגיבוי קיים ב-Storage; רק המייל לא יצא. זה עדיין לא שקט.
       await alertOwner(db, { kind: 'backup_mail_failed', severity: 'warning',
         title: 'הגיבוי נשמר אבל המייל לא יצא', body: `${name}: ${mail.error}`, meta: { name, steps } });
-      steps.push(`מייל נכשל: ${mail.error}`);
-    } else steps.push(`מייל נשלח (${plan.mode})`);
+    }
+    steps.push(mail.ok ? `מייל נשלח (${plan.mode})` : mail.error);
+
+    // המצב שמסך ההגדרות מציג: מתי, מה, והאם המייל יצא.
+    await recordRun(db, { ok: true, at: new Date().toISOString(), name, size: bytes.length,
+      tables: verified.tables, rows: verified.rows, mail: mail.ok ? 'sent' : to.length ? 'failed' : 'off', error: null });
 
     return json({ ok: true, name, size: bytes.length, delivery: plan.mode, mail: mail.ok, steps });
   } catch (e) {
@@ -110,6 +121,8 @@ Deno.serve(async (req) => {
     console.error('[cron-backup] נכשל', message);
     await alertOwner(db, { kind: 'backup_failed', severity: 'critical',
       title: 'הגיבוי היומי נכשל', body: message, meta: { name, steps } });
+    await recordRun(db, { ok: false, at: new Date().toISOString(), name, size: 0, tables: 0, rows: 0,
+      mail: to.length ? 'failed' : 'off', error: message }).catch(() => {});
     if (to.length) {
       const m = await sendMail({ to, subject: `⚠️ הגיבוי היומי נכשל — ${jerusalemDate()}`,
         text: `הגיבוי של ${jerusalemDate()} לא הושלם.\n\nשגיאה: ${message}\n\nשלבים שכן רצו: ${steps.join(' · ') || 'אף אחד'}\n\nאין קובץ גיבוי מהיום עד שזה מתוקן.` });

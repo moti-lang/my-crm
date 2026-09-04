@@ -46,3 +46,21 @@ export function useOpenAlerts() {
     },
   });
 }
+
+export type LastBackup = {
+  ok: boolean; at: string; name: string; size: number; tables: number; rows: number;
+  mail: 'sent' | 'failed' | 'off'; error: string | null;
+};
+
+/** הריצה האחרונה של הגיבוי היומי. null = עדיין לא רץ אף פעם. */
+export function useLastBackup() {
+  return useQuery({
+    queryKey: ['last-backup'],
+    refetchInterval: 5 * 60_000,
+    queryFn: async (): Promise<LastBackup | null> => {
+      const { data, error } = await supabase.from('settings').select('value').eq('key', 'last_backup').maybeSingle();
+      if (error) throw new Error(error.message);
+      return (data?.value as LastBackup | undefined) ?? null;
+    },
+  });
+}
