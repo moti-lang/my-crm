@@ -62,9 +62,10 @@ console.log('\nאימייל ברשימה, בסיסמה:');
     email: OWNER_EMAIL, password: `Probe!${stamp}`, email_confirm: true,
   });
   const alreadyJoined = /already|registered|exists/i.test(error?.message ?? '');
-  check('★ חשבון סיסמה למורשה נדחה', Boolean(error) && !alreadyJoined,
-        alreadyJoined ? 'הבעלים כבר נכנסה בגוגל — הבדיקה הזו רצה על ההזמנה הבאה' : `נוצר משתמש ${data?.user?.id}`);
-  if (error && !alreadyJoined) console.log(`      (${error.message})`);
+  // אחרי שהבעלים נכנסה בגוגל, GoTrue דוחה כבר בגלל האימייל התפוס — גם זה
+  // "אין חשבון סיסמה". ההוכחה שהשער עצמו דוחה ספק email ניתנת בסעיף 3 (SQL).
+  check('★ חשבון סיסמה למורשה נדחה', Boolean(error), `נוצר משתמש ${data?.user?.id}`);
+  if (error) console.log(`      (${alreadyJoined ? 'הבעלים כבר נכנסה בגוגל; השער מול ספק email מוכח בסעיף 3' : error.message})`);
   check('מספר המשתמשים לא השתנה', (await countUsers()) === before);
   if (data?.user) await admin.auth.admin.deleteUser(data.user.id);
 }
