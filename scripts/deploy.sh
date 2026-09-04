@@ -60,7 +60,10 @@ if need SUPABASE_PROJECT_REF; then
     ${WA_WEBHOOK_SECRET:+WA_WEBHOOK_SECRET="$WA_WEBHOOK_SECRET"} \
     ${ANTHROPIC_API_KEY:+ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"} \
     ${OWNER_ALERT_WEBHOOK:+OWNER_ALERT_WEBHOOK="$OWNER_ALERT_WEBHOOK"} \
-    ${SITE_URL:+SITE_URL="$SITE_URL"} >/dev/null \
+    ${SITE_URL:+SITE_URL="$SITE_URL"} \
+    ${RESEND_API_KEY:+RESEND_API_KEY="$RESEND_API_KEY"} \
+    ${BACKUP_MAIL_TO:+BACKUP_MAIL_TO="$BACKUP_MAIL_TO"} \
+    ${BACKUP_MAIL_FROM:+BACKUP_MAIL_FROM="$BACKUP_MAIL_FROM"} >/dev/null \
     && ok "הסודות נקבעו (WA_DRY_RUN=${WA_DRY_RUN:-true})" || fail "קביעת הסודות נכשלה"
 
   if [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] && ! command -v supabase >/dev/null 2>&1; then

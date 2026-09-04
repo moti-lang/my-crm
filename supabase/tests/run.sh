@@ -64,6 +64,9 @@ node_test "reports-export.test.mjs" "✗|מייצאים|נכשלו"
 echo "═══ ייבוא תלמידות ═══"
 node_test "students-import.test.mjs" "✗|ייבוא:|נכשלו"
 
+echo "═══ הגיבוי היומי ═══"
+node_test "backup-mail.test.mjs" "✗|ההחלטות|נכשלו"
+
 echo "═══ גיבוי ושחזור ═══"
 node_test "backup-roundtrip.test.mjs" "✗|זהה למקור|נכשלו"
 

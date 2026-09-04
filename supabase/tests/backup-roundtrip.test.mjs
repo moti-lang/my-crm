@@ -62,5 +62,24 @@ check('★ כל טבלה זהה למקור, תוכן וספירה', diff.length 
 check('★ המשתמשות חזרו דרך השער עם אותם מזהים', psql(`select count(*) from profiles p join auth.users u on u.id=p.id`) === psql(`select count(*) from auth.users`));
 check('הרשימה מקושרת לפרופילים', psql(`select count(*) from allowed_users where user_id is null`) === psql(`select count(*) from allowed_users a where not exists (select 1 from profiles p where p.email=a.email)`));
 
-console.log(fails === 0 ? '\nגיבוי ושחזור: זהה למקור' : `\n${fails} בדיקות נכשלו`);
-process.exit(fails ? 1 : 0);
+// ─── ★ אותו דבר עם הקובץ שהגיבוי היומי שומר: rpc_backup_dump() ───
+// זה הקובץ שמגיע במייל וב-Storage. אם הוא לא ניתן לשחזור, הגיבוי היומי חסר ערך.
+console.log('\nהקובץ של הגיבוי היומי (rpc_backup_dump):');
+import('node:fs').then(async ({ writeFileSync }) => {
+  execFileSync('./supabase/tests/reset.sh', { stdio: 'ignore' });
+  const base = fingerprint();
+  const dumped = psql('select rpc_backup_dump()::text');
+  const dailyFile = join(env.BACKUP_DIR, 'daily.json');
+  writeFileSync(dailyFile, dumped);
+  const parsed = JSON.parse(dumped);
+  check('★ הפורמט זהה לזה של backup.mjs', parsed.manifest?.format === 'teichtal-backup/1' && parsed.data && parsed.manifest.counts['auth.users'] !== undefined);
+  psql(`delete from attendance; delete from students where full_name like 'ש%'; update settings set value='true' where key='agent_may_quote_prices'`);
+  const r2 = node(['scripts/restore.mjs', dailyFile, '--yes']);
+  check('★ השחזור מהקובץ היומי מדווח התאמה מלאה', /כולן תואמות למניפסט/.test(r2), r2.slice(-300));
+  const after2 = fingerprint();
+  const diff2 = Object.keys(base).filter((t) => base[t] !== after2[t]);
+  check('★ הקובץ שהגיבוי היומי שומר משחזר כל טבלה זהה למקור', diff2.length === 0, `שונות: ${diff2.join(', ')}`);
+  console.log(fails === 0 ? '\nגיבוי ושחזור: זהה למקור' : `\n${fails} בדיקות נכשלו`);
+  process.exit(fails ? 1 : 0);
+});
+

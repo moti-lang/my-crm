@@ -32,7 +32,10 @@
     "test:import": "node supabase/tests/students-import.test.mjs",
     "backup": "node scripts/backup.mjs",
     "restore": "node scripts/restore.mjs",
-    "test:backup": "node supabase/tests/backup-roundtrip.test.mjs"
+    "test:backup": "node supabase/tests/backup-roundtrip.test.mjs",
+    "test:backup-mail": "node supabase/tests/backup-mail.test.mjs",
+    "backup:pull": "node scripts/backup-pull.mjs",
+    "backup:schedule": "node scripts/schedule-backup.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

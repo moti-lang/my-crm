@@ -258,6 +258,23 @@ expect_fail_code "הרכיב מייבא גם שורות עם שגיאות" \
   'sed -i "s/rows: valid.map((p) => ({ line: p.line, row: p.row! }))/rows: parsed.map((p) => ({ line: p.line, row: p.row! }))/" "$F"' \
   "node supabase/tests/students-import.test.mjs"
 
+# ─── הגיבוי היומי ───
+
+expect_fail_code "הגיבוי לא מאמת את הקובץ שנשמר" \
+  "$DIR/../../supabase/functions/cron-backup/index.ts" \
+  'sed -i "s/const verified = verifyBackupText(await back.text());/const verified = { ok: true, tables: 0, rows: 0, manifest: {} } as never;/" "$F"' \
+  "node supabase/tests/backup-mail.test.mjs"
+
+expect_fail_code "סף הצרופה עולה ל-200MB" \
+  "$DIR/../../supabase/functions/_shared/backup-core.ts" \
+  'sed -i "s/ATTACH_LIMIT = 20 \* 1024 \* 1024/ATTACH_LIMIT = 200 * 1024 * 1024/" "$F"' \
+  "node supabase/tests/backup-mail.test.mjs"
+
+expect_fail_code "הקובץ היומי בלי auth.users" \
+  "$DIR/../../supabase/migrations/0017_backup_dump.sql" \
+  "sed -i \"s/relname in ('users', 'identities')/relname in ('identities')/\" \"\$F\"" \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && node supabase/tests/backup-roundtrip.test.mjs"
+
 expect_fail "JWT בלי פרופיל רואה סניפים" \
   "create policy hole_branches_any_jwt on branches for select using (auth.uid() is not null)" \
   "11_allowlist_proof.sql"

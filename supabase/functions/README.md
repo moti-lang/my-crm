@@ -45,6 +45,7 @@ supabase secrets set WA_API_KEY=...              # x-api-key של ה-Hub
 supabase secrets set WA_WEBHOOK_SECRET=...       # מ-POST /api/webhooks בשרת
 supabase secrets set WA_DRY_RUN=false
 supabase secrets set OWNER_ALERT_WEBHOOK=...     # ערוץ חלופי, ראה למטה
+supabase secrets set RESEND_API_KEY=... BACKUP_MAIL_TO=... BACKUP_MAIL_FROM=...   # הגיבוי היומי במייל
 ```
 
 רישום ה-webhook בשרת:
@@ -143,3 +144,8 @@ curl -X POST "$WA_SERVER_URL/api/webhooks" -H "x-api-key: $WA_API_KEY" \
 (עם `SUPABASE_ACCESS_TOKEN`), כולל כל `_shared/` ו-`verify_jwt` מ-config.toml.
 `deploy.sh` בוחר בו אוטומטית כשאין `supabase` בנתיב. אומת: `ai-answer`
 נפרסה כך, עונה בהרצה יבשה, ומחזירה 401 בלי JWT.
+
+## `cron-backup` — הגיבוי היומי
+
+Storage + מייל, ראה README ("גיבוי אוטומטי במייל"). המייל דרך Resend
+(`_shared/mail.ts`); בלי מפתח המייל מוחזר ככשל ומתריע, לא נבלע.

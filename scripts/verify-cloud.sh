@@ -90,7 +90,7 @@ if [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
 fi
 
 # ─────────── 1. מיגרציות ───────────
-if step 1 "db push — 16 מיגרציות על פרויקט נקי"; then
+if step 1 "db push — 17 מיגרציות על פרויקט נקי"; then
   # db-push.sh בוחר בין ה-CLI, psql וה-Management API לפי מה שיש בסביבה.
   if [ -z "${SUPABASE_PROJECT_REF:-}" ] && [ -z "${SUPABASE_DB_URL:-}" ]; then
     echo "  ✗ חסרים משתני סביבה: SUPABASE_DB_URL (או SUPABASE_PROJECT_REF עם SUPABASE_DB_PASSWORD / SUPABASE_ACCESS_TOKEN)"
