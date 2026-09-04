@@ -41,7 +41,7 @@ npm run restore:drill          # פרויקט ריק → שחזור → אימו
    שורות, יעד) ואז `--yes`. **מוחק את היעד.** ~10 שנ' דרך ה-Management API.
 5. **אימות.** `npm run restore:verify -- backups/<קובץ>` — חייב להיות ירוק.
 6. **מה שלא בגיבוי, ונבנה מחדש מהריפו:**
-   - Auth: גוגל בלבד (`verify-cloud.sh 3` בודק; ההגדרה ב-`scripts/auth-config.mjs`),
+   - Auth: גוגל בלבד (`verify-cloud.sh 3` בודק; ההגדרה ב-`scripts/supabase-project.mjs`),
      וב-Google Cloud כתובת ההחזרה של הפרויקט החדש.
    - Edge Functions: `node scripts/functions-deploy-api.mjs` + הסודות
      (`ANTHROPIC_API_KEY`, `META_*`, `RESEND_*`; ראה `supabase/functions/README.md`).

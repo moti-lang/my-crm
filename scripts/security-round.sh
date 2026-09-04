@@ -16,8 +16,8 @@ r node supabase/tests/reports-export.test.mjs >/dev/null && echo "  ✓ הזרק
 r node supabase/tests/students-import.test.mjs >/dev/null && echo "  ✓ ייבוא"
 r node supabase/tests/customer-agent.test.mjs >/dev/null && echo "  ✓ סוכן: פלט פגום לא מגיע להורה"
 grep -rn "dangerouslySetInnerHTML\|innerHTML" src && { echo "  ✗ innerHTML בקוד"; F=1; } || echo "  ✓ אין innerHTML"
-s "3 · גבולות הרשאה (02, 05, 11, 12)"
-for f in 02_rls_proof 05_role_consistency_proof 11_allowlist_proof 12_reports_proof; do
+s "3 · גבולות הרשאה (02, 05, 11, 12, 15)"
+for f in 02_rls_proof 05_role_consistency_proof 11_allowlist_proof 12_reports_proof 15_users_screen_attack; do
   psql -h "${PGHOST:-/tmp}" -p "${PGPORT:-5433}" -U "${PGUSER:-postgres}" -d teichtal -v ON_ERROR_STOP=1 -f "supabase/tests/$f.sql" >/tmp/sec.out 2>&1 \
     && echo "  ✓ $f" || { echo "  ✗ $f"; F=1; }
 done

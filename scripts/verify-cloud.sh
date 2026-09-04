@@ -90,7 +90,7 @@ if [ -n "${SUPABASE_ACCESS_TOKEN:-}" ]; then
 fi
 
 # ─────────── 1. מיגרציות ───────────
-if step 1 "db push — 18 מיגרציות על פרויקט נקי"; then
+if step 1 "db push — 19 מיגרציות על פרויקט נקי"; then
   # db-push.sh בוחר בין ה-CLI, psql וה-Management API לפי מה שיש בסביבה.
   if [ -z "${SUPABASE_PROJECT_REF:-}" ] && [ -z "${SUPABASE_DB_URL:-}" ]; then
     echo "  ✗ חסרים משתני סביבה: SUPABASE_DB_URL (או SUPABASE_PROJECT_REF עם SUPABASE_DB_PASSWORD / SUPABASE_ACCESS_TOKEN)"
@@ -194,11 +194,14 @@ if step 7 "פרונט בנטליפיי + כתובת חיה"; then
 fi
 
 # ─────────── 8. כל פונקציה פרוסה מסרבת בלי טוקן ───────────
-if step 8 "Edge Functions — כולן מסרבות בלי טוקן ולמפתח anon"; then
+if step 8 "Edge Functions ו-Storage — סגורים בלי טוקן, למפתח anon ולמחוברות"; then
   if need SUPABASE_ACCESS_TOKEN SUPABASE_ANON_KEY; then
     node scripts/verify-functions.mjs \
       && ok "אף פונקציה אינה פתוחה" \
       || fail "פונקציה פתוחה — ראה למעלה"
+    node scripts/verify-storage.mjs \
+      && ok "Storage סגור ל-anon ולמחוברות" \
+      || fail "Storage פתוח — ראה למעלה"
   fi
 fi
 

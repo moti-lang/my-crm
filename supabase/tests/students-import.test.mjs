@@ -51,6 +51,7 @@ const good = (i, extra = {}) => ({
   status: 'פעילה', joined: '01/09/2026', tuition: 2000, discount: 0, inst: 3, consent: 'כן', notes: '', ...extra,
 });
 const EXPECTED_ERRORS = {}; // line → תיאור
+const SPECIAL_NAME = 'כ״ץ־שפירא ז׳בוטינסקי "המנצחת" O\'Brien ' + 'שרה-לאה '.repeat(30);
 for (let i = 1; i <= 50; i++) {
   const line = i + 1;
   let r = good(i);
@@ -74,6 +75,7 @@ for (let i = 1; i <= 50; i++) {
   if (i === 44) { r = good(i, { consent: 'לא' }); }
   if (i === 45) { r = good(i, { phone: '+972-52-9876543' }); }   // פורמט בינלאומי
   if (i === 46) { r = good(i, { tuition: '₪1,800' }); }          // סכום מעוצב
+  if (i === 47) { r = good(i, { name: SPECIAL_NAME, parent: 'אבא ״גרשיים״ ו׳גרש׳' }); } // גרשיים, מקף עברי, מירכאות, גרש לטיני
   rows.push([r.name, r.branch, r.grade, r.parent, r.phone, r.status, r.joined, r.tuition, r.discount, r.inst, r.consent, r.notes]);
 }
 const aoa = [HEADERS, ...rows];
@@ -115,6 +117,8 @@ const byLine = (n) => parsed.find((x) => x.line === n);
 check('★ טלפון מנורמל ל-972', byLine(2).row.parent_phone === '972521000001');
 check('פורמט בינלאומי +972 מנורמל', byLine(46).row.parent_phone === '972529876543');
 check('★ תאריך כמספר סידורי של אקסל → 2026-09-01', byLine(41).row.joined_on === '2026-09-01');
+check('★ שם ארוך עם גרשיים, מקף עברי, מירכאות וגרש — נשמר תו-בתו דרך אקסל', byLine(48).row.full_name === SPECIAL_NAME.trim() || byLine(48).row.full_name === SPECIAL_NAME, byLine(48).row.full_name);
+check('שם הורה עם גרשיים וגרש נשמר', byLine(48).row.parent_name === 'אבא ״גרשיים״ ו׳גרש׳', byLine(48).row.parent_name);
 check('תאריך dd/MM/yyyy → ISO', byLine(2).row.joined_on === '2026-09-01');
 check('★ שכר לימוד ריק → ברירת המחדל של הסניף', byLine(42).row.tuition_total === 2000 && byLine(42).warnings.some((w) => /ברירת המחדל/.test(w)));
 check('סכום מעוצב "₪1,800" → 1800', byLine(47).row.tuition_total === 1800);

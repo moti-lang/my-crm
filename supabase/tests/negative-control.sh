@@ -302,6 +302,16 @@ expect_fail_code "אימות השחזור סופר שורות בלבד (שם ת�
   'sed -i "s/const got = (await ex.run(/const got = want.size ? [...want.keys()] : (await ex.run(/" "$F"' \
   "./scripts/restore-drill.sh >/dev/null && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal_drill -qc \"update students set full_name = full_name || \x27 X\x27 where id = (select id from students limit 1)\" && PGURL=postgresql://\${PGUSER:-postgres}@localhost:\${PGPORT:-5433}/teichtal_drill?host=\${PGHOST:-/tmp} node scripts/restore-verify.mjs \$(ls backups/teichtal-*.json | sort | tail -1)"
 
+expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (0019 מבוטל)" \
+  "$DIR/../migrations/0019_open_debt_positive_only.sql" \
+  'sed -i "s/sum(greatest(vb.balance, 0))/sum(vb.balance)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
+
+expect_fail_code "רשימת המורשים פתוחה לכתיבה לכל מחובר (מנהלת מזמינה את עצמה כבעלים)" \
+  "$DIR/../migrations/0014_google_allowlist.sql" \
+  'sed -i "47s/using (auth_role() = .owner.) with check (auth_role() = .owner.);/using (true) with check (true);/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/15_users_screen_attack.sql"
+
 expect_fail_code "הזרקת נוסחאות: ההגנה מוסרת מהייצוא" \
   "$DIR/../../src/lib/export-core.ts" \
   'sed -i "s/columns.map((c) => neutralizeCell(c.value(r)))/columns.map((c) => c.value(r))/" "$F"' \
