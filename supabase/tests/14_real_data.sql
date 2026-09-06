@@ -33,16 +33,22 @@ select assert_eq((select round(sum(allocated_amount))::bigint from v_general_all
 savepoint s1;
 update students set status = 'stopped';
 insert into ledger_entries (season_id, kind, scope, entry_date, category, amount, split_method) values (:SEASON, 'expense', 'general', current_date, 'בדיקה', 900, 'by_students');
--- "שווה" 6,000 + "ידני" 2,400 עדיין מחולקים; "לפי תלמידות" 3,600 + 900 — לאף אחד.
-select assert_eq((select round(sum(allocated_amount))::bigint from v_general_allocation), 8400, 'אין תלמידות פעילות: 4,500 של "לפי תלמידות" לא מחולקים לאף סניף (נעלמים מרווחיות הסניפים)');
+-- 0020: "לפי תלמידות" בלי תלמידות פעילות נופל לחלוקה שווה — כל 12,900 מחולקים.
+select assert_eq((select round(sum(allocated_amount))::bigint from v_general_allocation), 12900, '★ אין תלמידות פעילות (חופשה): "לפי תלמידות" נופל לשווה, כל ההוצאה מחולקת');
 select assert_eq((select expenses_general::bigint from v_pnl_monthly where month = date_trunc('month', current_date)::date), 900, 'אבל היא כן נספרת ברווח והפסד הכללי');
 rollback to s1;
 -- מעבר סניף: התשלומים הולכים עם התלמידה
 select income_students as before_income from v_branch_pnl where branch_id = :BEITAR \gset
 select student_id as mover from v_student_balance where branch_id = :BEITAR and paid > 0 order by paid desc limit 1 \gset
 select paid as mover_paid from v_student_balance where student_id = :'mover' \gset
+select income_students as modiin_before from v_branch_pnl where branch_id = :MODIIN \gset
 update students set branch_id = :MODIIN where id = :'mover';
-select assert_eq((select income_students::bigint from v_branch_pnl where branch_id = :BEITAR), (:'before_income')::numeric::bigint - (:'mover_paid')::numeric::bigint, 'מעבר סניף: כל התשלומים ההיסטוריים עוברים לסניף החדש (הרווחיות של הסניף הישן יורדת למפרע)');
+select assert_eq((select income_students::bigint from v_branch_pnl where branch_id = :BEITAR), (:'before_income')::numeric::bigint, '★ מעבר סניף: התשלומים ההיסטוריים נשארים בסניף שבו נרשמו (0020)');
+select assert_eq((select income_students::bigint from v_branch_pnl where branch_id = :MODIIN), (:'modiin_before')::numeric::bigint, 'הסניף החדש לא מקבל היסטוריה');
+insert into payments (student_id, amount, collected_by) values (:'mover', 300, (select t_user('owner'::user_role)));
+select assert_true((select branch_id = :MODIIN::uuid from payments where student_id = :'mover' order by created_at desc limit 1), 'תשלום חדש נרשם על הסניף החדש (הטריגר ממלא את הסניף)');
+select assert_eq((select income_students::bigint from v_branch_pnl where branch_id = :MODIIN), (:'modiin_before')::numeric::bigint + 300, 'ורק הוא נספר בסניף החדש');
+select assert_eq((select paid::bigint from v_student_balance where student_id = :'mover'), (:'mover_paid')::numeric::bigint + 300, 'היתרה של התלמידה עצמה כוללת הכל, בלי קשר לסניף');
 select assert_eq((select count(*) from attendance a join lessons l on l.id = a.lesson_id where a.student_id = :'mover' and l.branch_id = :BEITAR), (select count(*) from attendance a join lessons l on l.id = a.lesson_id where a.student_id = :'mover'), 'הנוכחות ההיסטורית נשארת בשיעורי הסניף הישן');
 rollback;
 
@@ -70,11 +76,28 @@ select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
 select assert_no_effect('★ מחיקה קשה של סניף עם תלמידות נחסמת (מפתח זר), שום נתון לא נמחק',
   format('delete from branches where id = %L', 'bbbbbbbb-0000-0000-0000-000000000001'),
   $p$select (select count(*) from students) || '/' || (select count(*) from ledger_entries) || '/' || (select count(*) from branches) || '/' || (select count(*) from lessons)$p$);
--- מחיקה רכה (deleted_at): מה קורה לתלמידות?
-update branches set deleted_at = now() where id = :BEITAR;
-select assert_eq((select count(*) from v_branch_pnl where branch_id = :BEITAR), 0, 'סניף שנמחק רכה יוצא מהרווחיות');
-select assert_eq((select count(*) from v_student_overview where branch_id = :BEITAR), 6, 'אבל 6 התלמידות שלו עדיין ברשימת התלמידות (יתומות: הסניף לא מוצג, הן כן)');
-select assert_eq((select count(*) from v_debtors where branch_id = :BEITAR), (select count(*) from v_student_balance where branch_id = :BEITAR and balance > 0), 'והחייבות שלו עדיין בגבייה');
+-- סגירה מסודרת: rpc_close_branch (0020)
+select assert_no_effect('★ סגירת סניף עם תלמידות פעילות נדחית, עם הודעה בעברית שאומרת כמה',
+  format('select rpc_close_branch(%L)', 'bbbbbbbb-0000-0000-0000-000000000001'),
+  $p$select is_active::text || (select count(*) from attendance_links where branch_id = 'bbbbbbbb-0000-0000-0000-000000000001' and is_active) from branches where id = 'bbbbbbbb-0000-0000-0000-000000000001'$p$);
+do $$ begin
+  perform rpc_close_branch('bbbbbbbb-0000-0000-0000-000000000001');
+  raise exception 'לא נזרקה שגיאה';
+exception when others then
+  perform assert_true(sqlerrm like 'בסניף ביתר עילית יש % תלמידות פעילות או ממתינות%', 'ההודעה: ' || sqlerrm);
+end $$;
+update students set status = 'stopped', stopped_on = current_date where branch_id = :BEITAR;
+select rpc_close_branch(:BEITAR);
+select assert_true((select not is_active and deleted_at is not null from branches where id = :BEITAR), '★ בלי תלמידות פעילות — הסניף נסגר');
+select assert_eq((select count(*) from attendance_links where branch_id = :BEITAR and is_active), 0, 'קישור הנוכחות של הסניף בוטל');
+select assert_eq((select count(*) from v_branch_pnl where branch_id = :BEITAR), 0, 'סניף סגור יוצא ממסך הרווחיות');
+select assert_eq((select count(*) from students where branch_id = :BEITAR), 6, 'ההיסטוריה נשארת: 6 התלמידות (שהפסיקו) עדיין במסד');
+select assert_eq((select count(*) from audit_log where action = 'close_branch' and row_id = :BEITAR), 1, 'הסגירה נרשמת ביומן');
+-- מנהלת סניף לא יכולה לסגור
+select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
+select assert_no_effect('★ מנהלת סניף לא יכולה לסגור סניף',
+  format('select rpc_close_branch(%L)', 'bbbbbbbb-0000-0000-0000-000000000002'),
+  $p$select is_active::text from branches where id = 'bbbbbbbb-0000-0000-0000-000000000002'$p$);
 rollback;
 
 \echo 'ה. שמות ארוכים ותווים מיוחדים:'

@@ -32,10 +32,11 @@ Deno.serve(async (req) => {
     if (error) throw new Error(error.message);
 
     let queued = 0, skipped = 0;
+    const noPhone: string[] = [];
 
     for (const d of (debtors ?? []) as Record<string, unknown>[]) {
       const phone = d.parent_phone as string | null;
-      if (!phone) { skipped++; continue; }
+      if (!phone) { skipped++; noPhone.push(`${d.full_name ?? ''} (${d.branch_name ?? ''})`); continue; }
 
       const days = Number(d.days_outstanding ?? 0);
       // הסף הגבוה ביותר שנחצה — לא שולחים שלוש הודעות ביום אחד.
@@ -62,8 +63,26 @@ Deno.serve(async (req) => {
       if (created) queued++; else skipped++;
     }
 
-    console.log(`[cron-debt] ${queued} תזכורות חדשות, ${skipped} דולגו`);
-    return json({ queued, skipped });
+    // חייבות בלי טלפון: אף תזכורת לא תגיע אליהן, ומישהי צריכה לדעת.
+    // התראה אחת ביום, לא אחת לכל ריצה.
+    let alerted = false;
+    if (noPhone.length) {
+      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { count } = await db.from('system_alerts').select('id', { count: 'exact', head: true })
+        .eq('kind', 'debtors_no_phone').gte('created_at', since);
+      if (!count) {
+        const { error: aErr } = await db.from('system_alerts').insert({
+          kind: 'debtors_no_phone', severity: 'warning',
+          title: `${noPhone.length} חייבות בלי טלפון — לא יקבלו תזכורת`,
+          body: `אין להן מספר טלפון של הורה, ולכן תזכורות הגבייה מדלגות עליהן: ${noPhone.slice(0, 20).join(', ')}${noPhone.length > 20 ? ' ועוד' : ''}. להשלים טלפון במסך התלמידות.`,
+          meta: { students: noPhone },
+        });
+        if (aErr) console.error('[cron-debt] ההתראה על חייבות בלי טלפון לא נשמרה', aErr.message);
+        else alerted = true;
+      }
+    }
+    console.log(`[cron-debt] ${queued} תזכורות חדשות, ${skipped} דולגו, ${noPhone.length} בלי טלפון`);
+    return json({ queued, skipped, no_phone: noPhone.length, alerted });
   } catch (e) {
     console.error('[cron-debt] נכשל', e);
     return json({ error: 'יצירת תזכורות הגבייה נכשלה' }, 500);

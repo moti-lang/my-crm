@@ -154,7 +154,11 @@ export function Collection() {
                   <td className="px-3 py-2">{d.full_name}</td>
                   <td className="px-3 py-2">{d.branch_name}</td>
                   <td className="px-3 py-2">{d.parent_name ?? '—'}</td>
-                  <td className="px-3 py-2" dir="ltr">{formatPhone(d.parent_phone)}</td>
+                  <td className="px-3 py-2" dir="ltr">
+                    {d.parent_phone
+                      ? formatPhone(d.parent_phone)
+                      : <span dir="rtl" className="rounded-full bg-warn/15 px-2 py-0.5 text-xs text-warn" title="בלי טלפון לא נשלחת תזכורת. להשלים במסך התלמידות.">אין טלפון</span>}
+                  </td>
                   <td className="px-3 py-2 tabular-nums text-bad">{formatILS(d.balance)}</td>
                   <td className="px-3 py-2">
                     <span className={`rounded-full px-2 py-0.5 text-xs ${AGING_TONE[d.aging_bucket ?? 0]}`}>

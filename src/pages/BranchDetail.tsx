@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/auth/AuthProvider';
+import { useCloseBranch } from '@/hooks/queries';
+import { humanError } from '@/lib/errors';
 import { useBranch, useStudents, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
 import { useBranchPnl } from '@/hooks/queries';
 import { StudentDrawer } from '@/components/StudentDrawer';
@@ -23,6 +26,9 @@ export function BranchDetail() {
   const students = useStudents();
   const [tab, setTab] = useState<Tab>('overview');
   const [selected, setSelected] = useState<Student | null>(null);
+  const { profile } = useAuth();
+  const navigate = useNavigate();
+  const closeBranch = useCloseBranch();
 
   if (branch.isError) return <ErrorState error={branch.error} onRetry={() => void branch.refetch()} />;
   if (branch.isLoading) return <CardSkeleton rows={6} />;
@@ -149,9 +155,28 @@ export function BranchDetail() {
             <Row label="מחיר ברירת מחדל" value={formatILS(b.default_tuition)} />
             <Row label="שכירות חודשית" value={formatILS(b.monthly_rent)} />
           </dl>
-          <p className="border-t border-rule pt-3 text-xs text-soft">
-            עריכת ההגדרות וכפתור "קישור נוכחות" נבנים בסבב 4.
-          </p>
+          {profile?.role === 'owner' && b.is_active && (
+            <div className="border-t border-rule pt-3">
+              <p className="text-xs text-soft">
+                סגירת סניף אפשרית רק כשאין בו תלמידות פעילות או ממתינות — קודם מעבירים אותן לסניף אחר או מסמנות שהפסיקו.
+                ההיסטוריה (תשלומים, נוכחות, הוצאות) נשארת בדוחות; קישור הנוכחות של הסניף מתבטל.
+              </p>
+              {closeBranch.error != null && (
+                <p className="mt-2 text-sm text-bad" role="alert">{humanError(closeBranch.error)}</p>
+              )}
+              <button
+                type="button"
+                className="btn-ghost mt-2 text-bad"
+                disabled={closeBranch.isPending}
+                onClick={() => {
+                  if (!window.confirm(`לסגור את הסניף "${b.name}"? הפעולה מסתירה אותו מהמסכים ומבטלת את קישור הנוכחות שלו.`)) return;
+                  closeBranch.mutate(b.id, { onSuccess: () => navigate('/branches') });
+                }}
+              >
+                {closeBranch.isPending ? 'סוגר…' : 'סגירת הסניף'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

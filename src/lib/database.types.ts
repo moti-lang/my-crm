@@ -644,6 +644,7 @@ export type Database = {
           note: string | null;
           deleted_at: string | null;
           created_at: string;
+          branch_id: string | null;
         };
         Insert: {
           id?: string;
@@ -659,6 +660,7 @@ export type Database = {
           note?: string | null;
           deleted_at?: string | null;
           created_at?: string;
+          branch_id?: string | null;
         };
         Update: {
           id?: string;
@@ -674,8 +676,16 @@ export type Database = {
           note?: string | null;
           deleted_at?: string | null;
           created_at?: string;
+          branch_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "payments_branch_id_fkey";
+            columns: ["branch_id"];
+            isOneToOne: false;
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "payments_collected_by_fkey";
             columns: ["collected_by"];
@@ -1348,6 +1358,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_backup_dump: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
       rpc_cancel_command: {
         Args: {
           p_command_id: string;
@@ -1359,6 +1373,12 @@ export type Database = {
           p_phone: string;
         };
         Returns: Json;
+      };
+      rpc_close_branch: {
+        Args: {
+          p_branch: string;
+        };
+        Returns: undefined;
       };
       rpc_create_pending_command: {
         Args: {

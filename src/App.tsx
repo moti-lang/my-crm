@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { IdleGuard } from '@/auth/IdleGuard';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { ErrorBoundary, ConfigError } from '@/components/ErrorBoundary';
 import { supabaseConfigError } from '@/lib/supabase';
@@ -30,6 +32,15 @@ const queryClient = new QueryClient({
 
 function Gate() {
   const { session, profile, loading, denied, signOut } = useAuth();
+  // החלפת משתמשת (כולל יציאה) מנקה את כל מה שנטען לזיכרון. בלי זה
+  // מי שנכנסת אחרי מישהי אחרת באותו טאב רואה לרגע את הנתונים שלה,
+  // ואחרי יציאה הם נשארים בזיכרון עד רענון.
+  const queryClient = useQueryClient();
+  const userId = session?.user.id ?? null;
+  const prevUser = useRef<string | null>(userId);
+  useEffect(() => {
+    if (prevUser.current !== userId) { queryClient.clear(); prevUser.current = userId; }
+  }, [userId, queryClient]);
 
   if (loading) {
     return (
@@ -48,6 +59,8 @@ function Gate() {
   }
 
   return (
+    <>
+    <IdleGuard />
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
@@ -70,6 +83,7 @@ function Gate() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </>
   );
 }
 

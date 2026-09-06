@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 
 /** כל קריאת רשת עוברת דרך React Query עם מצבי טעינה ושגיאה. */
@@ -69,5 +69,17 @@ export function useCurrentSeason() {
       if (error) throw new Error(error.message);
       return data;
     },
+  });
+}
+
+/** סגירת סניף — הבעלים בלבד, ורק בלי תלמידות פעילות (נאכף ב-rpc_close_branch). */
+export function useCloseBranch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (branchId: string) => {
+      const { error } = await supabase.rpc('rpc_close_branch', { p_branch: branchId });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => { void qc.invalidateQueries(); },
   });
 }

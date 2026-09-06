@@ -105,8 +105,10 @@ expect_fail "הסרת האינדקס שמונע הודעות כפולות" \
   "drop index wa_messages_provider_msg_id_uniq" \
   "04_wa_dedupe_proof.sql"
 
+# 05 ולא 02: מאז 0020 הסכום הכולל נשמר גם בחור הזה (הנפילה לחלוקה שווה),
+# ורק ההשוואה לפי סניף בין התפקידים תופסת אותו.
 expect_fail "החזרת חלוקת ההוצאות להרשאות הקורא (מספר שגוי לרואת חשבון)" \
-  "alter function f_general_allocation(uuid) security invoker"
+  "alter function f_general_allocation(uuid) security invoker" 05_role_consistency_proof.sql
 
 expect_fail "החזרת הדוחות הכספיים לתלות ב-RLS של students" \
   "\\i $DIR/holes/invoker_financial_views.sql" \
@@ -302,8 +304,8 @@ expect_fail_code "אימות השחזור סופר שורות בלבד (שם ת�
   'sed -i "s/const got = (await ex.run(/const got = want.size ? [...want.keys()] : (await ex.run(/" "$F"' \
   "./scripts/restore-drill.sh >/dev/null && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal_drill -qc \"update students set full_name = full_name || \x27 X\x27 where id = (select id from students limit 1)\" && PGURL=postgresql://\${PGUSER:-postgres}@localhost:\${PGPORT:-5433}/teichtal_drill?host=\${PGHOST:-/tmp} node scripts/restore-verify.mjs \$(ls backups/teichtal-*.json | sort | tail -1)"
 
-expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (0019 מבוטל)" \
-  "$DIR/../migrations/0019_open_debt_positive_only.sql" \
+expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (greatest מוסר מ-0020, ההגדרה האחרונה)" \
+  "$DIR/../migrations/0020_real_data_findings.sql" \
   'sed -i "s/sum(greatest(vb.balance, 0))/sum(vb.balance)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
@@ -311,6 +313,46 @@ expect_fail_code "רשימת המורשים פתוחה לכתיבה לכל מח�
   "$DIR/../migrations/0014_google_allowlist.sql" \
   'sed -i "47s/using (auth_role() = .owner.) with check (auth_role() = .owner.);/using (true) with check (true);/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/15_users_screen_attack.sql"
+
+expect_fail_code "יציאה אוטומטית: מסך האחראית מאבד את הפטור" \
+  "$DIR/../../src/lib/idle.ts" \
+  'sed -i "s|return /\^\\\\/a\\\\//.test(pathname);|return false;|" "$F"' \
+  "node supabase/tests/idle-logout.test.mjs"
+
+expect_fail_code "יציאה אוטומטית: 30 דקות הופכות ל-8 שעות" \
+  "$DIR/../../src/lib/idle.ts" \
+  'sed -i "s/export const IDLE_LIMIT_MS = 30 \* 60_000;/export const IDLE_LIMIT_MS = 480 * 60_000;/" "$F"' \
+  "node supabase/tests/idle-logout.test.mjs"
+
+expect_fail_code "החלפת משתמשת בלי ניקוי הזיכרון" \
+  "$DIR/../../src/App.tsx" \
+  'sed -i "s/{ queryClient.clear(); prevUser.current = userId; }/{ prevUser.current = userId; }/" "$F"' \
+  "node supabase/tests/idle-logout.test.mjs"
+
+expect_fail_code "תשלום יתר בלי אזהרה" \
+  "$DIR/../../src/lib/payments.ts" \
+  'sed -i "s/if (amount > balance) return/if (false) return/" "$F"' \
+  "node supabase/tests/real-data-ui.test.mjs"
+
+expect_fail_code "cron-debt שוב שותקת על חייבות בלי טלפון" \
+  "$DIR/../../supabase/functions/cron-debt/index.ts" \
+  'sed -i "s/kind: .debtors_no_phone.,/kind: \x27debt_noise\x27,/" "$F"' \
+  "node supabase/tests/real-data-ui.test.mjs"
+
+expect_fail_code "0020: חלוקה לפי תלמידות בלי תלמידות חוזרת להיעלם" \
+  "$DIR/../migrations/0020_real_data_findings.sql" \
+  'sed -i "s/case when (select students from totals) > 0 then ab.students::numeric else 1::numeric end/ab.students::numeric/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
+
+expect_fail_code "0020: הרווחיות חוזרת להישען על הסניף הנוכחי של התלמידה" \
+  "$DIR/../migrations/0020_real_data_findings.sql" \
+  'sed -i "s/where p.branch_id = b.id and p.deleted_at is null and s.deleted_at is null/where s.branch_id = b.id and p.deleted_at is null and s.deleted_at is null/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
+
+expect_fail_code "0020: סגירת סניף בלי לבדוק תלמידות פעילות" \
+  "$DIR/../migrations/0020_real_data_findings.sql" \
+  'sed -i "s/if v_open > 0 then/if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
 expect_fail_code "הזרקת נוסחאות: ההגנה מוסרת מהייצוא" \
   "$DIR/../../src/lib/export-core.ts" \

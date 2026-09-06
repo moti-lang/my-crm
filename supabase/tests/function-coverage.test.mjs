@@ -49,6 +49,8 @@ const TRIGGER_FUNCTIONS = {
   // סנכרון הרשימה: מופעל בכל כתיבה ל-allowed_users
   f_allowlist_before:    /(insert into|update|delete from) allowed_users/,
   f_allowlist_after:     /(insert into|update|delete from) allowed_users/,
+  // הסניף על התשלום: מופעל בכל הוספה ל-payments; 14 מאמתת שהוא מולא
+  f_payment_branch:      /הטריגר ממלא את הסניף/,
 };
 
 let fails = 0;

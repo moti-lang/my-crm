@@ -25,6 +25,8 @@ s "4 · חשוף בלי התחברות (10, שומרי פונקציות, משט�
 psql -h "${PGHOST:-/tmp}" -p "${PGPORT:-5433}" -U "${PGUSER:-postgres}" -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/10_portability_proof.sql >/tmp/sec.out 2>&1 && echo "  ✓ 10_portability_proof" || { echo "  ✗ 10_portability_proof"; F=1; }
 r node supabase/tests/function-guards.test.mjs >/dev/null && echo "  ✓ כל פונקציה עם שומר"
 r node supabase/tests/public-surface.test.mjs >/dev/null && echo "  ✓ משטח ציבורי: דף אחד"
+s "7 · מכשיר שאבד: יציאה אוטומטית וניקוי זיכרון"
+r node supabase/tests/idle-logout.test.mjs >/dev/null && echo "  ✓ 30 דקות, אזהרה דקה לפני, מסך האחראית פטור, clear() בהחלפת משתמשת"
 s "5 · סודות (ריפו, בילד, היסטוריה)"
 PAT='sk-ant-[A-Za-z0-9_-]{20,}|sbp_[0-9a-f]{20,}|nfp_[A-Za-z0-9]{20,}|GOCSPX-[A-Za-z0-9_-]{10,}|eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]{30,}|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC )?PRIVATE KEY'
 git log -p --all | grep -qE "$PAT" && { echo "  ✗ סוד בהיסטוריית הגיט"; F=1; } || echo "  ✓ היסטוריית הגיט נקייה"

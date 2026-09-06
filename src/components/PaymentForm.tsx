@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { useAddPayment } from '@/hooks/finance';
 import { formatILS } from '@/lib/format';
 import { humanError } from '@/lib/errors';
+import { overpaymentWarning } from '@/lib/payments';
 
 const METHOD_LABEL: Record<string, string> = {
   cash: 'מזומן', transfer: 'העברה', bit: 'ביט', credit: 'אשראי', check: 'צ׳ק', other: 'אחר',
@@ -33,6 +34,7 @@ export function PaymentForm({
 
   const amount = Number(watch('amount') ?? 0);
   const remaining = balance - (Number.isFinite(amount) ? amount : 0);
+  const warning = overpaymentWarning(amount, balance);
 
   return (
     <form
@@ -79,6 +81,10 @@ export function PaymentForm({
             {remaining > 0 ? `נותרו ${formatILS(remaining)}` : remaining < 0 ? `יתרת זכות ${formatILS(-remaining)}` : 'שולם במלואו'}
           </span>
         </p>
+      )}
+
+      {warning && (
+        <p className="mt-2 rounded-field bg-warn/10 px-3 py-2 text-sm text-warn" role="status">{warning}</p>
       )}
 
       {addPayment.error != null && (

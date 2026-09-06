@@ -15,6 +15,8 @@ const PATTERNS: [RegExp, string][] = [
 
 export function humanError(error: unknown): string {
   const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  // הודעה שנכתבה בעברית במסד (raise exception ב-RPC) נועדה למסך כמו שהיא.
+  if (/[\u0590-\u05FF]/.test(raw)) return raw.replace(/^[^\u0590-\u05FF]*?(?=[\u0590-\u05FF])/, '').trim();
   for (const [pattern, message] of PATTERNS) {
     if (pattern.test(raw)) return message;
   }

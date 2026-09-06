@@ -31,6 +31,10 @@ node_test "public-surface.test.mjs" "✓|✗|משטח|נכשלו"
 echo "═══ שומרי הפונקציות ═══"
 node_test "function-guards.test.mjs" "✗|מוגנות|נכשלו"
 
+node_test "idle-logout.test.mjs" "✗|יציאה אוטומטית|נכשלו"
+
+node_test "real-data-ui.test.mjs" "✗|ממצאי|נכשלו"
+
 echo "═══ סודות בצד הלקוח ═══"
 (cd "$DIR/../.." && node scripts/check-secrets.mjs) 2>&1 | grep -E "✓|✗|סודות|דליפות"
 
