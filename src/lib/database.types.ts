@@ -457,6 +457,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      knowledge_sections: {
+        Row: {
+          id: string;
+          title: string;
+          body: string;
+          position: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          body?: string;
+          position?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          body?: string;
+          position?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       ledger_entries: {
         Row: {
           id: string;

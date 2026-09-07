@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import type { Tables } from '@/lib/database.types';
 
 export type Faq = Tables<'faq_entries'>;
+export type KnowledgeSection = Tables<'knowledge_sections'>;
 export type Conversation = Tables<'conversations'> & { students: { full_name: string; status: string } | null };
 export type Unanswered = Tables<'unanswered_questions'>;
 export type WaMessage = Tables<'wa_messages'>;
@@ -43,6 +44,61 @@ export function useSaveFaq() {
         if (error) throw new Error(error.message);
       }
       return id;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+// ─────────── מידע על החוג ───────────
+export function useKnowledge() {
+  return useQuery({
+    queryKey: ['knowledge'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('knowledge_sections').select('*').order('position').order('created_at');
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+}
+
+export function useSaveKnowledge() {
+  const invalidate = useInvalidate([['knowledge']]);
+  return useMutation({
+    mutationFn: async (input: { id?: string; title: string; body: string; is_active: boolean; position?: number }) => {
+      const row = { title: input.title.trim(), body: input.body.trim(), is_active: input.is_active, ...(input.position !== undefined ? { position: input.position } : {}) };
+      if (input.id) {
+        const { error } = await supabase.from('knowledge_sections').update(row).eq('id', input.id);
+        if (error) throw new Error(error.message);
+        return input.id;
+      }
+      const { data, error } = await supabase.from('knowledge_sections').insert(row).select('id').single();
+      if (error) throw new Error(error.message);
+      return data.id;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteKnowledge() {
+  const invalidate = useInvalidate([['knowledge']]);
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('knowledge_sections').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidate,
+  });
+}
+
+/** סידור מחדש: שני קטעים מחליפים מקום. */
+export function useSwapKnowledge() {
+  const invalidate = useInvalidate([['knowledge']]);
+  return useMutation({
+    mutationFn: async (input: { a: { id: string; position: number }; b: { id: string; position: number } }) => {
+      const r1 = await supabase.from('knowledge_sections').update({ position: input.b.position }).eq('id', input.a.id);
+      if (r1.error) throw new Error(r1.error.message);
+      const r2 = await supabase.from('knowledge_sections').update({ position: input.a.position }).eq('id', input.b.id);
+      if (r2.error) throw new Error(r2.error.message);
     },
     onSuccess: invalidate,
   });
@@ -133,15 +189,23 @@ export function useSetMayQuotePrices() {
 }
 
 // ─────────── הסימולטור: ai-answer האמיתי, בלי לכתוב דבר ───────────
-export type SimTurn = { role: 'user' | 'assistant'; text: string; kind?: string; dryRun?: boolean; faq?: string | null; error?: string };
+export type SimSource = 'faq' | 'knowledge' | null;
+export type SimTurn = {
+  role: 'user' | 'assistant'; text: string; kind?: string; dryRun?: boolean; error?: string;
+  /** מאיפה התשובה שיוצאת בפועל, אחרי השומרים */
+  source?: SimSource; faq?: string | null; knowledgeTitle?: string | null;
+  blocked?: 'price' | 'promise' | 'ungrounded' | null; original?: string;
+};
 
+export type Resolved = { reply: string; source: SimSource; faqQuestion: string | null; knowledgeTitle: string | null; blocked: 'price' | 'promise' | 'ungrounded' | null; original: string };
 export type AnswerOutcome =
-  | { ok: true; dryRun: boolean; answer: { kind: string; reply: string; faq_question: string | null; lead: Record<string, string | null> | null; lead_complete: boolean; confidence: number } }
+  | { ok: true; dryRun: boolean; resolved: Resolved; answer: { kind: string; reply: string; faq_question: string | null; lead: Record<string, string | null> | null; lead_complete: boolean; confidence: number } }
   | { ok: false; dryRun: boolean; reason: string; detail: string };
 
 export async function simulateAnswer(input: {
   text: string; history: { role: 'user' | 'assistant'; text: string }[];
-  faq: { question: string; answer: string }[]; branches: string[]; mayQuotePrices: boolean; lead: Record<string, string | null> | null;
+  faq: { question: string; answer: string }[]; knowledge: { title: string; body: string }[];
+  branches: string[]; mayQuotePrices: boolean; lead: Record<string, string | null> | null;
 }): Promise<AnswerOutcome> {
   const { data, error } = await supabase.functions.invoke('ai-answer', { body: input });
   if (error) throw new Error(error.message);

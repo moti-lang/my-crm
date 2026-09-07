@@ -1,5 +1,6 @@
 import { answerProvider, type AnswerContext } from './answer.ts';
-import { NO_ANSWER_REPLY, PROVIDER_ERROR_REPLY, isLeadComplete, quotesPrice, type LeadFields } from './answer-schema.ts';
+import { NO_ANSWER_REPLY, PROVIDER_ERROR_REPLY, isLeadComplete, type LeadFields, type AnswerSource } from './answer-schema.ts';
+import { resolveAnswer } from './answer-resolve.ts';
 
 /**
  * מסלול הלקוחות (סעיף 4.4). מוצא מ-wa-webhook כפונקציה עם db מוזרק,
@@ -7,20 +8,21 @@ import { NO_ANSWER_REPLY, PROVIDER_ERROR_REPLY, isLeadComplete, quotesPrice, typ
  *
  * הסדר:
  *   1. שיחה לפי טלפון. השתלטות אנושית → לוג בלבד, אין מענה.
- *   2. הקשר: מאגר פעיל, הגדרת המחירים, היסטוריה, ליד שנאסף.
+ *   2. הקשר: מאגר פעיל, "מידע על החוג", הגדרת המחירים, היסטוריה, ליד שנאסף.
  *   3. המודל.
  *   4. אין תשובה / שגיאה → הפניה + unanswered_questions + התראה.
  *   5. הרשמה: איסוף פרטים; כשהכול ידוע → תלמידה ממתינה + התראה.
  *
- * ★ שומר המחירים: גם אם המודל נקב מחיר, ההודעה לא יוצאת ככה כל עוד
- *   agent_may_quote_prices=false. זה נאכף בקוד, לא מוסכם בפרומפט.
+ * ★ סדר העדיפות והשומרים (answer-resolve.ts) נאכפים בקוד, לא בפרומפט:
+ *   המאגר גובר ומצוטט מילה במילה; מהמידע החופשי רק תשובה מעוגנת בקטע
+ *   קיים, בלי מחירים כשהמתג כבוי, בלי הבטחת מקום או הנחה.
  */
 
 export type Db = { from: (t: string) => any };
 
 export type CustomerDecision =
   | { route: 'customer_takeover'; phone: string }
-  | { route: 'customer_answer'; phone: string; reply: string; faqQuestion: string | null }
+  | { route: 'customer_answer'; phone: string; reply: string; faqQuestion: string | null; source: AnswerSource; knowledgeTitle: string | null }
   | { route: 'customer_no_answer'; phone: string; reply: string; unansweredId?: string }
   | { route: 'customer_lead'; phone: string; reply: string; lead: LeadFields; studentId: string | null; complete: boolean }
   | { route: 'customer_error'; phone: string; reply: string; reason: string };
@@ -62,13 +64,15 @@ export async function answerCustomer(
   }
 
   // ─── 2. ההקשר ───
-  const [faqRes, settingRes, historyRes, branchesRes] = await Promise.all([
+  const [faqRes, knowledgeRes, settingRes, historyRes, branchesRes] = await Promise.all([
     db.from('faq_entries').select('id, question, answer').eq('is_active', true).order('created_at'),
+    db.from('knowledge_sections').select('title, body').eq('is_active', true).order('position'),
     db.from('settings').select('value').eq('key', 'agent_may_quote_prices').maybeSingle(),
     db.from('wa_messages').select('direction, body').eq('phone', phone).order('created_at', { ascending: false }).limit(HISTORY_LIMIT + 1),
     db.from('branches').select('id, name, default_tuition').is('deleted_at', null),
   ]);
   const faq = (faqRes.data ?? []) as { id: string; question: string; answer: string }[];
+  const knowledge = ((knowledgeRes.data ?? []) as { title: string; body: string }[]).filter((k) => k.title && k.body);
   const mayQuotePrices = settingRes.data?.value === true || settingRes.data?.value === 'true';
   const branches = (branchesRes.data ?? []) as { id: string; name: string; default_tuition: number | string }[];
   // ההודעה הנוכחית כבר נרשמה כנכנסת — מסירים אותה מההיסטוריה.
@@ -80,6 +84,7 @@ export async function answerCustomer(
 
   const ctx: AnswerContext = {
     text, history, faq: faq.map((f) => ({ question: f.question, answer: f.answer })),
+    knowledge,
     branches: branches.map((b) => b.name), mayQuotePrices, lead: knownLead,
   };
 
@@ -116,17 +121,32 @@ export async function answerCustomer(
     return { route: 'customer_no_answer', phone, reply: NO_ANSWER_REPLY, unansweredId: q?.id };
   }
 
-  // ─── ★ שומר המחירים ───
-  let reply = answer.reply;
-  if (!mayQuotePrices && quotesPrice(reply)) {
-    const priceFaq = faq.find((f) => /מחיר|עולה|עלות/.test(f.question));
-    reply = priceFaq?.answer ?? NO_ANSWER_REPLY;
+  // ─── ★ סדר העדיפות והשומרים — בקוד ───
+  const resolved = resolveAnswer(answer, { faq: ctx.faq, knowledge, mayQuotePrices });
+  const reply = resolved.reply;
+  if (resolved.blocked === 'price') {
     await deps.alert({
       kind: 'agent_price_blocked',
       severity: 'info',
       title: 'הסוכן ניסה לנקוב במחיר — ההודעה הוחלפה בהפניה',
-      body: `${phone}: "${answer.reply.slice(0, 140)}"`,
+      body: `${phone}: "${resolved.original.slice(0, 140)}"`,
       meta: { phone },
+    });
+  } else if (resolved.blocked === 'promise') {
+    await deps.alert({
+      kind: 'agent_promise_blocked',
+      severity: 'warning',
+      title: 'הסוכן ניסה להבטיח מקום או הנחה — ההודעה הוחלפה בהפניה',
+      body: `${phone}: "${resolved.original.slice(0, 140)}"`,
+      meta: { phone },
+    });
+  } else if (resolved.blocked === 'ungrounded') {
+    await deps.alert({
+      kind: 'agent_ungrounded',
+      severity: 'warning',
+      title: 'הסוכן ענה בלי מקור (לא מהמאגר ולא מהמידע) — ההודעה הוחלפה בהפניה',
+      body: `${phone}: "${resolved.original.slice(0, 140)}" (קטע: ${answer.knowledge_title ?? '—'})`,
+      meta: { phone, knowledge_title: answer.knowledge_title },
     });
   }
 
@@ -190,11 +210,18 @@ export async function answerCustomer(
     return { route: 'customer_lead', phone, reply, lead: merged, studentId: student.id, complete: true };
   }
 
+  // ─── תשובה שנחסמה ונשארה בלי מקור: כמו "אין תשובה" — נרשמת ועוברת לבעלים ───
+  if (!resolved.source) {
+    const { data: q } = await db.from('unanswered_questions')
+      .insert({ phone, question: text }).select('id').maybeSingle();
+    return { route: 'customer_no_answer', phone, reply: NO_ANSWER_REPLY, unansweredId: q?.id };
+  }
+
   // ─── תשובה מהמאגר: מונה שימוש ───
-  const hit = answer.faq_question ? faq.find((f) => f.question === answer.faq_question) : null;
+  const hit = resolved.faqQuestion ? faq.find((f) => f.question === resolved.faqQuestion) : null;
   if (hit) {
     const { data: current } = await db.from('faq_entries').select('hits').eq('id', hit.id).maybeSingle();
     await db.from('faq_entries').update({ hits: Number(current?.hits ?? 0) + 1 }).eq('id', hit.id);
   }
-  return { route: 'customer_answer', phone, reply, faqQuestion: hit?.question ?? null };
+  return { route: 'customer_answer', phone, reply, faqQuestion: hit?.question ?? null, source: resolved.source, knowledgeTitle: resolved.knowledgeTitle };
 }

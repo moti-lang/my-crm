@@ -208,9 +208,9 @@ expect_fail_code "הייצוא מוציא סכום כטקסט מעוצב במק�
 
 # ─── סוכן הלקוחות ───
 
-expect_fail_code "הסרת שומר המחירים מהסוכן" \
-  "$DIR/../../supabase/functions/_shared/customer.ts" \
-  'sed -i "s/if (!mayQuotePrices \&\& quotesPrice(reply)) {/if (false) {/" "$F"' \
+expect_fail_code "הסרת שומר המחירים משיחת ההרשמה" \
+  "$DIR/../../supabase/functions/_shared/answer-resolve.ts" \
+  'sed -i "s/^    if (!input.mayQuotePrices && quotesPrice(answer.reply)) {$/    if (false) {/" "$F"' \
   "node supabase/tests/customer-agent.test.mjs"
 
 expect_fail_code "הסוכן עונה גם בהשתלטות אנושית" \
@@ -353,6 +353,26 @@ expect_fail_code "0020: סגירת סניף בלי לבדוק תלמידות פ�
   "$DIR/../migrations/0020_real_data_findings.sql" \
   'sed -i "s/if v_open > 0 then/if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
+
+expect_fail_code "מידע על החוג: שומר המחירים מוסר מהתשובה החופשית" \
+  "$DIR/../../supabase/functions/_shared/answer-resolve.ts" \
+  'sed -i "0,/^  if (!input.mayQuotePrices && quotesPrice(answer.reply)) {$/s//  if (false) {/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
+expect_fail_code "מידע על החוג: תשובה בלי עיגון בקטע קיים יוצאת (המצאה)" \
+  "$DIR/../../supabase/functions/_shared/answer-resolve.ts" \
+  'sed -i "s/  if (!section) return noAnswer(.ungrounded.);/  const _s = section ?? { title: answer.knowledge_title ?? \x27\x27, body: \x27\x27 }; if (!_s) return noAnswer(\x27ungrounded\x27);/; s/knowledgeTitle: section.title/knowledgeTitle: (section ?? _s).title/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
+expect_fail_code "מידע על החוג: הבטחת מקום/הנחה עוברת" \
+  "$DIR/../../supabase/functions/_shared/answer-resolve.ts" \
+  'sed -i "s/  if (promisesPlaceOrDiscount(answer.reply)) return noAnswer(.promise.);/  if (false) return noAnswer(\x27promise\x27);/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
+expect_fail_code "מידע על החוג: המאגר מפסיק לגבור (הניסוח של המודל במקום התשובה של הניה)" \
+  "$DIR/../../supabase/functions/_shared/answer-resolve.ts" \
+  'sed -i "s/    return { reply: hit.answer, source: .faq./    return { reply: answer.reply, source: \x27faq\x27/" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
 
 expect_fail_code "הזרקת נוסחאות: ההגנה מוסרת מהייצוא" \
   "$DIR/../../src/lib/export-core.ts" \

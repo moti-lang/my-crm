@@ -8,6 +8,7 @@
 // הוא מריץ את אותו ספק ואותו פרומפט מול המאגר האמיתי, בלי לכתוב דבר.
 import { answerProvider, type AnswerContext } from '../_shared/answer.ts';
 import { requireUserJwt } from '../_shared/guard.ts';
+import { resolveAnswer } from '../_shared/answer-resolve.ts';
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
@@ -33,11 +34,14 @@ Deno.serve(async (req) => {
     text,
     history: Array.isArray(input.history) ? input.history.slice(-10) : [],
     faq: Array.isArray(input.faq) ? input.faq : [],
+    knowledge: Array.isArray(input.knowledge) ? input.knowledge : [],
     branches: Array.isArray(input.branches) ? input.branches : [],
     mayQuotePrices: input.mayQuotePrices === true,
     lead: input.lead ?? null,
   };
 
   const outcome = await answerProvider().answer(ctx);
-  return json(outcome);
+  // מה שהיה נשלח בפועל — אותו resolver כמו בוואטסאפ, בלי מסד.
+  const resolved = outcome.ok ? resolveAnswer(outcome.answer, { faq: ctx.faq, knowledge: ctx.knowledge, mayQuotePrices: ctx.mayQuotePrices }) : null;
+  return json({ ...outcome, resolved });
 });

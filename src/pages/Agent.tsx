@@ -2,18 +2,20 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   useFaq, useSaveFaq, useUnanswered, useResolveUnanswered, useConversations, useConversationMessages,
   useSetTakeover, useMayQuotePrices, useSetMayQuotePrices, simulateAnswer,
-  type Faq, type Unanswered, type SimTurn,
+  useKnowledge, useSaveKnowledge, useDeleteKnowledge, useSwapKnowledge,
+  type Faq, type Unanswered, type SimTurn, type KnowledgeSection,
 } from '@/hooks/agent';
 import { useBranches } from '@/hooks/queries';
 import { formatPhone, formatDate } from '@/lib/format';
 import { humanError } from '@/lib/errors';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
 
-type Tab = 'simulator' | 'conversations' | 'faq' | 'unanswered';
+type Tab = 'simulator' | 'conversations' | 'faq' | 'knowledge' | 'unanswered';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'simulator', label: 'סימולטור' },
   { id: 'conversations', label: 'שיחות' },
   { id: 'faq', label: 'מאגר שאלות' },
+  { id: 'knowledge', label: 'מידע על החוג' },
   { id: 'unanswered', label: 'שאלות ללא מענה' },
 ];
 
@@ -29,7 +31,7 @@ export function Agent() {
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="text-2xl">סוכן הלקוחות</h1>
-          <p className="text-sm text-soft">עונה להורים בוואטסאפ מתוך המאגר בלבד. מה שאין במאגר עובר אלייך.</p>
+          <p className="text-sm text-soft">עונה להורים בוואטסאפ מהמאגר (גובר) ומהמידע על החוג. מה שאין בשניהם עובר אלייך.</p>
         </div>
         <PriceToggle />
       </header>
@@ -46,6 +48,7 @@ export function Agent() {
       {tab === 'simulator' && <Simulator />}
       {tab === 'conversations' && <Conversations />}
       {tab === 'faq' && <FaqTab draft={draftFromQuestion} onDraftDone={() => setDraftFromQuestion(null)} />}
+      {tab === 'knowledge' && <KnowledgeTab />}
       {tab === 'unanswered' && <UnansweredTab onMakeFaq={(q) => { setDraftFromQuestion(q); setTab('faq'); }} />}
     </div>
   );
@@ -67,6 +70,7 @@ function PriceToggle() {
 // ─────────── סימולטור ───────────
 function Simulator() {
   const faq = useFaq();
+  const knowledge = useKnowledge();
   const branches = useBranches();
   const may = useMayQuotePrices();
   const [turns, setTurns] = useState<SimTurn[]>([]);
@@ -88,12 +92,18 @@ function Simulator() {
       const outcome = await simulateAnswer({
         text: t, history,
         faq: (faq.data ?? []).filter((f) => f.is_active).map((f) => ({ question: f.question, answer: f.answer })),
+        knowledge: (knowledge.data ?? []).filter((k) => k.is_active).map((k) => ({ title: k.title, body: k.body })),
         branches: (branches.data ?? []).map((b) => b.name),
         mayQuotePrices: may.data === true, lead,
       });
       if (outcome.ok) {
         setLead(outcome.answer.kind === 'lead' ? { ...(lead ?? {}), ...(outcome.answer.lead ?? {}) } : lead);
-        setTurns((prev) => [...prev, { role: 'assistant', text: outcome.answer.reply, kind: outcome.answer.kind, dryRun: outcome.dryRun, faq: outcome.answer.faq_question }]);
+        const r = outcome.resolved;
+        setTurns((prev) => [...prev, {
+          role: 'assistant', text: r.reply, kind: outcome.answer.kind, dryRun: outcome.dryRun,
+          source: r.source, faq: r.faqQuestion, knowledgeTitle: r.knowledgeTitle, blocked: r.blocked,
+          original: r.blocked || r.reply !== outcome.answer.reply ? outcome.answer.reply : undefined,
+        }]);
       } else {
         setTurns((prev) => [...prev, { role: 'assistant', text: `(${outcome.reason}) ${outcome.detail}`, error: outcome.reason, dryRun: outcome.dryRun }]);
       }
@@ -104,15 +114,22 @@ function Simulator() {
     }
   }
 
-  const KIND: Record<string, string> = { answer: 'מהמאגר', no_answer: 'אין תשובה → הפניה', lead: 'הרשמה' };
+  const BLOCKED: Record<string, string> = { price: 'נחסם: ניסה לנקוב מחיר', promise: 'נחסם: הבטיח מקום/הנחה', ungrounded: 'נחסם: בלי מקור' };
+  const sourceLabel = (t: SimTurn) => {
+    if (t.kind === 'lead') return 'הרשמה';
+    if (t.source === 'faq') return `מהמאגר · ${t.faq ?? ''}`;
+    if (t.source === 'knowledge') return `מהמידע על החוג · ${t.knowledgeTitle ?? ''}`;
+    return 'אין תשובה → הפניה להניה';
+  };
 
   return (
     <section className="card flex h-[32rem] flex-col">
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {turns.length === 0 && (
           <p className="text-sm text-soft">
-            כתבי כמו הורה. הסימולטור מריץ את הסוכן האמיתי מול המאגר, ולא כותב דבר —
-            לא שאלות ללא מענה ולא לידים. במצב הרצה יבשה התשובות מוקלטות.
+            כתבי כמו הורה. הסימולטור מריץ את הסוכן האמיתי מול המאגר והמידע על החוג, ולא כותב דבר —
+            לא שאלות ללא מענה ולא לידים. כל תשובה מסומנת מאיפה הגיעה: מהמאגר, מהמידע, או הפניה.
+            במצב הרצה יבשה התשובות מוקלטות.
           </p>
         )}
         {turns.map((t, i) => (
@@ -120,9 +137,17 @@ function Simulator() {
             <div className={`max-w-[80%] rounded-card px-3 py-2 text-sm ${t.role === 'user' ? 'bg-shade text-ink' : t.error ? 'bg-bad/10 text-bad' : 'bg-plum text-white'}`}>
               <p className="whitespace-pre-wrap">{t.text}</p>
               {t.role === 'assistant' && !t.error && (
+                <>
                 <p className="mt-1 text-[11px] opacity-70">
-                  {KIND[t.kind ?? ''] ?? t.kind}{t.faq ? ` · ${t.faq}` : ''}{t.dryRun ? ' · הרצה יבשה' : ''}
+                  <span className={`rounded-btn px-1.5 py-0.5 ${t.source === 'faq' ? 'bg-white/20' : t.source === 'knowledge' ? 'bg-warn/40' : 'bg-black/20'}`}>{sourceLabel(t)}</span>
+                  {t.dryRun ? ' · הרצה יבשה' : ''}
                 </p>
+                {t.blocked && (
+                  <p className="mt-1 rounded-btn bg-bad/30 px-1.5 py-0.5 text-[11px]" title={t.original}>
+                    {BLOCKED[t.blocked]} — המודל כתב: "{(t.original ?? '').slice(0, 80)}"
+                  </p>
+                )}
+                </>
               )}
             </div>
           </div>
@@ -286,6 +311,94 @@ function FaqTab({ draft, onDraftDone }: { draft: Unanswered | null; onDraftDone:
                   <p>{f.hits} שימושים</p>
                   {!f.is_active && <p className="text-warn">לא פעילה</p>}
                   <button type="button" className="mt-1 text-plum hover:underline" onClick={() => setEditing(f)}>עריכה</button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─────────── מידע על החוג ───────────
+function KnowledgeTab() {
+  const list = useKnowledge();
+  const save = useSaveKnowledge();
+  const remove = useDeleteKnowledge();
+  const swap = useSwapKnowledge();
+  const [editing, setEditing] = useState<Partial<KnowledgeSection> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const rows = list.data ?? [];
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    setError(null);
+    const title = (editing.title ?? '').trim();
+    const body = (editing.body ?? '').trim();
+    if (!title || !body) { setError('כותרת ותוכן הם חובה.'); return; }
+    try {
+      await save.mutateAsync({
+        id: editing.id, title, body, is_active: editing.is_active ?? true,
+        position: editing.id ? undefined : (rows.length ? Math.max(...rows.map((r) => r.position)) + 1 : 0),
+      });
+      setEditing(null);
+    } catch (err) { setError(humanError(err)); }
+  }
+
+  if (list.isError) return <ErrorState error={list.error} onRetry={() => void list.refetch()} />;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-soft">
+          טקסט חופשי, כמו מסמך: על החוג, על הצוות, מה קורה בשיעור, נהלים, מה מיוחד בו. מחולק לקטעים כדי לערוך חלק בלי לגעת בשאר.
+          הסוכן מקבל את הכול כהקשר, אבל המאגר גובר; מחירים והבטחות נחסמים בקוד גם מכאן.
+        </p>
+        {!editing && <button type="button" className="btn-primary" onClick={() => setEditing({ title: '', body: '', is_active: true })}>קטע חדש</button>}
+      </div>
+
+      {editing && (
+        <form onSubmit={onSubmit} className="card space-y-3 p-4">
+          <label className="block text-sm">כותרת הקטע
+            <input className="field mt-1" value={editing.title ?? ''} onChange={(e) => setEditing({ ...editing, title: e.target.value })} required autoFocus placeholder="למשל: הצוות, מה קורה בשיעור, נהלי היעדרות" />
+          </label>
+          <label className="block text-sm">תוכן
+            <textarea className="field mt-1 min-h-[10rem]" value={editing.body ?? ''} onChange={(e) => setEditing({ ...editing, body: e.target.value })} required />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={editing.is_active ?? true} onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })} /> פעיל (הסוכן רואה אותו)
+          </label>
+          {error && <p className="text-sm text-bad" role="alert">{error}</p>}
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary" disabled={save.isPending}>{save.isPending ? 'שומרת…' : 'שמירה'}</button>
+            <button type="button" className="btn-ghost" onClick={() => setEditing(null)}>ביטול</button>
+          </div>
+        </form>
+      )}
+
+      {list.isLoading ? <CardSkeleton rows={4} /> : rows.length === 0 && !editing ? (
+        <EmptyState title="עדיין אין מידע על החוג" hint="הסוכן עונה בינתיים מהמאגר בלבד. כתבי קטע ראשון — למשל על הצוות." />
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((k, i) => (
+            <li key={k.id} className={`card p-3 text-sm ${k.is_active ? '' : 'opacity-60'}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-medium">{k.title}{!k.is_active && <span className="mr-2 text-xs text-warn">לא פעיל</span>}</h3>
+                  <p className="mt-1 whitespace-pre-wrap text-soft">{k.body}</p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1 text-xs">
+                  <button type="button" className="text-plum hover:underline" onClick={() => setEditing(k)}>עריכה</button>
+                  <div className="flex gap-1">
+                    <button type="button" className="btn-ghost px-2 py-0.5" disabled={i === 0 || swap.isPending} aria-label="הזזה למעלה"
+                      onClick={() => { const o = rows[i - 1]; if (o) void swap.mutateAsync({ a: { id: k.id, position: k.position }, b: { id: o.id, position: o.position } }); }}>↑</button>
+                    <button type="button" className="btn-ghost px-2 py-0.5" disabled={i === rows.length - 1 || swap.isPending} aria-label="הזזה למטה"
+                      onClick={() => { const o = rows[i + 1]; if (o) void swap.mutateAsync({ a: { id: k.id, position: k.position }, b: { id: o.id, position: o.position } }); }}>↓</button>
+                  </div>
+                  <button type="button" className="text-bad hover:underline" disabled={remove.isPending}
+                    onClick={() => { if (window.confirm(`למחוק את הקטע "${k.title}"?`)) void remove.mutateAsync(k.id); }}>מחיקה</button>
                 </div>
               </div>
             </li>

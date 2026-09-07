@@ -63,6 +63,45 @@ export const ANSWER_FIXTURES: Record<string, string> = {
     lead: { student_name: 'נועה', age: '9', branch: 'חיפה', parent_name: 'מיכל', parent_phone: '0529999999' },
     lead_complete: true,
   }),
+  // ─── מידע על החוג ───
+  // תשובה מהמידע החופשי, מעוגנת בקטע קיים.
+  'מי מלמדת בחוג?': JSON.stringify({
+    kind: 'answer', confidence: 0.9, source: 'knowledge',
+    reply: 'את החוג מלמדת הניה טייכטל בעצמה, עם צוות מדריכות מנוסות 😊',
+    faq_question: null, knowledge_title: 'הצוות', lead: null, lead_complete: false,
+  }),
+  // המודל טוען "מהמידע" אבל מצביע על קטע שלא קיים — המצאה.
+  '__FIXTURE_KNOWLEDGE_UNGROUNDED__': JSON.stringify({
+    kind: 'answer', confidence: 0.9, source: 'knowledge',
+    reply: 'החוג מתקיים גם בחיפה בימי שני 😊',
+    faq_question: null, knowledge_title: 'סניפים בצפון', lead: null, lead_complete: false,
+  }),
+  // ניסיון להשיג מחיר דרך המידע החופשי.
+  '__FIXTURE_KNOWLEDGE_PRICE__': JSON.stringify({
+    kind: 'answer', confidence: 0.9, source: 'knowledge',
+    reply: 'לפי המידע, החוג עולה 1,800 ש״ח לשנה 😊',
+    faq_question: null, knowledge_title: 'הצוות', lead: null, lead_complete: false,
+  }),
+  // הבטחת מקום והנחה מתוך המידע החופשי.
+  '__FIXTURE_KNOWLEDGE_PROMISE__': JSON.stringify({
+    kind: 'answer', confidence: 0.9, source: 'knowledge',
+    reply: 'בטח, שמרתי לך מקום בקבוצה ויש הנחה לאחיות 😊',
+    faq_question: null, knowledge_title: 'הצוות', lead: null, lead_complete: false,
+  }),
+  // המודל ניסח בעצמו אף שיש שאלה תואמת במאגר — המאגר גובר.
+  '__FIXTURE_FAQ_REPHRASED__': JSON.stringify({
+    kind: 'answer', confidence: 0.9, source: 'knowledge',
+    reply: 'יש לנו סניפים בהמון מקומות, גם בחיפה!',
+    faq_question: 'באילו סניפים החוג פועל?', knowledge_title: 'הצוות', lead: null, lead_complete: false,
+  }),
+  // שיחת הרשמה שבה המודל נוקב מחיר — גם שם השומר חל.
+  '__FIXTURE_LEAD_PRICE__': JSON.stringify({
+    kind: 'lead', confidence: 0.9,
+    reply: 'רשמתי! זה 2,000 ש״ח לשנה. בת כמה היא?',
+    faq_question: null,
+    lead: { student_name: 'נועה', age: null, branch: null, parent_name: null, parent_phone: null },
+    lead_complete: false,
+  }),
   // ─── מקרים פגומים ───
   '__FIXTURE_MALFORMED_JSON__': '{ "kind": "answer", "reply": "בטח',
   '__FIXTURE_NOT_JSON__': 'בטח! החוג מתקיים בימי שלישי בשעה 17:00 בירושלים.',

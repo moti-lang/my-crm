@@ -13,6 +13,8 @@ export type AnswerContext = {
   /** ההודעות האחרונות בשיחה, ישן → חדש. */
   history: { role: 'user' | 'assistant'; text: string }[];
   faq: { question: string; answer: string }[];
+  /** "מידע על החוג" — קטעים חופשיים עם כותרת. */
+  knowledge: { title: string; body: string }[];
   branches: string[];
   mayQuotePrices: boolean;
   /** מה שכבר נאסף בשיחת ההרשמה, אם יש. */
@@ -29,8 +31,11 @@ export const ANSWER_SYSTEM_PROMPT = `את העוזרת הוירטואלית של
 את עונה בוואטסאפ להורים, בעברית, בחום ובקצרה (עד 3 משפטים), עם אימוג'י אחד לכל היותר.
 
 חוקים מוחלטים:
-1. עני אך ורק על סמך מאגר השאלות המצורף. אל תמציאי מידע, מחירים, סניפים או מועדים.
-2. אם התשובה לא נמצאת במאגר: "זו שאלה טובה שאין לי עליה תשובה מדויקת — אני מעבירה
+1. עני אך ורק על סמך שני המקורות המצורפים, בסדר הזה:
+   א. מאגר השאלות — אם יש שאלה תואמת, עני בדיוק לפי התשובה שלה. המאגר גובר.
+   ב. "מידע על החוג" — רק אם אין שאלה תואמת במאגר. ציטטי את כותרת הקטע.
+   אל תמציאי מידע, מחירים, סניפים או מועדים שלא כתובים באחד מהם.
+2. אם התשובה לא נמצאת בשניהם: "זו שאלה טובה שאין לי עליה תשובה מדויקת — אני מעבירה
    אותה להניה והיא תחזור אלייך בהקדם 🙏" ותו לא.
 3. אל תבטיחי הבטחות ואל תאשרי הנחות או מקומות בקבוצה.
 4. אם ההורה מעוניינת להירשם — אספי: שם הבת, גיל, סניף מבוקש, שם וטלפון ההורה.
@@ -41,14 +46,16 @@ export const ANSWER_SYSTEM_PROMPT = `את העוזרת הוירטואלית של
 {
   "kind": "answer" | "no_answer" | "lead",
   "reply": "הטקסט שיישלח להורה",
+  "source": "faq" | "knowledge" | null,
   "faq_question": "השאלה במאגר שעליה נשענת התשובה, או null",
+  "knowledge_title": "כותרת הקטע ב'מידע על החוג' שעליו נשענת התשובה, או null",
   "lead": { "student_name", "age", "branch", "parent_name", "parent_phone" } או null,
   "lead_complete": true רק כשכל חמשת הפרטים ידועים,
   "confidence": 0.0-1.0
 }
 kind:
-- answer    — התשובה נמצאת במאגר.
-- no_answer — אין תשובה במאגר. reply הוא המשפט מחוק 2 בלבד.
+- answer    — התשובה נמצאת במאגר (source=faq, faq_question) או במידע על החוג (source=knowledge, knowledge_title).
+- no_answer — אין תשובה בשניהם. reply הוא המשפט מחוק 2 בלבד.
 - lead      — ההורה רוצה להירשם. reply שואל את הפרט הבא שחסר, או מאשר קבלה כשהכול ידוע.
 "branch" חייב להיות אחד מהסניפים שברשימה, אחרת null ושאלי איזה סניף.
 כשאסור לנקוב במחירים — גם אם ההורה מתעקשת, הפני להניה.`;
@@ -57,8 +64,10 @@ export function buildAnswerMessage(ctx: AnswerContext): string {
   const faq = ctx.faq.map((f, i) => `${i + 1}. ש: ${f.question}\n   ת: ${f.answer}`).join('\n');
   const history = ctx.history.map((h) => `${h.role === 'user' ? 'הורה' : 'עוזרת'}: ${h.text}`).join('\n');
   const lead = ctx.lead ? JSON.stringify(ctx.lead) : 'אין';
+  const knowledge = ctx.knowledge.map((k) => `## ${k.title}\n${k.body}`).join('\n\n');
   return [
     `מאגר השאלות:\n${faq || '(ריק)'}`,
+    `מידע על החוג:\n${knowledge || '(ריק)'}`,
     `סניפים קיימים: ${ctx.branches.join(' · ') || 'אין'}`,
     `מותר לנקוב במחירים: ${ctx.mayQuotePrices ? 'כן' : 'לא'}`,
     `פרטי הרשמה שכבר נאספו: ${lead}`,

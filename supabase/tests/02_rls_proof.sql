@@ -23,6 +23,20 @@ select assert_eq((select round(sum(allocated_amount))::bigint from v_general_all
 select assert_eq((select count(*) from v_debtors), 12, 'בעלים רואה 12 חייבות');
 rollback;
 
+-- ═════════════ מידע על החוג: הבעלים בלבד ═════════════
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select t_user('owner'::user_role)), 'role','authenticated')::text, true);
+insert into knowledge_sections (title, body) values ('הצוות', 'הניה מלמדת בעצמה.');
+select assert_eq((select count(*) from knowledge_sections), 1, 'בעלים כותבת וקוראת מידע על החוג');
+select set_config('request.jwt.claims', json_build_object('sub', (select t_user('branch_manager'::user_role)), 'role','authenticated')::text, true);
+select assert_eq((select count(*) from knowledge_sections), 0, '★ מנהלת סניף לא רואה את המידע על החוג');
+select assert_no_effect('★ מנהלת סניף לא כותבת מידע על החוג', $a$insert into knowledge_sections (title, body) values ('x', 'y')$a$,
+  $p$select count(*)::text from public.knowledge_sections$p$);
+select set_config('request.jwt.claims', json_build_object('sub', (select t_user('accountant'::user_role)), 'role','authenticated')::text, true);
+select assert_eq((select count(*) from knowledge_sections), 0, 'רואת חשבון לא רואה את המידע על החוג');
+rollback;
+
 -- ═════════════ מנהלת סניף: ביתר עילית בלבד ═════════════
 begin;
 set local role authenticated;

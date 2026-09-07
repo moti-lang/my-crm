@@ -19,11 +19,18 @@ export type LeadFields = {
   parent_phone: string | null;
 };
 
+export const ANSWER_SOURCES = ['faq', 'knowledge'] as const;
+export type AnswerSource = (typeof ANSWER_SOURCES)[number];
+
 export type AgentAnswer = {
   kind: AnswerKind;
   reply: string;
   /** השאלה במאגר שעליה נשענה התשובה, או null */
   faq_question: string | null;
+  /** מאיפה התשובה: המאגר, המידע על החוג, או null (המודל לא אמר) */
+  source: AnswerSource | null;
+  /** כותרת הקטע ב"מידע על החוג" שעליו נשענה התשובה, או null */
+  knowledge_title: string | null;
   lead: LeadFields | null;
   lead_complete: boolean;
   confidence: number;
@@ -84,6 +91,8 @@ function validateShape(value: unknown): { ok: true; answer: AgentAnswer } | { ok
       kind: v.kind as AnswerKind,
       reply: (v.reply as string).trim(),
       faq_question: str(v.faq_question),
+      source: v.source === 'faq' || v.source === 'knowledge' ? v.source : null,
+      knowledge_title: str(v.knowledge_title),
       lead,
       lead_complete: v.lead_complete === true,
       confidence: typeof v.confidence === 'number' ? v.confidence : 0.5,
@@ -118,4 +127,12 @@ export function validateAnswer(raw: string, dryRun: boolean): AnswerOutcome {
 /** מחרוזת שנוקבת מחיר: מספר צמוד לסימן שקל, או "שקל/ש״ח" ליד מספר. */
 export function quotesPrice(text: string): boolean {
   return /(₪\s*\d|\d\s*₪|\d[\d,\.]*\s*(ש"ח|ש״ח|שקל|שקלים|ש''ח)|(ש"ח|ש״ח|שקל|שקלים)\s*\d)/.test(text);
+}
+
+/**
+ * מחרוזת שמבטיחה מקום או הנחה. תשובה מהמידע החופשי (ולא מהמאגר שהבעלים
+ * ניסחה) שמכילה הבטחה כזו לא יוצאת — נאכף בקוד, לא מוסכם בפרומפט.
+ */
+export function promisesPlaceOrDiscount(text: string): boolean {
+  return /(שמרתי|נשמר|שמור|מובטח|מבטיחה|יש)\s+(לך|לכן|לה)?\s*מקום|מקום\s+(שמור|מובטח)|הנחה|הנחות|בחינם|ללא תשלום|חינם/.test(text);
 }

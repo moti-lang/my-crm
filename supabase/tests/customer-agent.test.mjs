@@ -7,7 +7,8 @@
  *   · שאלה שבמאגר נענית נכון.
  *   · שאלה שאינה במאגר לא מקבלת המצאה, נרשמת, ומייצרת התראה.
  *   · שיחת הרשמה יוצרת תלמידה בסטטוס ממתינה.
- *   · הסוכן אינו נוקב במחיר כל עוד agent_may_quote_prices=false.
+ *   · הסוכן אינו נוקב במחיר כל עוד agent_may_quote_prices=false — גם דרך המידע החופשי.
+ *   · מידע על החוג: המאגר גובר; תשובה חופשית רק מעוגנת בקטע קיים, בלי הבטחות.
  * ובנוסף: השתלטות אנושית משתיקה, פלט פגום לא מגיע להורה, וכל תשובה
  * באמת נשלחת.
  *
@@ -32,7 +33,7 @@ const bundle = (src, name) => {
 };
 const { answerCustomer } = await import(bundle('supabase/functions/_shared/customer.ts', 'customer.mjs'));
 const { deliverReply } = await import(bundle('supabase/functions/_shared/reply.ts', 'reply.mjs'));
-const { NO_ANSWER_REPLY, PROVIDER_ERROR_REPLY, quotesPrice, validateAnswer } =
+const { NO_ANSWER_REPLY, PROVIDER_ERROR_REPLY, quotesPrice, promisesPlaceOrDiscount, validateAnswer } =
   await import(bundle('supabase/functions/_shared/answer-schema.ts', 'schema.mjs'));
 
 let fails = 0;
@@ -65,12 +66,16 @@ const FAQ = { list: [
   { id: 'faq-branches', question: 'באילו סניפים החוג פועל?', answer: 'החוג פועל בביתר עילית, מודיעין עילית, ירושלים רמות, בית שמש ואשדוד.' },
   { id: 'faq-price', question: 'כמה עולה החוג?', answer: 'המחירים משתנים לפי סניף ומספר התשלומים. אשמח להעביר אותך להניה שתיתן לך את כל הפרטים 🙏' },
 ] };
+const KNOWLEDGE = { list: [
+  { title: 'הצוות', body: 'את החוג מלמדת הניה טייכטל בעצמה, עם צוות מדריכות מנוסות.' },
+  { title: 'מה קורה בשיעור', body: 'חימום, משחקי תיאטרון, עבודה על מונולוג, ובסוף השנה הפקה.' },
+] };
 const BRANCHES = { list: [{ id: 'b-beitar', name: 'ביתר עילית', default_tuition: 2000 }, { id: 'b-modiin', name: 'מודיעין עילית', default_tuition: 2000 }] };
 const SEASON = { single: { id: 'season-1' } };
 const PHONE = '972529990001';
 const base = (extra = {}) => ({
   conversations: { single: { id: 'c1', phone: PHONE, is_human_takeover: false, student_id: null, lead_state: null } },
-  faq_entries: FAQ, branches: BRANCHES, seasons: SEASON,
+  faq_entries: FAQ, knowledge_sections: KNOWLEDGE, branches: BRANCHES, seasons: SEASON,
   settings: { single: { value: false } },
   wa_messages: { list: [{ direction: 'in', body: 'x' }] },
   ...extra,
@@ -127,12 +132,60 @@ console.log('\nשומר המחירים:');
   check('מה שנשלח הוא ההפניה, לא המחיר', r.sent.length === 1 && !quotesPrice(r.sent[0].body));
 }
 {
+  const r = await run('__FIXTURE_KNOWLEDGE_PRICE__', base({ settings: { single: { value: true } } }));
+  check('agent_may_quote_prices=true: מחיר מתוך המידע על החוג עובר', quotesPrice(r.decision.reply), r.decision.reply);
+  check('ובלי התראה', r.alerts.length === 0, JSON.stringify(r.alerts));
+}
+{
   const r = await run('__FIXTURE_QUOTES_PRICE__', base({ settings: { single: { value: true } } }));
-  check('agent_may_quote_prices=true: המחיר עובר', quotesPrice(r.decision.reply));
-  check('ובלי התראה', r.alerts.length === 0);
+  check('שאלת מחיר שיש לה תשובה במאגר: המאגר גובר גם כשהמתג דולק (התשובה של הניה, מילה במילה)', r.decision.reply === FAQ.list[1].answer);
+}
+{
+  const r = await run('__FIXTURE_LEAD_PRICE__');
+  check('★ גם בשיחת הרשמה — מחיר לא יוצא כשהמתג כבוי', !quotesPrice(r.decision.reply) && !quotesPrice(r.sent[0]?.body ?? ''), r.decision.reply);
+  check('ההרשמה עצמה ממשיכה (הליד נשמר)', r.decision.route === 'customer_lead');
 }
 check('quotesPrice מזהה ₪, ש״ח ושקלים', quotesPrice('2,000 ש״ח') && quotesPrice('₪1800') && quotesPrice('150 שקל'));
 check('quotesPrice לא נבהל ממספר סתמי', !quotesPrice('בת 10, כיתה ה') && !quotesPrice('בשעה 17:00'));
+
+// ═══════ 3ב. מידע על החוג ═══════
+console.log('\nמידע על החוג:');
+{
+  const r = await run('מי מלמדת בחוג?');
+  check('★ שאלה שאינה במאגר אבל במידע על החוג — נענית', r.decision.route === 'customer_answer' && /הניה טייכטל/.test(r.decision.reply), r.decision.reply);
+  check('★ מסומנת כתשובה מהמידע, עם כותרת הקטע', r.decision.source === 'knowledge' && r.decision.knowledgeTitle === 'הצוות');
+  check('לא נגעו במונה המאגר, לא נרשמה שאלה ללא מענה', writesTo(r.writes, 'faq_entries').length === 0 && writesTo(r.writes, 'unanswered_questions').length === 0);
+  check('אין התראה', r.alerts.length === 0);
+}
+{
+  const r = await run('מי מלמדת בחוג?', base({ knowledge_sections: { list: [] } }));
+  check('★ אותה תשובה בלי מידע על החוג — אין מקור → המשפט הקבוע והעברה', r.decision.reply === NO_ANSWER_REPLY && r.decision.route === 'customer_no_answer');
+  check('נרשמה כשאלה ללא מענה', writesTo(r.writes, 'unanswered_questions', 'insert').length === 1);
+}
+{
+  const r = await run('__FIXTURE_KNOWLEDGE_UNGROUNDED__');
+  check('★ "מהמידע" עם כותרת שלא קיימת — המצאה, לא יוצאת', r.decision.reply === NO_ANSWER_REPLY && !/חיפה/.test(r.sent[0]?.body ?? ''));
+  check('התראה לבעלים על תשובה בלי מקור', r.alerts.some((a) => a.kind === 'agent_ungrounded'));
+}
+{
+  const r = await run('__FIXTURE_KNOWLEDGE_PRICE__');
+  check('★ מחיר דרך המידע החופשי, המתג כבוי — לא יוצא', !quotesPrice(r.decision.reply) && !quotesPrice(r.sent[0]?.body ?? ''), r.decision.reply);
+  check('במקומו תשובת המחיר מהמאגר', r.decision.reply === FAQ.list[1].answer);
+  check('והתראה', r.alerts.some((a) => a.kind === 'agent_price_blocked'));
+}
+{
+  const r = await run('__FIXTURE_KNOWLEDGE_PROMISE__');
+  check('★ הבטחת מקום/הנחה מתוך המידע — לא יוצאת', r.decision.reply === NO_ANSWER_REPLY && !/שמרתי|הנחה/.test(r.sent[0]?.body ?? ''));
+  check('התראה לבעלים', r.alerts.some((a) => a.kind === 'agent_promise_blocked'));
+}
+{
+  const r = await run('__FIXTURE_FAQ_REPHRASED__');
+  check('★ יש שאלה תואמת במאגר — המאגר גובר: התשובה של הניה מילה במילה, לא הניסוח של המודל', r.decision.reply === FAQ.list[0].answer && !/חיפה/.test(r.decision.reply));
+  check('מסומנת כתשובה מהמאגר', r.decision.source === 'faq' && r.decision.faqQuestion === FAQ.list[0].question);
+  check('מונה השימוש עולה', writesTo(r.writes, 'faq_entries', 'update').length === 1);
+}
+check('promisesPlaceOrDiscount מזהה הבטחות', promisesPlaceOrDiscount('שמרתי לך מקום') && promisesPlaceOrDiscount('יש הנחה לאחיות') && promisesPlaceOrDiscount('מקום מובטח'));
+check('promisesPlaceOrDiscount לא נבהל מ"מקום" סתמי', !promisesPlaceOrDiscount('החוג מתקיים במקום נעים') && !promisesPlaceOrDiscount('הניה תחזור אלייך'));
 
 // ═══════ 4. שיחת הרשמה ═══════
 console.log('\nשיחת הרשמה:');
