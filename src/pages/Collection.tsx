@@ -1,6 +1,7 @@
 import { humanError } from '@/lib/errors';
 import { useMemo, useState } from 'react';
-import { useDebtors, useTemplates, useCreateReminders } from '@/hooks/finance';
+import { useDebtors, useTemplates, useCreateReminders, useReconciliation, useCancelPaymentLink } from '@/hooks/finance';
+import { PaymentLinkButton } from '@/components/PaymentLinkButton';
 import { useBranches } from '@/hooks/queries';
 import { formatILS, formatPhone, formatDate, formatPercent } from '@/lib/format';
 import { renderTemplate } from '@/lib/template';
@@ -28,6 +29,7 @@ export function Collection() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState(false);
   const [templateKey, setTemplateKey] = useState('debt_reminder');
+  const [view, setView] = useState<'debtors' | 'links'>('debtors');
 
   const rows = useMemo(
     () => (debtors.data ?? []).filter((d) => !branchId || d.branch_id === branchId),
@@ -95,6 +97,16 @@ export function Collection() {
         </select>
       </header>
 
+      <nav className="flex gap-1" aria-label="חלקי המסך">
+        {([['debtors', 'חייבות'], ['links', 'קישורי תשלום והתאמה']] as const).map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setView(k)} aria-pressed={view === k}
+            className={`rounded-btn px-3 py-1.5 text-sm ${view === k ? 'bg-plum text-white' : 'border border-rule text-ink hover:bg-shade'}`}>{label}</button>
+        ))}
+      </nav>
+
+      {view === 'links' && <Reconciliation branchId={branchId} />}
+
+      {view === 'debtors' && (<>
       <div className="grid grid-cols-3 gap-3">
         <Kpi label="נגבה" value={formatILS(collected)} tone="text-ok" />
         <Kpi label="נותר" value={formatILS(outstanding)} tone="text-bad" />
@@ -138,6 +150,7 @@ export function Collection() {
                 <th className="px-3 py-2 font-medium">חוב</th>
                 <th className="px-3 py-2 font-medium">ותק החוב</th>
                 <th className="px-3 py-2 font-medium">תשלום אחרון</th>
+                <th className="px-3 py-2 font-medium">קישור</th>
               </tr>
             </thead>
             <tbody>
@@ -166,12 +179,14 @@ export function Collection() {
                     </span>
                   </td>
                   <td className="px-3 py-2">{d.last_paid_on ? formatDate(d.last_paid_on) : 'טרם שילמה'}</td>
+                  <td className="px-3 py-2">{d.student_id && <PaymentLinkButton studentId={d.student_id} balance={Number(d.balance ?? 0)} hasPhone={Boolean(d.parent_phone)} compact />}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      </>)}
 
       {preview && (
         <PreviewDialog
@@ -182,6 +197,76 @@ export function Collection() {
           onConfirm={() => void send()}
         />
       )}
+    </div>
+  );
+}
+
+// ─────────── קישורי תשלום והתאמה מול SUMIT ───────────
+const LINK_STATUS: Record<string, string> = {
+  pending: 'נשלח', opened: 'נפתח', paid: 'שולם', mismatch: 'שולם — סכום שונה', expired: 'פג', cancelled: 'בוטל',
+};
+function Reconciliation({ branchId }: { branchId: string }) {
+  const links = useReconciliation();
+  const cancel = useCancelPaymentLink();
+  const rows = (links.data ?? []).filter((l) => !branchId || l.branch_id === branchId);
+  const issues = rows.filter((l) => l.issue);
+  if (links.isError) return <ErrorState error={links.error} onRetry={() => void links.refetch()} />;
+  if (links.isLoading) return <CardSkeleton rows={5} />;
+  if (rows.length === 0) return <EmptyState title="עדיין אין קישורי תשלום" hint='"קישור תשלום" ליד חייבת שולח להורה דף תשלום בכרטיס. מה שנקלט ב-SUMIT מופיע כאן מול מה שנרשם אצלנו.' />;
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-3">
+        <Kpi label="קישורים פתוחים" value={String(rows.filter((l) => ['pending', 'opened'].includes(l.status ?? '')).length)} />
+        <Kpi label="שולמו" value={String(rows.filter((l) => ['paid', 'mismatch'].includes(l.status ?? '')).length)} tone="text-ok" />
+        <Kpi label="הפרשים" value={String(issues.length)} tone={issues.length ? 'text-bad' : 'text-ok'} />
+      </div>
+      {issues.length > 0 && (
+        <p className="rounded-card border border-bad/40 bg-bad/10 p-3 text-sm text-bad" role="alert">
+          {issues.length} קישורים עם הפרש בין SUMIT לרישום אצלנו — מסומנים באדום למטה. כל אחד כזה קיבל גם התראה.
+        </p>
+      )}
+      <div className="card table-wrap">
+        <table className="w-full min-w-[56rem] text-sm">
+          <thead className="border-b border-rule text-right text-soft">
+            <tr>
+              <th className="px-3 py-2 font-medium">תלמידה</th>
+              <th className="px-3 py-2 font-medium">סניף</th>
+              <th className="px-3 py-2 font-medium">נשלח</th>
+              <th className="px-3 py-2 font-medium">סכום בקישור</th>
+              <th className="px-3 py-2 font-medium">נקלט ב-SUMIT</th>
+              <th className="px-3 py-2 font-medium">נרשם אצלנו</th>
+              <th className="px-3 py-2 font-medium">מצב</th>
+              <th className="px-3 py-2 font-medium">נבדק</th>
+              <th className="px-3 py-2 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((l) => (
+              <tr key={l.id} className={`border-b border-rule last:border-0 ${l.issue ? 'bg-bad/10' : ''}`}>
+                <td className="px-3 py-2">{l.student_name}<span className="block text-xs text-soft">{l.parent_name ?? ''}</span></td>
+                <td className="px-3 py-2">{l.branch_name}</td>
+                <td className="px-3 py-2">{l.created_at ? formatDate(l.created_at) : ''}<span className="block text-xs text-soft">עד {l.expires_at ? formatDate(l.expires_at) : ''}</span></td>
+                <td className="px-3 py-2 tabular-nums">{formatILS(l.link_amount)}</td>
+                <td className="px-3 py-2 tabular-nums">{l.sumit_amount != null ? formatILS(l.sumit_amount) : '—'}{l.sumit_document_id ? <span className="block text-xs text-soft">קבלה {l.sumit_document_id}</span> : null}</td>
+                <td className="px-3 py-2 tabular-nums">{l.recorded_amount != null ? formatILS(l.recorded_amount) : '—'}</td>
+                <td className="px-3 py-2">
+                  <span className={`rounded-full px-2 py-0.5 text-xs ${l.issue ? 'bg-bad text-white' : ['paid'].includes(l.status ?? '') ? 'bg-ok/15 text-ok' : 'bg-shade text-soft'}`}>
+                    {l.issue ?? LINK_STATUS[l.status ?? ''] ?? l.status}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-xs text-soft">{l.last_checked_at ? formatDate(l.last_checked_at) : 'טרם'}</td>
+                <td className="px-3 py-2">
+                  {['pending', 'opened'].includes(l.status ?? '') && l.id && (
+                    <button type="button" className="text-xs text-bad hover:underline" disabled={cancel.isPending}
+                      onClick={() => { if (window.confirm('לבטל את הקישור? ההורה לא תוכל לשלם דרכו.')) void cancel.mutateAsync(l.id as string); }}>ביטול</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-soft">"נבדק" — מתי המערכת שאלה את SUMIT לאחרונה על הקישור (כל שעה, ומיד כשמגיע webhook). התשלום נרשם רק ממה ש-SUMIT מאשרת.</p>
     </div>
   );
 }

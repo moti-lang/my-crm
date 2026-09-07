@@ -659,6 +659,111 @@ export type Database = {
         };
         Relationships: [];
       };
+      payment_links: {
+        Row: {
+          id: string;
+          token: string;
+          external_identifier: string;
+          student_id: string;
+          branch_id: string;
+          amount: number;
+          status: string;
+          expires_at: string;
+          opened_at: string | null;
+          sumit_page_url: string | null;
+          sumit_payment_id: string | null;
+          sumit_document_id: string | null;
+          sumit_amount: number | null;
+          paid_at: string | null;
+          payment_id: string | null;
+          last_checked_at: string | null;
+          reminder_id: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          token: string;
+          external_identifier: string;
+          student_id: string;
+          branch_id: string;
+          amount: number;
+          status?: string;
+          expires_at?: string;
+          opened_at?: string | null;
+          sumit_page_url?: string | null;
+          sumit_payment_id?: string | null;
+          sumit_document_id?: string | null;
+          sumit_amount?: number | null;
+          paid_at?: string | null;
+          payment_id?: string | null;
+          last_checked_at?: string | null;
+          reminder_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          token?: string;
+          external_identifier?: string;
+          student_id?: string;
+          branch_id?: string;
+          amount?: number;
+          status?: string;
+          expires_at?: string;
+          opened_at?: string | null;
+          sumit_page_url?: string | null;
+          sumit_payment_id?: string | null;
+          sumit_document_id?: string | null;
+          sumit_amount?: number | null;
+          paid_at?: string | null;
+          payment_id?: string | null;
+          last_checked_at?: string | null;
+          reminder_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payment_links_branch_id_fkey";
+            columns: ["branch_id"];
+            isOneToOne: false;
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payment_links_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payment_links_payment_id_fkey";
+            columns: ["payment_id"];
+            isOneToOne: true;
+            referencedRelation: "payments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payment_links_reminder_id_fkey";
+            columns: ["reminder_id"];
+            isOneToOne: false;
+            referencedRelation: "reminders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payment_links_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: false;
+            referencedRelation: "students";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       payments: {
         Row: {
           id: string;
@@ -1263,6 +1368,29 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_payment_reconciliation: {
+        Row: {
+          id: string | null;
+          created_at: string | null;
+          expires_at: string | null;
+          status: string | null;
+          link_amount: number | null;
+          sumit_amount: number | null;
+          sumit_payment_id: string | null;
+          sumit_document_id: string | null;
+          paid_at: string | null;
+          last_checked_at: string | null;
+          recorded_amount: number | null;
+          payment_id: string | null;
+          student_name: string | null;
+          parent_name: string | null;
+          branch_name: string | null;
+          branch_id: string | null;
+          student_id: string | null;
+          issue: string | null;
+        };
+        Relationships: [];
+      };
       v_pnl_monthly: {
         Row: {
           season_id: string | null;
@@ -1367,7 +1495,7 @@ export type Database = {
       msg_status: "queued" | "sent" | "failed";
       payment_method: "cash" | "transfer" | "bit" | "credit" | "check" | "other";
       production_status: "planning" | "rehearsals" | "filming" | "editing" | "released";
-      reminder_kind: "debt" | "followup" | "general" | "attendance" | "owner_summary" | "event";
+      reminder_kind: "debt" | "followup" | "general" | "attendance" | "owner_summary" | "event" | "payment_link";
       reminder_status: "scheduled" | "sent" | "cancelled" | "failed";
       split_method: "none" | "equal" | "by_students" | "manual";
       student_status: "active" | "pending" | "stopped" | "graduated";
@@ -1404,11 +1532,24 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_cancel_payment_link: {
+        Args: {
+          p_id: string;
+        };
+        Returns: undefined;
+      };
       rpc_close_branch: {
         Args: {
           p_branch: string;
         };
         Returns: undefined;
+      };
+      rpc_create_payment_link: {
+        Args: {
+          p_student: string;
+          p_amount: number;
+        };
+        Returns: Json;
       };
       rpc_create_pending_command: {
         Args: {
@@ -1430,6 +1571,39 @@ export type Database = {
           p_branch: string;
         };
         Returns: string;
+      };
+      rpc_payment_link_public: {
+        Args: {
+          p_token: string;
+        };
+        Returns: Json;
+      };
+      rpc_payment_link_set_page: {
+        Args: {
+          p_token: string;
+          p_url: string;
+        };
+        Returns: Json;
+      };
+      rpc_payment_links_mark_checked: {
+        Args: {
+          p_tokens: string[];
+        };
+        Returns: number;
+      };
+      rpc_payment_links_to_sync: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      rpc_record_sumit_payment: {
+        Args: {
+          p_external_identifier: string;
+          p_sumit_payment_id: string;
+          p_amount: number;
+          p_paid_at: string;
+          p_document_id: string;
+        };
+        Returns: Json;
       };
       rpc_revoke_attendance_link: {
         Args: {

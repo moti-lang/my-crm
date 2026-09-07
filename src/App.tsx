@@ -19,6 +19,7 @@ import { Expenses } from '@/pages/Expenses';
 import { General } from '@/pages/General';
 import { Attendance } from '@/pages/Attendance';
 import { AttendanceSheet } from '@/pages/AttendanceSheet';
+import { Pay } from '@/pages/Pay';
 import { Reminders } from '@/pages/Reminders';
 import { Placeholder } from '@/pages/Placeholder';
 import { Productions } from '@/pages/Productions';
@@ -99,6 +100,8 @@ export default function App() {
           {/* ציבורי: מסך האחראית. מחוץ ל-AuthProvider בכוונה —
               הוא לא דורש התחברות ולא אמור להמתין לבדיקת session. */}
           <Route path="/a/:token" element={<AttendanceSheet />} />
+          {/* ציבורי: דף התשלום של ההורה. הטוקן הוא ההרשאה; המסד מאמת. */}
+          <Route path="/pay/:token" element={<Pay />} />
           <Route
             path="*"
             element={

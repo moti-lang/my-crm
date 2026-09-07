@@ -63,6 +63,13 @@ curl -X POST "$WA_SERVER_URL/api/webhooks" -H "x-api-key: $WA_API_KEY" \
 
 הסוד שחוזר בתשובה הוא `WA_WEBHOOK_SECRET`.
 
+## SUMIT — `sumit-checkout`, `sumit-webhook`, `cron-sumit-sync`
+
+משתני סביבה: `SUMIT_DRY_RUN` (ברירת מחדל true), `SUMIT_COMPANY_ID`, `SUMIT_API_KEY`,
+`SUMIT_WEBHOOK_SECRET` (מונפק ב-`npm run sumit:schedule`), `APP_BASE_URL`.
+האדפטר `_shared/sumit.ts`; הקליטה `_shared/sumit-sync.ts` (מוזרק db+ספק, נבדק
+ב-`sumit.test.mjs`). ראה README הראשי, "גבייה בכרטיס".
+
 ## מניעת כפילויות — בשני הכיוונים
 
 שרת עצמאי שולח שוב אחרי ריסטארט. כפילות בפקודה כספית = הוצאה שנרשמת פעמיים.

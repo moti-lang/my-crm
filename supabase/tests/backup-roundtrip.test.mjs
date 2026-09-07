@@ -42,7 +42,7 @@ console.log('\nגיבוי:');
 const out = node(['scripts/backup.mjs']);
 const file = readdirSync(env.BACKUP_DIR).find((f) => f.endsWith('.json'));
 check('★ קובץ הגיבוי נוצר', Boolean(file), out.slice(-300));
-check('הגיבוי מדווח על כל הטבלאות', /2\d טבלאות/.test(out));
+check('הגיבוי מדווח על כל הטבלאות', /[23]\d טבלאות/.test(out));
 
 console.log('\nשיבוש:');
 psql(`delete from attendance; delete from students where full_name like 'ר%'; delete from allowed_users where email='books@teichtal.local';

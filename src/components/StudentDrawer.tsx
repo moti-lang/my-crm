@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStudentPayments, useStudentProductions, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
 import { formatILS, formatDate, formatPhone } from '@/lib/format';
 import { PaymentForm } from '@/components/PaymentForm';
+import { PaymentLinkButton } from '@/components/PaymentLinkButton';
 import type { Views } from '@/lib/database.types';
 
 type Student = Views<'v_student_overview'>;
@@ -99,9 +100,12 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
                 />
               </div>
             ) : (
-              <button type="button" className="btn-ghost mt-3 w-full" onClick={() => setAdding(true)}>
-                + רישום תשלום
-              </button>
+              <>
+                <button type="button" className="btn-ghost mt-3 w-full" onClick={() => setAdding(true)}>
+                  + רישום תשלום
+                </button>
+                {student.id && <PaymentLinkButton studentId={student.id} balance={balance} hasPhone={Boolean(student.parent_phone)} />}
+              </>
             )}
 
             {payments.isLoading ? (

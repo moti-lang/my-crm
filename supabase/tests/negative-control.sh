@@ -316,7 +316,7 @@ expect_fail_code "רשימת המורשים פתוחה לכתיבה לכל מח�
 
 expect_fail_code "יציאה אוטומטית: מסך האחראית מאבד את הפטור" \
   "$DIR/../../src/lib/idle.ts" \
-  'sed -i "s|return /\^\\\\/a\\\\//.test(pathname);|return false;|" "$F"' \
+  'sed -i "s#return /\\^\\\\/(a|pay)\\\\//.test(pathname);#return false;#" "$F"' \
   "node supabase/tests/idle-logout.test.mjs"
 
 expect_fail_code "יציאה אוטומטית: 30 דקות הופכות ל-8 שעות" \
@@ -373,6 +373,36 @@ expect_fail_code "מידע על החוג: המאגר מפסיק לגבור (הנ
   "$DIR/../../supabase/functions/_shared/answer-resolve.ts" \
   'sed -i "s/    return { reply: hit.answer, source: .faq./    return { reply: answer.reply, source: \x27faq\x27/" "$F"' \
   "node supabase/tests/customer-agent.test.mjs"
+
+expect_fail_code "SUMIT: הסנכרון רושם גם כשלא שולם (סומך על הגוף)" \
+  "$DIR/../../supabase/functions/_shared/sumit-sync.ts" \
+  'sed -i "s/  if (!status.paid) return { result: .unpaid. };/  if (false) return { result: \x27unpaid\x27 };/" "$F"' \
+  "node supabase/tests/sumit.test.mjs"
+
+expect_fail_code "SUMIT: ה-webhook רושם ישירות מהגוף" \
+  "$DIR/../../supabase/functions/sumit-webhook/index.ts" \
+  'sed -i "s|const outcome = await syncPaymentLink(db, sumitProvider(), link);|const body = JSON.parse(raw); await db.rpc(\x27rpc_record_sumit_payment\x27, { p_external_identifier: ext, p_sumit_payment_id: String(body.ID), p_amount: Number(body.Amount), p_paid_at: null, p_document_id: null }); const outcome = { result: \x27recorded\x27 };|" "$F"' \
+  "node supabase/tests/sumit.test.mjs"
+
+expect_fail_code "SUMIT: הסוד המשותף מושווה בלי זמן קבוע ומקבל ריק" \
+  "$DIR/../../supabase/functions/_shared/guard.ts" \
+  'sed -i "s/  if (!(await constantTimeEqual(given, expected))) return deny(401, .unauthorized.);/  if (given !== expected \&\& given !== \x27\x27) return deny(401, \x27unauthorized\x27);/" "$F"' \
+  "node supabase/tests/sumit.test.mjs"
+
+expect_fail_code "SUMIT: הסכום לדף מגיע מהבקשה" \
+  "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
+  'sed -i "s/      amount: Number(link.amount),/      amount: Number((await req.json()).amount ?? link.amount),/" "$F"' \
+  "node supabase/tests/sumit.test.mjs"
+
+expect_fail_code "SUMIT: הדף הציבורי חושף את הטלפון" \
+  "$DIR/../migrations/0022_payment_links.sql" \
+  'sed -i "s/  return jsonb_build_object(.ok., true, .state., .open., .student., v_name, .branch., v_branch, .amount., l.amount,/  return jsonb_build_object(\x27ok\x27, true, \x27state\x27, \x27open\x27, \x27student\x27, v_name, \x27branch\x27, v_branch, \x27amount\x27, l.amount, \x27parent_phone\x27, (select parent_phone from students where id = l.student_id),/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/16_payment_links.sql"
+
+expect_fail_code "SUMIT: הרישום מפסיק להיות אידמפוטנטי" \
+  "$DIR/../migrations/0022_payment_links.sql" \
+  'sed -i "s/  if l.payment_id is not null then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/16_payment_links.sql"
 
 expect_fail_code "הזרקת נוסחאות: ההגנה מוסרת מהייצוא" \
   "$DIR/../../src/lib/export-core.ts" \

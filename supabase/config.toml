@@ -70,3 +70,12 @@ verify_jwt = true              # הסימולטור במסך /agent בלבד; ה
 
 [functions.cron-backup]
 verify_jwt = false             # מוגנת בעצמה: Authorization חייב להיות service_role (pg_cron)
+
+# SUMIT — הגבייה בכרטיס. checkout: ההורה (anon) עם הטוקן של הקישור;
+# webhook: סוד משותף בכותרת; cron: CRON_SECRET.
+[functions.sumit-checkout]
+verify_jwt = false
+[functions.sumit-webhook]
+verify_jwt = false
+[functions.cron-sumit-sync]
+verify_jwt = false

@@ -22,6 +22,8 @@ const check = (label, ok, detail = '') => { if (!ok) fails++; console.log(`  ${o
 export const EXPECTED = {
   'wa-webhook': 'verifyHubSignature',
   'ai-answer': 'requireUserJwt', 'ai-command': 'requireUserJwt',
+  // SUMIT: סוד משותף בכותרת (webhook), והטוקן של הקישור עצמו (checkout).
+  'sumit-webhook': 'requireSharedSecret', 'sumit-checkout': 'requirePayToken',
 };
 const dirs = readdirSync(ROOT).filter((d) => !d.startsWith('_') && statSync(join(ROOT, d)).isDirectory() && readdirSync(join(ROOT, d)).includes('index.ts'));
 check(`יש ${dirs.length} פונקציות`, dirs.length >= 12);
@@ -35,7 +37,7 @@ for (const d of dirs) {
   const body = handler.slice(handler.indexOf('{') + 1).trimStart();
   const first = want === 'verifyHubSignature'
     ? /^if \(req\.method[\s\S]{0,400}verifyHubSignature\(/.test(body)
-    : new RegExp(`^const denied = ${want}\\(req\\);\\s*if \\(denied\\) return denied;`).test(body)
+    : new RegExp(`^const denied = (await )?${want}\\(req[^)]*\\);\\s*if \\(denied\\) return denied;`).test(body)
       || new RegExp(`^if \\(req\\.method[^\\n]*\\n\\s*const denied = ${want}\\(req\\);\\s*if \\(denied\\) return denied;`).test(body);
   check(`   ${d}: השומר הוא המשפט הראשון ב-handler`, first, body.slice(0, 120).replace(/\n/g, ' '));
 }

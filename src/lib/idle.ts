@@ -23,9 +23,9 @@ export function secondsLeft(lastActivity: number, now: number): number {
   return Math.max(0, Math.ceil((IDLE_LIMIT_MS - (now - lastActivity)) / 1000));
 }
 
-/** המסך הציבורי של האחראית — לא כפוף ליציאה האוטומטית. */
+/** המסכים הציבוריים (האחראית, ההורה) — לא כפופים ליציאה האוטומטית. */
 export function isIdleExempt(pathname: string): boolean {
-  return /^\/a\//.test(pathname);
+  return /^\/(a|pay)\//.test(pathname);
 }
 
 /** אירועי דפדפן שנחשבים פעילות. */

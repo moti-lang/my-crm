@@ -37,10 +37,15 @@ const publicRoutes = [...outer.matchAll(/<Route\s+path="([^"]+)"/g)]
 console.log('\nמסלולים מחוץ לשער ההתחברות:');
 for (const r of publicRoutes) console.log(`    ${r}`);
 
-check('★ מסלול ציבורי אחד בלבד', publicRoutes.length === 1,
+// שניים בלבד: מסך האחראית ודף התשלום של ההורה. שניהם עם טוקן, שניהם RPC בלבד.
+check('★ שני מסלולים ציבוריים בלבד', publicRoutes.length === 2,
       `נמצאו: ${publicRoutes.join(', ')}`);
-check('★ והוא /a/:token', publicRoutes[0] === '/a/:token',
-      `נמצא: ${publicRoutes[0]}`);
+check('★ והם /a/:token ו-/pay/:token', publicRoutes.join(',') === '/a/:token,/pay/:token',
+      `נמצא: ${publicRoutes.join(',')}`);
+const pay = codeOf('src/pages/Pay.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+check('★ דף התשלום ניגש רק דרך RPC ופונקציה, לא לטבלאות', !/\.from\(/.test(pay) && /rpc\('rpc_payment_link_public'/.test(pay));
+check('★ דף התשלום אינו מייבא את AuthProvider', !/AuthProvider|useAuth/.test(pay));
+check('★ "שולם" בדף התשלום מגיע מהשרת (RPC), לא מפרמטר החזרה', /state === 'paid'/.test(pay) && !/setInfo\([^)]*returned/.test(pay) && !/returned\s*\?[^\n]*paid/.test(pay));
 // ה-catch-all חייב לעטוף את AuthProvider — אחרת "כל השאר" אינו מוגן.
 check('★ המסלול "*" עוטף את AuthProvider',
       /path="\*"[\s\S]{0,200}<AuthProvider>/.test(app),

@@ -195,3 +195,43 @@ export function useUpdateSplitMethod() {
     onSuccess: invalidate,
   });
 }
+
+// ─────────── קישורי תשלום (SUMIT) ───────────
+export type PaymentLinkResult = { id: string; token: string; url: string; amount: number; expires_at: string };
+
+/** יוצר קישור תשלום נעול לתלמידה ולסכום (ברירת מחדל: היתרה), ושולח בוואטסאפ דרך תור התזכורות. */
+export function useCreatePaymentLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { studentId: string; amount: number }) => {
+      // הסכום נשלח מהמסך אבל המסד מאמת: לא יותר מהיתרה הפתוחה ברגע היצירה.
+      const { data, error } = await supabase.rpc('rpc_create_payment_link', { p_student: input.studentId, p_amount: input.amount });
+      if (error) throw new Error(error.message);
+      return data as unknown as PaymentLinkResult;
+    },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['payment-links'] }); void qc.invalidateQueries({ queryKey: ['reminders'] }); },
+  });
+}
+
+export function useCancelPaymentLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc('rpc_cancel_payment_link', { p_id: id });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['payment-links'] }); },
+  });
+}
+
+/** מסך ההתאמה: מה נרשם ב-SUMIT מול מה שרשום אצלנו. */
+export function useReconciliation() {
+  return useQuery({
+    queryKey: ['payment-links'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('v_payment_reconciliation').select('*').order('created_at', { ascending: false }).limit(500);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+}

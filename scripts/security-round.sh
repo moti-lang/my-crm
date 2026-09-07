@@ -25,6 +25,9 @@ s "4 · חשוף בלי התחברות (10, שומרי פונקציות, משט�
 psql -h "${PGHOST:-/tmp}" -p "${PGPORT:-5433}" -U "${PGUSER:-postgres}" -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/10_portability_proof.sql >/tmp/sec.out 2>&1 && echo "  ✓ 10_portability_proof" || { echo "  ✗ 10_portability_proof"; F=1; }
 r node supabase/tests/function-guards.test.mjs >/dev/null && echo "  ✓ כל פונקציה עם שומר"
 r node supabase/tests/public-surface.test.mjs >/dev/null && echo "  ✓ משטח ציבורי: דף אחד"
+s "10 · תשלומים (SUMIT): אישור רק מהספק, סוד משותף, קישור נעול"
+r node supabase/tests/sumit.test.mjs >/dev/null && echo "  ✓ webhook הוא רמז, הרישום רק אחרי SUMIT, הסוד בזמן קבוע"
+psql -h "${PGHOST:-/tmp}" -p "${PGPORT:-5433}" -U "${PGUSER:-postgres}" -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/16_payment_links.sql >/tmp/sec.out 2>&1 && echo "  ✓ 16_payment_links" || { echo "  ✗ 16_payment_links"; F=1; }
 s "7 · מכשיר שאבד: יציאה אוטומטית וניקוי זיכרון"
 r node supabase/tests/idle-logout.test.mjs >/dev/null && echo "  ✓ 30 דקות, אזהרה דקה לפני, מסך האחראית פטור, clear() בהחלפת משתמשת"
 s "5 · סודות (ריפו, בילד, היסטוריה)"
