@@ -1,9 +1,10 @@
 import { PrismaClient } from "@prisma/client";
+import { resolveDatabaseUrl } from "./db-url";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 /** תומך בשמות המשתנים של האינטגרציות: Neon (DATABASE_URL), Vercel Postgres / Supabase (POSTGRES_PRISMA_URL, POSTGRES_URL) */
-const datasourceUrl = process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL;
+const datasourceUrl = resolveDatabaseUrl();
 
 export const prisma =
   globalForPrisma.prisma ??
