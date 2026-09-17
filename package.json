@@ -1,0 +1,61 @@
+{
+  "name": "sevev-crm",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "node scripts/prisma-env.mjs generate && node scripts/prisma-env.mjs migrate deploy --if-db && next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "postinstall": "node scripts/prisma-env.mjs generate",
+    "db:migrate": "node scripts/prisma-env.mjs migrate dev",
+    "db:deploy": "node scripts/prisma-env.mjs migrate deploy",
+    "db:push": "node scripts/prisma-env.mjs db push",
+    "db:studio": "node scripts/prisma-env.mjs studio",
+    "db:seed": "node scripts/prisma-env.mjs db seed",
+    "push:keys": "web-push generate-vapid-keys"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
+    "@hebcal/core": "^6.9.2",
+    "@prisma/client": "^6.19.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "date-fns-tz": "^3.2.0",
+    "idb-keyval": "^6.3.0",
+    "lucide-react": "^1.47.0",
+    "next": "15.5.25",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^3.7.0",
+    "web-push": "^3.6.7",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^22.20.3",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.25",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.13",
+    "typescript": "^5",
+    "vitest": "^5.0.1"
+  },
+  "description": "מעקב לידים בשטח — סבב",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module"
+}

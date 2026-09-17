@@ -1,0 +1,223 @@
+// מודל הנתונים — מעקב לידים בשטח ("סבב")
+// כל התאריכים נשמרים UTC ומוצגים בשעון ישראל (Asia/Jerusalem).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL") // חיבור ישיר (לא דרך pooler) למיגרציות; scripts/prisma-env.mjs ממלא ברירת מחדל
+}
+
+enum LeadStatus {
+  NEW          // נרשם בשטח, לא בורר
+  TO_CLARIFY   // לא יודע מה העסק / מה הצורך
+  WAITING_THEM // הבטיחו לחזור אליי
+  SCHEDULED    // יש תאריך קבוע
+  DIAGNOSED    // נעשתה פגישת אבחון
+  PROPOSED     // נשלחה הצעה
+  CONTRACT     // חוזה נשלח, ממתין לחתימה
+  WON          // נסגר
+  PARKED       // לא עכשיו — לחזור בעוד תקופה
+  LOST         // לא רלוונטי
+}
+
+enum Heat {
+  HOT  // ישב איתי / ביקש מסמך / קבע תאריך
+  WARM // שיחה אמיתית, עניין
+  COLD // ביקור נימוס
+}
+
+enum ActionType {
+  VISIT    // כניסה פיזית — ברירת מחדל כשאין טלפון
+  CALL
+  EMAIL
+  MEETING
+  WHATSAPP
+}
+
+enum TimeOfDay {
+  MORNING   // תעשייה ובתי מלאכה — 8:00–13:00
+  AFTERNOON // קמעונאות — 16:00–20:00
+  ANY
+}
+
+enum TaskSource {
+  MANUAL        // נוצרה ידנית
+  NEXT_ACTION   // משקפת את nextActionAt של הליד
+  AUTO_WAITING  // אוטומציה: WAITING_THEM שעבר תאריכו + 2 ימים
+  AUTO_CONTRACT // אוטומציה: חוזה שממתין מעל 7 ימים
+}
+
+/// הישות המרכזית. המיקום הוא הציר, לא איש הקשר — כל השדות אופציונליים חוץ ממזהה אחד (name או descriptor).
+model Lead {
+  id          String  @id @default(cuid())
+
+  // זיהוי — לפחות אחד מהשניים
+  name        String? // שם העסק, אם ידוע
+  descriptor  String? // תיאור מזהה: "נגריה ליד רחוב הסלע"
+
+  // מיקום — הציר המרכזי
+  area        String? // אזור/רחוב ראשי
+  addressNote String? // "בניין הסלע, קומה תחתונה"
+  lat         Float?
+  lng         Float?
+
+  // תחום
+  category      String?
+  bestTimeOfDay TimeOfDay @default(ANY)
+
+  // אנשי קשר
+  contactName String?
+  contactRole String?
+  phone       String? // מנורמל לפורמט בינלאומי (+972...)
+  email       String?
+  website     String?
+
+  // ניהול
+  status          LeadStatus @default(NEW)
+  statusChangedAt DateTime   @default(now())
+  heat            Heat       @default(WARM)
+
+  // המעקב הבא — הלב של המערכת
+  nextActionAt            DateTime?
+  nextActionType          ActionType?
+  nextActionNote          String?
+  nextActionIsApproximate Boolean     @default(false) // תאריך משוער ("אחרי החג")
+
+  // תוכן
+  observation  String? @db.Text // "מה ראיתי"
+  painPoints   String? @db.Text
+  currentTools String?
+  notes        String? @db.Text
+
+  firstSeenAt  DateTime @default(now())
+  lastTouchAt  DateTime @default(now())
+  closedReason String?
+
+  touches       Touch[]
+  tasks         Task[]
+  photos        Photo[]
+  statusHistory StatusHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([nextActionAt])
+  @@index([area])
+  @@index([status])
+  @@index([lastTouchAt])
+}
+
+/// יומן מגעים — כל ביקור/שיחה.
+model Touch {
+  id     String @id @default(cuid())
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  at          DateTime   @default(now())
+  type        ActionType
+  withWhom    String?
+  summary     String     @db.Text
+  outcome     String? // מה סוכם
+  durationMin Int? // כמה זמן נתן לי — מדד עניין חזק
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId, at])
+  @@index([at])
+}
+
+model Task {
+  id     String  @id @default(cuid())
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  title         String
+  dueAt         DateTime
+  allDay        Boolean     @default(true)
+  isApproximate Boolean     @default(false)
+  type          ActionType?
+  notes         String?     @db.Text
+  source        TaskSource  @default(MANUAL)
+
+  done    Boolean   @default(false)
+  doneAt  DateTime?
+  outcome String?   @db.Text
+
+  remindMinutesBefore Int? // null = בלי התראה ייעודית
+  notifiedAt          DateTime? // מניעת כפילות התראות
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dueAt, done])
+  @@index([leadId])
+}
+
+/// תמונות — שלט כניסה לבניין, חזית עסק. הקובץ נשמר ב-DB (data) ומוגש דרך url.
+model Photo {
+  id       String  @id @default(cuid())
+  leadId   String
+  lead     Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  url      String
+  caption  String?
+  mimeType String?
+  size     Int?
+  data     Bytes?
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+}
+
+/// היסטוריית סטטוסים — לדוחות ("כמה התקדמו השבוע").
+model StatusHistory {
+  id     String      @id @default(cuid())
+  leadId String
+  lead   Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  from   LeadStatus?
+  to     LeadStatus
+  at     DateTime    @default(now())
+
+  @@index([at])
+  @@index([leadId])
+}
+
+/// מנוי Web Push של המכשיר.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+}
+
+/// הגדרות כלליות (למשל טוקן ICS).
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// רישום ריצות cron — מונע ריצה כפולה של דיגסט באותו יום.
+model CronRun {
+  id     String   @id @default(cuid())
+  job    String
+  runKey String
+  ranAt  DateTime @default(now())
+  detail String?
+
+  @@unique([job, runKey])
+}
+
+/// snapshot יומי של הנתונים (ללא קבצי תמונות).
+model Snapshot {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  data      Json
+  leadCount Int      @default(0)
+}
