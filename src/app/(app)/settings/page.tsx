@@ -6,6 +6,7 @@ import { isAuthDisabled } from "@/lib/auth";
 import { appUrl, getOrCreateIcsToken } from "@/lib/settings";
 import { Card, PageTitle } from "@/components/ui/card";
 import { Appearance, FailedQueuePanel, IcsControls, InstallHelp, JobsPanel, LogoutButton, PushControls, SnapshotsPanel } from "./settings-client";
+import { ImportPanel } from "./import-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "הגדרות" };
@@ -46,6 +47,9 @@ export default async function SettingsPage() {
       </Section>
       <Section title="📅 יומן (ICS)">
         <IcsControls url={icsUrl} webcal={icsUrl.replace(/^https?:/, "webcal:")} />
+      </Section>
+      <Section title="📥 ייבוא לידים מקובץ">
+        <ImportPanel />
       </Section>
       <Section title="💾 ייצוא וגיבוי">
         <SnapshotsPanel snapshots={snapshots.map((s) => ({ ...s, createdAt: s.createdAt.toISOString() }))} />
