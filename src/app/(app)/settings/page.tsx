@@ -35,7 +35,7 @@ export default async function SettingsPage() {
       <Section title="🔔 התראות (Web Push)">
         <PushControls configured={pushConfigured()} publicKey={process.env.VAPID_PUBLIC_KEY ?? null} subscriptions={subs} />
         <p className="text-xs text-muted-foreground">
-          לוח זמנים: 07:30 דיגסט בוקר · כל 15 דק׳ תזכורות · 20:00 סיכום יום · ראשון 06:00 סיכום שבועי. ב-iOS ההתראות עובדות רק כשהאפליקציה מותקנת למסך הבית.
+          לוח זמנים: דיגסט בוקר (07:30–08:30) · סיכום יום (19:30–20:30) · ראשון בבוקר סיכום שבועי · תזכורות למשימות בכל הרצה (כל 15 דק׳ עם cron-job.org / Vercel Pro). ב-iOS ההתראות עובדות רק כשהאפליקציה מותקנת למסך הבית.
         </p>
       </Section>
       <Section title="💬 ערוץ גיבוי — וואטסאפ">

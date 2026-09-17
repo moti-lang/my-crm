@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL") // חיבור ישיר (לא דרך pooler) למיגרציות; scripts/prisma-env.mjs ממלא ברירת מחדל
 }
 
 enum LeadStatus {

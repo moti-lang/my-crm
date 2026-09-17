@@ -1,5 +1,6 @@
 /**
- * Cron: נקודת כניסה אחת (tick) שרצה כל 15 דקות ומפעילה עבודות לפי שעון ישראל.
+ * Cron: נקודת כניסה אחת (tick) שמפעילה עבודות לפי שעון ישראל.
+ * מומלץ כל 15 דקות (Vercel Pro או cron-job.org). בתוכנית Hobby של Vercel: פעמיים ביום (05:30 ו-17:30 UTC, ראה vercel.json).
  * מניעת כפילויות דרך טבלת CronRun (job + runKey ייחודיים).
  */
 import { formatInTimeZone } from "date-fns-tz";
@@ -168,9 +169,9 @@ export async function runTick(now = new Date(), force: JobName[] = []) {
   }
   await daily("automations", minutes >= 6 * 60);
   await daily("snapshot", minutes >= 6 * 60);
-  await daily("morning", minutes >= 7 * 60 + 30 && minutes < 10 * 60);
-  await daily("evening", minutes >= 20 * 60 && minutes < 23 * 60);
-  await daily("weekly", weekday === 0 && minutes >= 6 * 60 && minutes < 10 * 60, `week-${ymd}`);
+  await daily("morning", minutes >= 7 * 60 + 30 && minutes < 11 * 60);
+  await daily("evening", minutes >= 19 * 60 + 30 && minutes < 24 * 60);
+  await daily("weekly", weekday === 0 && minutes >= 6 * 60 && minutes < 11 * 60, `week-${ymd}`);
   results.openUntilTonight = await prisma.task.count({ where: { done: false, dueAt: { lt: endOfDayIL(now) } } });
   return results;
 }

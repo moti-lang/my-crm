@@ -54,13 +54,27 @@ npm run dev                 # http://localhost:3000
 | `GREEN_API_ID_INSTANCE`, `GREEN_API_TOKEN`, `WHATSAPP_TO` | | ערוץ גיבוי — וואטסאפ דרך Green API. `GREEN_API_URL` אם ההוסט שונה. |
 | `AUTH_DISABLED=1` | | פיתוח מקומי בלבד — בלי מסך כניסה. |
 
-## פריסה ל-Vercel
+## פריסה ל-Vercel (כ-5 דקות, בחינם)
 
-1. DB: Neon או Supabase → `DATABASE_URL`.
-2. הגדירו את כל משתני הסביבה למעלה ב-Vercel.
-3. Vercel מריץ `vercel-build` (`prisma generate && prisma migrate deploy && next build`) — המיגרציות רצות אוטומטית.
-4. **Cron**: `vercel.json` מגדיר `/api/cron/tick` כל 15 דקות. בתוכנית Hobby של Vercel ה-cron מוגבל (פעם ביום) — שתי אפשרויות: לשנות ל-`30 4 * * *` (07:30 בקיץ / 06:30 בחורף, UTC) או להפעיל שירות חיצוני חינמי (cron-job.org) שקורא ל-`https://<app>/api/cron/tick?secret=<CRON_SECRET>` כל 15 דקות. ה-tick עצמו מחליט לפי שעון ישראל מה להריץ ולא ירוץ פעמיים.
-5. HTTPS חובה ל-PWA ולהתראות (Vercel נותן).
+1. **חשבון**: [vercel.com](https://vercel.com) → Sign up with GitHub.
+2. **Add New → Project → Import** את הריפו `moti-lang/my-crm` (ענף `main`).
+3. **Environment Variables**: הדביקו את בלוק המשתנים (`APP_PASSWORD`, `AUTH_SECRET`, `CRON_SECRET`, `VAPID_*` — אפשר להדביק קובץ `.env` שלם לתוך שדה ה-Key והוא מתפצל לבד). לחצו **Deploy**. הבנייה הראשונה מדלגת על המיגרציות כי עדיין אין מסד נתונים — זה תקין.
+4. **מסד נתונים**: בפרויקט → **Storage → Create Database → Neon (Postgres)** → Connect to project. זה מוסיף `DATABASE_URL` אוטומטית (גם `POSTGRES_URL` של Supabase/Vercel Postgres מזוהה).
+5. **Deployments → ⋯ → Redeploy**. הפעם המיגרציות רצות והאתר חי בכתובת `https://<project>.vercel.app`.
+6. **בטלפון**: פתחו את הכתובת → שיתוף → "הוסף למסך הבית" → הגדרות → "הפעל התראות במכשיר הזה".
+
+`APP_URL` לא חובה ב-Vercel — הכתובת מזוהה לבד. אם משתמשים בדומיין משלכם, הגדירו `APP_URL`.
+
+### Cron
+
+`vercel.json` מגדיר שתי ריצות יומיות (מתאים לתוכנית Hobby החינמית): 05:30 UTC (דיגסט בוקר 07:30 בחורף / 08:30 בקיץ, אוטומציות, snapshot, סיכום שבועי בראשון) ו-17:30 UTC (סיכום יום). ה-tick מחליט לפי שעון ישראל מה להריץ ולא ירוץ פעמיים.
+
+לתזכורות בזמן אמת (משימות עם התראה לפני) צריך ריצה כל 15 דקות: או Vercel Pro (`*/15 * * * *` ב-`vercel.json`), או שירות חינמי כמו [cron-job.org](https://cron-job.org) שקורא כל 15 דקות ל-`https://<app>/api/cron/tick?secret=<CRON_SECRET>`.
+
+### אופציונלי
+
+- **Claude** לפירוק טקסט חופשי: `ANTHROPIC_API_KEY` (מפתח מ-console.anthropic.com). בלי — מפרש מקומי.
+- **וואטסאפ**: חשבון ב-[green-api.com](https://green-api.com) → `GREEN_API_ID_INSTANCE`, `GREEN_API_TOKEN`, `WHATSAPP_TO`.
 
 ### התראות בסלולר (iOS)
 

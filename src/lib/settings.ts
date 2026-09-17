@@ -31,6 +31,8 @@ export async function rotateIcsToken(): Promise<string> {
 }
 
 export function appUrl(path = ""): string {
-  const base = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")).replace(/\/$/, "");
+  const explicit = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  const base = (explicit || (vercel ? `https://${vercel}` : "http://localhost:3000")).replace(/\/$/, "");
   return `${base}${path}`;
 }
