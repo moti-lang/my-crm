@@ -4,7 +4,8 @@
  * - DATABASE_URL  ← DATABASE_URL | POSTGRES_PRISMA_URL | POSTGRES_URL      (Neon / Supabase / Vercel Storage)
  * - DIRECT_DATABASE_URL ← DIRECT_DATABASE_URL | DATABASE_URL_UNPOOLED | POSTGRES_URL_NON_POOLING | DATABASE_URL
  * שימוש: node scripts/prisma-env.mjs migrate deploy [--if-db]
- *   --if-db  אם אין חיבור למסד נתונים — מדלג בשקט (לבנייה ראשונה ב-Vercel לפני שחיברו DB).
+ *   --if-db  אם אין חיבור למסד נתונים (או שהוא לא זמין) — מדלג באזהרה במקום להפיל את הבנייה
+ *            (לבנייה ראשונה ב-Vercel לפני שחיברו DB).
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -43,4 +44,8 @@ const r = spawnSync(process.execPath, [prismaBin, ...cleanArgs], {
   stdio: "inherit",
   env: { ...process.env, DATABASE_URL: url || "postgresql://unset:unset@localhost:5432/unset", DIRECT_DATABASE_URL: direct || "postgresql://unset:unset@localhost:5432/unset" },
 });
+if ((r.status ?? 1) !== 0 && ifDb) {
+  console.warn(`[prisma-env] "prisma ${cleanArgs.join(" ")}" נכשל (כנראה מסד הנתונים לא זמין) — ממשיכים בבנייה. בדוק את DATABASE_URL ב-Vercel והרץ Redeploy.`);
+  process.exit(0);
+}
 process.exit(r.status ?? 1);
