@@ -186,9 +186,12 @@ export function CalendarView({ view, anchor, from, to, today, tasks, days, month
                   <div className="flex items-center justify-between">
                     <span className={cn("text-xs font-medium", ymd === today && "rounded-full bg-primary px-1.5 text-primary-foreground")}>{dayNum(ymd)}</span>
                     {special && (
-                      <span className="truncate text-[10px] text-warning" title={info?.name}>
-                        {info?.short ?? info?.name}
-                      </span>
+                      <>
+                        <span className="hidden truncate text-[10px] text-warning md:inline" title={info?.name}>
+                          {info?.short ?? info?.name}
+                        </span>
+                        <span className="h-1.5 w-1.5 rounded-full bg-warning md:hidden" title={info?.name} />
+                      </>
                     )}
                   </div>
                   <div className="mt-1 hidden flex-col gap-0.5 md:flex">
