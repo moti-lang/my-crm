@@ -4,7 +4,9 @@ import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mic, MicOff } from "lucide-react";
 import { ACTION_META, ACTION_TYPES, HEATS, HEAT_META, LEAD_STATUSES, STATUS_META, type ActionType, type Heat, type LeadStatus } from "@/lib/categories";
-import { api, errorMessage } from "@/lib/client/api";
+import { errorMessage } from "@/lib/client/api";
+import { requestOrQueue } from "@/lib/client/offline-queue";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { emptyNext, instantToNext, nextToIso, type NextActionValue } from "@/lib/client/lead-form-model";
 import { useSpeech } from "@/lib/client/use-speech";
 import { Button } from "@/components/ui/button";
@@ -15,6 +17,7 @@ import { useToast } from "@/components/ui/toast";
 import { NextActionPicker } from "./next-action-picker";
 
 const DURATIONS = [5, 10, 20, 30, 60];
+const TZ = "Asia/Jerusalem";
 
 export function TouchForm({
   lead,
@@ -38,6 +41,8 @@ export function TouchForm({
   const [status, setStatus] = useState<LeadStatus>(lead.status as LeadStatus);
   const [next, setNext] = useState<NextActionValue>(() => (lead.nextActionAt ? instantToNext(lead.nextActionAt, lead.nextActionType, lead.nextActionNote, lead.nextActionIsApproximate) : emptyNext()));
   const [complete, setComplete] = useState(lead.openTasks > 0);
+  const [date, setDate] = useState(() => formatInTimeZone(new Date(), TZ, "yyyy-MM-dd"));
+  const [time, setTime] = useState(() => formatInTimeZone(new Date(), TZ, "HH:mm"));
   const [busy, setBusy] = useState(false);
 
   const onFinal = useCallback((t: string) => setSummary((s) => (s ? `${s} ${t}` : t)), []);
@@ -50,10 +55,13 @@ export function TouchForm({
     }
     setBusy(true);
     try {
-      await api(`/api/leads/${lead.id}/touches`, {
+      const r = await requestOrQueue({
         method: "POST",
+        path: `/api/leads/${lead.id}/touches`,
+        title: "מגע חדש",
         body: {
           type,
+          at: fromZonedTime(`${date}T${time || "00:00"}:00`, TZ).toISOString(),
           summary: summary.trim(),
           withWhom: withWhom.trim() || null,
           durationMin: duration,
@@ -67,7 +75,8 @@ export function TouchForm({
           completeOpenTasks: complete,
         },
       });
-      toast("המגע נרשם", "success");
+      if (r.queued) toast("אין חיבור — המגע נשמר במכשיר ויסונכרן", "info");
+      else toast("המגע נרשם", "success");
       onClose();
       router.refresh();
     } catch (e) {
@@ -95,6 +104,10 @@ export function TouchForm({
               {ACTION_META[t].emoji} {ACTION_META[t].label}
             </Chip>
           ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="תאריך" />
+          <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="שעה" />
         </div>
         <div className="relative">
           <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="מה קרה? עם מי דיברתי, מה ראיתי, מה סוכם…" className="min-h-28 pe-12" autoFocus />

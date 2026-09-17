@@ -9,7 +9,7 @@ import { ACTION_META, defaultTimeOfDay, type ActionType } from "./categories";
 import { leadTitle } from "./utils";
 import { addDaysIL, dateAtIL, formatIL, hmIL, ymdIL } from "./dates";
 import { addDaysYmd, nextFullWorkdayYmd } from "./hebrew-dates";
-import type { LeadInput, TaskInput, TaskPatch, TouchInput } from "./validation";
+import type { LeadInput, TaskInput, TaskPatch, TouchInput, TouchPatch } from "./validation";
 
 type Tx = Prisma.TransactionClient;
 
@@ -223,6 +223,37 @@ export async function markSawClosed(leadId: string, now = new Date()) {
     nextActionType: "VISIT",
     nextActionNote: `היה סגור ב-${formatIL(now, "d.M")} — לנסות שוב`,
     nextActionIsApproximate: false,
+  });
+}
+
+/** מגע אחרון של הליד = המגע המאוחר ביותר, או firstSeenAt אם אין מגעים */
+async function recomputeLastTouch(tx: Tx, leadId: string) {
+  const [latest, lead] = await Promise.all([
+    tx.touch.findFirst({ where: { leadId }, orderBy: { at: "desc" }, select: { at: true } }),
+    tx.lead.findUniqueOrThrow({ where: { id: leadId }, select: { firstSeenAt: true } }),
+  ]);
+  await tx.lead.update({ where: { id: leadId }, data: { lastTouchAt: latest?.at ?? lead.firstSeenAt } });
+}
+
+export async function updateTouch(id: string, patch: TouchPatch) {
+  return prisma.$transaction(async (tx) => {
+    const data: Prisma.TouchUncheckedUpdateInput = {};
+    if (patch.at) data.at = new Date(patch.at);
+    if (patch.type) data.type = patch.type;
+    if (patch.summary !== undefined) data.summary = patch.summary;
+    if (patch.withWhom !== undefined) data.withWhom = patch.withWhom?.trim() || null;
+    if (patch.outcome !== undefined) data.outcome = patch.outcome?.trim() || null;
+    if (patch.durationMin !== undefined) data.durationMin = patch.durationMin;
+    const touch = await tx.touch.update({ where: { id }, data });
+    await recomputeLastTouch(tx, touch.leadId);
+    return touch;
+  });
+}
+
+export async function deleteTouch(id: string) {
+  return prisma.$transaction(async (tx) => {
+    const touch = await tx.touch.delete({ where: { id } });
+    await recomputeLastTouch(tx, touch.leadId);
   });
 }
 

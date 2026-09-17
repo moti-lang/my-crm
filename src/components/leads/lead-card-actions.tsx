@@ -1,16 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, Camera, MessageSquarePlus, Pencil, Trash2 } from "lucide-react";
+import { Camera, MessageSquarePlus, Trash2 } from "lucide-react";
 import { api, errorMessage } from "@/lib/client/api";
-import { instantToNext, nextToIso, type NextActionValue } from "@/lib/client/lead-form-model";
-import { Button, LinkButton } from "@/components/ui/button";
-import { Sheet } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { NavButtons, PhoneButtons } from "./lead-actions";
-import { NextActionPicker } from "./next-action-picker";
 import { TouchForm } from "./touch-form";
 import { SawClosedButton } from "@/components/route/saw-closed-button";
 
@@ -33,70 +29,21 @@ export interface CardLead {
   openTasks: number;
 }
 
+/** פס פעולות: התקשר · וואטסאפ · ניווט · הוסף מגע · ראיתי שסגור */
 export function LeadCardActions({ lead }: { lead: CardLead }) {
   const [touchOpen, setTouchOpen] = useState(false);
-  const [nextOpen, setNextOpen] = useState(false);
   return (
     <>
       <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-        <PhoneButtons phone={lead.phone} text={`שלום${lead.contactName ? ` ${lead.contactName}` : ""}, `} />
-        <NavButtons target={lead} />
-        <Button variant="outline" onClick={() => setNextOpen(true)}>
-          <CalendarPlus className="h-4 w-4" /> קבע מעקב
-        </Button>
         <Button onClick={() => setTouchOpen(true)}>
           <MessageSquarePlus className="h-4 w-4" /> הוסף מגע
         </Button>
+        <PhoneButtons phone={lead.phone} text={`שלום${lead.contactName ? ` ${lead.contactName}` : ""}, `} />
+        <NavButtons target={lead} />
         <SawClosedButton leadId={lead.id} size="md" />
-        <LinkButton href={`/leads/${lead.id}/edit`} variant="ghost">
-          <Pencil className="h-4 w-4" /> עריכה
-        </LinkButton>
       </div>
       {touchOpen && <TouchForm lead={lead} open={touchOpen} onClose={() => setTouchOpen(false)} />}
-      <NextActionSheet lead={lead} open={nextOpen} onClose={() => setNextOpen(false)} />
     </>
-  );
-}
-
-export function NextActionSheet({ lead, open, onClose }: { lead: CardLead; open: boolean; onClose: () => void }) {
-  const router = useRouter();
-  const { toast } = useToast();
-  const [value, setValue] = useState<NextActionValue>(() => instantToNext(lead.nextActionAt, lead.nextActionType, lead.nextActionNote, lead.nextActionIsApproximate));
-  const [busy, setBusy] = useState(false);
-  async function save() {
-    setBusy(true);
-    try {
-      await api(`/api/leads/${lead.id}`, {
-        method: "PATCH",
-        body: {
-          nextActionAt: nextToIso(value),
-          nextActionType: value.date ? value.type ?? undefined : null,
-          nextActionNote: value.date ? value.note || null : null,
-          nextActionIsApproximate: value.date ? value.isApproximate : false,
-        },
-      });
-      toast(value.date ? "המעקב נקבע" : "המעקב בוטל", "success");
-      onClose();
-      router.refresh();
-    } catch (e) {
-      toast(errorMessage(e), "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title="קבע מעקב"
-      footer={
-        <Button size="lg" className="w-full" onClick={save} disabled={busy}>
-          {busy ? "שומר…" : "שמור"}
-        </Button>
-      }
-    >
-      <NextActionPicker value={value} onChange={setValue} hasPhone={Boolean(lead.phone)} />
-    </Sheet>
   );
 }
 
@@ -172,35 +119,31 @@ export function DeletePhotoButton({ photoId }: { photoId: string }) {
   );
 }
 
-export function DeleteLeadButton({ leadId }: { leadId: string }) {
+/** מחיקת ליד — רק מתפריט משני, עם אישור */
+export function DeleteLeadButton({ leadId, asMenuItem }: { leadId: string; asMenuItem?: boolean }) {
   const router = useRouter();
   const { toast } = useToast();
+  async function del() {
+    if (!window.confirm("למחוק את הליד על כל המגעים, המשימות והתמונות שלו? אי אפשר לבטל.")) return;
+    try {
+      await api(`/api/leads/${leadId}`, { method: "DELETE" });
+      toast("הליד נמחק", "info");
+      router.push("/leads");
+      router.refresh();
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    }
+  }
+  if (asMenuItem) {
+    return (
+      <button type="button" onClick={del} className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-start text-danger hover:bg-danger/10">
+        <Trash2 className="h-4 w-4" /> מחק ליד…
+      </button>
+    );
+  }
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="text-danger"
-      onClick={async () => {
-        if (!window.confirm("למחוק את הליד על כל המגעים והמשימות שלו? אי אפשר לבטל.")) return;
-        try {
-          await api(`/api/leads/${leadId}`, { method: "DELETE" });
-          toast("הליד נמחק", "info");
-          router.push("/leads");
-          router.refresh();
-        } catch (e) {
-          toast(errorMessage(e), "error");
-        }
-      }}
-    >
+    <Button variant="ghost" size="sm" className="text-danger" onClick={del}>
       <Trash2 className="h-4 w-4" /> מחק ליד
     </Button>
-  );
-}
-
-export function BackLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link href={href} className="text-sm text-muted-foreground hover:underline">
-      {children}
-    </Link>
   );
 }
