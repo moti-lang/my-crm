@@ -77,6 +77,16 @@ export const touchInput = z.object({
 });
 export type TouchInput = z.infer<typeof touchInput>;
 
+export const touchPatch = z.object({
+  at: isoDate.optional(),
+  type: z.enum(ACTION_TYPES).optional(),
+  summary: z.string().trim().min(1).max(5000).optional(),
+  withWhom: optText(120),
+  outcome: optText(500),
+  durationMin: z.number().int().min(0).max(600).nullable().optional(),
+});
+export type TouchPatch = z.infer<typeof touchPatch>;
+
 export const taskInput = z.object({
   leadId: z.string().nullable().optional(),
   title: z.string().trim().min(1).max(300),

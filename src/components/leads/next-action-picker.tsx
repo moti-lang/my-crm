@@ -127,7 +127,7 @@ export function NextActionPicker({
           placeholder='או כתוב: "ביום חמישי", "בין כיפור לסוכות"…'
         />
         <div className="flex gap-2">
-          <Input type="date" value={value.date ?? ""} onChange={(e) => onChange({ ...value, date: e.target.value || null })} className={cn("flex-1", value.isApproximate && "approx")} />
+          <Input type="date" value={value.date ?? ""} onChange={(e) => onChange({ ...value, date: e.target.value || null, isApproximate: false })} className={cn("flex-1", value.isApproximate && "approx")} title="שינוי ידני של התאריך מבטל את הסימון משוער" />
           <Input type="time" value={value.time ?? ""} onChange={(e) => onChange({ ...value, time: e.target.value || null })} className="w-28" />
         </div>
       </div>

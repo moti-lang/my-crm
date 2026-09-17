@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DoorClosed } from "lucide-react";
-import { api, errorMessage } from "@/lib/client/api";
+import { errorMessage } from "@/lib/client/api";
+import { requestOrQueue } from "@/lib/client/offline-queue";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
@@ -15,8 +16,8 @@ export function SawClosedButton({ leadId, size = "sm" }: { leadId: string; size?
   async function click() {
     setBusy(true);
     try {
-      await api(`/api/leads/${leadId}/closed`, { method: "POST" });
-      toast("נרשם: סגור. המעקב הוזז ליום העבודה הבא", "success");
+      const r = await requestOrQueue({ method: "POST", path: `/api/leads/${leadId}/closed`, title: "ראיתי שסגור" });
+      toast(r.queued ? "אין חיבור — יירשם כשיחזור חיבור" : "נרשם: סגור. המעקב הוזז ליום העבודה הבא", r.queued ? "info" : "success");
       router.refresh();
     } catch (e) {
       toast(errorMessage(e), "error");

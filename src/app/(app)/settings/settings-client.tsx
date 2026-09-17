@@ -268,7 +268,7 @@ export function FailedQueuePanel() {
   if (items.length === 0) return null;
   return (
     <Card>
-      <div className="mb-1 font-bold text-danger">לידים שנשמרו אופליין ונדחו על ידי השרת</div>
+      <div className="mb-1 font-bold text-danger">שינויים שנשמרו אופליין ונדחו על ידי השרת</div>
       <ul className="text-sm">
         {items.map((i) => (
           <li key={i.id} className="flex items-center justify-between border-t border-border py-1">

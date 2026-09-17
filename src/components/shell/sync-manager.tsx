@@ -22,10 +22,10 @@ export function SyncManager() {
     try {
       const r = await flushQueue();
       if (r.synced) {
-        toast(`סונכרנו ${r.synced} לידים שנשמרו אופליין`, "success");
+        toast(`סונכרנו ${r.synced} שינויים שנשמרו אופליין`, "success");
         router.refresh();
       }
-      if (r.failed) toast(`${r.failed} לידים נדחו על ידי השרת — ראה הגדרות`, "error");
+      if (r.failed) toast(`${r.failed} שינויים נדחו על ידי השרת — ראה הגדרות`, "error");
     } finally {
       setBusy(false);
       await refresh();
@@ -58,7 +58,7 @@ export function SyncManager() {
     <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
       <div className="flex items-center gap-2">
         <CloudOff className="h-5 w-5 text-warning" />
-        {!online ? <span>אין חיבור — לידים חדשים יישמרו במכשיר{pending ? ` (${pending} ממתינים)` : ""}</span> : <span>{pending} לידים ממתינים לסנכרון</span>}
+        {!online ? <span>אין חיבור — שינויים ולידים חדשים יישמרו במכשיר{pending ? ` (${pending} ממתינים)` : ""}</span> : <span>{pending} שינויים ממתינים לסנכרון</span>}
       </div>
       {online && pending > 0 && (
         <button type="button" onClick={sync} disabled={busy} className="flex min-h-9 items-center gap-1 rounded-lg bg-warning px-3 text-sm font-medium text-white">
