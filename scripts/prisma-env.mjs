@@ -21,8 +21,19 @@ if (existsSync(".env")) {
   }
 }
 
-const url = process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL || "";
-const direct = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL_UNPOOLED || process.env.POSTGRES_URL_NON_POOLING || url;
+const isPg = (v) => Boolean(v && /^postgres(ql)?:\/\//.test(v));
+const entries = Object.entries(process.env).sort(([a], [b]) => a.localeCompare(b));
+const pick = (names, suffixes) => {
+  for (const k of names) if (isPg(process.env[k])) return process.env[k];
+  for (const suf of suffixes) {
+    const hit = entries.find(([k, v]) => k.endsWith(suf) && isPg(v));
+    if (hit) return hit[1];
+  }
+  return "";
+};
+const url = pick(["DATABASE_URL", "POSTGRES_PRISMA_URL", "POSTGRES_URL", "STORAGE_URL", "NEON_DATABASE_URL"], ["_PRISMA_URL", "_URL"]);
+const direct = pick(["DIRECT_DATABASE_URL", "DATABASE_URL_UNPOOLED", "POSTGRES_URL_NON_POOLING", "STORAGE_URL_UNPOOLED"], ["_URL_UNPOOLED", "_URL_NON_POOLING"]) || url;
+if (url) console.log(`[prisma-env] using database from ${entries.find(([, v]) => v === url)?.[0]}`);
 
 const args = process.argv.slice(2);
 const ifDb = args.includes("--if-db");
