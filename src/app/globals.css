@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f6f7f5;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --muted: #eef2f3;
+  --muted-foreground: #64748b;
+  --border: #dfe5e8;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --success: #059669;
+  --ring: #14b8a6;
+}
+
+.dark {
+  --background: #0b1220;
+  --foreground: #e6eaf0;
+  --card: #121b2e;
+  --card-foreground: #e6eaf0;
+  --muted: #1c273b;
+  --muted-foreground: #93a0b4;
+  --border: #283449;
+  --primary: #2dd4bf;
+  --primary-foreground: #04211d;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --success: #34d399;
+  --ring: #2dd4bf;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-ring: var(--ring);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Hebrew", "Noto Sans", sans-serif;
+  --radius-xl: 14px;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+}
+
+/* מניעת זום אוטומטי ב-iOS בשדות קלט */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* תאריך משוער — קו מקווקו */
+.approx {
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+@media (display-mode: standalone) {
+  .hide-in-standalone {
+    display: none;
+  }
+}

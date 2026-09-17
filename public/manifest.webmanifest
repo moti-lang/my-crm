@@ -1,0 +1,22 @@
+{
+  "name": "סבב — מעקב לידים בשטח",
+  "short_name": "סבב",
+  "description": "מערכת אישית לניהול מכירות שטח בהליכה רגלית",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "he",
+  "background_color": "#f6f7f5",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "הוספה מהירה", "url": "/leads/new", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "סבב שטח", "url": "/route", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
