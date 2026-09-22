@@ -11,6 +11,7 @@ import { TZ, addDaysIL, dateAtIL, endOfDayIL, formatIL, hmIL, startOfDayIL, week
 import { getDailyReport, getStuckLeads, getTodayBoard, getWeeklyReport, leadSummarySelect } from "./leads";
 import { buildEveningSummary, buildMorningDigest, buildWeeklySummary, notifyAll } from "./notify";
 import { sendPushToAll } from "./push";
+import { whatsappConfigured } from "./whatsapp";
 import { createSnapshot } from "./snapshot";
 import { leadTitle } from "./utils";
 import { appUrl } from "./settings";
@@ -69,10 +70,26 @@ export async function runReminders(now = new Date()) {
   return { checked: tasks.length, due: due.length, sent, deferred, blocked: !gate.allowed, reason: gate.reason };
 }
 
-/** דיגסט בוקר — ביום מותר בלבד; כולל את מה שנחסם מאז הדיגסט הקודם, מקובץ לפי ליד. */
-export async function runMorningDigest(now = new Date()) {
+/** כשל שליחה של דיגסט בערוץ מוגדר — נזרק כדי שנעילת היום תשוחרר וה-tick הבא ינסה שוב */
+export class DeliveryError extends Error {
+  name = "DeliveryError";
+}
+
+export interface DigestDeps {
+  /** להזרקה בבדיקות: השולח (ברירת מחדל notifyAll) */
+  notify?: typeof notifyAll;
+}
+
+/**
+ * דיגסט בוקר — ביום מותר בלבד; כולל את מה שנחסם מאז הדיגסט הקודם, מקובץ לפי ליד.
+ * הדחויים מסומנים כנשלחו רק אחרי שהדיגסט יצא בהצלחה באחד הערוצים.
+ * אם ערוץ מוגדר נכשל — נזרקת DeliveryError, הדחויים נשארים בתור, ו-runTick ינסה שוב.
+ * אם אין שום ערוץ מוגדר — הדחויים נשארים בתור (יגיעו בדיגסט הראשון שכן יישלח).
+ */
+export async function runMorningDigest(now = new Date(), deps: DigestDeps = {}) {
+  const notify = deps.notify ?? notifyAll;
   const gate = await canNotifyAt(now);
-  if (!gate.allowed) return { blocked: true, reason: gate.reason, text: null };
+  if (!gate.allowed) return { blocked: true as const, reason: gate.reason, text: null, delivered: false, deferredIncluded: 0, deferredDelivered: 0 };
   const board = await getTodayBoard(now);
   const digest = buildMorningDigest(board, now);
   const deferred = await pendingDeferred();
@@ -83,9 +100,19 @@ export async function runMorningDigest(now = new Date()) {
     text = `${text}\n\n${section.join("\n")}`;
     body = `🔕 ${deferred.length} התראות הצטברו בזמן החסימה\n${body}`;
   }
-  const res = await notifyAll({ title: digest.title, body, url: appUrl("/"), tag: "morning" }, text, { at: now });
-  if (!res.blocked) await markDeferredDelivered(deferred.map((d) => d.id));
-  return { ...res, text, deferredDelivered: deferred.length };
+  const res = await notify({ title: digest.title, body, url: appUrl("/"), tag: "morning" }, text, { at: now });
+  const delivered = !res.blocked && (res.push.sent > 0 || res.whatsapp.ok === true);
+  if (delivered) {
+    await markDeferredDelivered(deferred.map((d) => d.id));
+  } else if (!res.blocked) {
+    const attempted = (res.push.configured && res.push.sent + res.push.failed > 0) || whatsappConfigured();
+    if (attempted) {
+      throw new DeliveryError(
+        `דיגסט הבוקר לא נשלח (push ${res.push.sent}/${res.push.sent + res.push.failed}, וואטסאפ: ${res.whatsapp.error ?? "לא מוגדר"}); ${deferred.length} התראות דחויות נשארו בתור לניסיון הבא`,
+      );
+    }
+  }
+  return { ...res, text, delivered, deferredIncluded: deferred.length, deferredDelivered: delivered ? deferred.length : 0 };
 }
 
 export async function runEveningSummary(now = new Date()) {

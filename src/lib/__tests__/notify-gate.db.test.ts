@@ -91,15 +91,28 @@ describe.skipIf(!HAS_DB)("notification gate (DB)", () => {
     expect(rows[0].blockedOn).toBe("2026-10-17");
   });
 
-  it("דיגסט בוקר ביום חסום לא נשלח; ביום מותר כולל את הפריטים שנדחו, מקובצים לפי ליד, ומסמן אותם כמסופקים", async () => {
+  it("דיגסט בוקר ביום חסום לא נשלח; ביום מותר כולל את הדחויים מקובצים; הם מסומנים כנשלחו רק אחרי שליחה מוצלחת", async () => {
     const blocked = await cron.runMorningDigest(SATURDAY());
-    expect(blocked).toMatchObject({ blocked: true, reason: "SHABBAT" });
+    expect(blocked).toMatchObject({ blocked: true, reason: "SHABBAT", delivered: false });
     const pendingBefore = await prisma.deferredNotification.count({ where: { deliveredAt: null } });
     expect(pendingBefore).toBeGreaterThanOrEqual(2);
 
-    const sunday = await cron.runMorningDigest(SUNDAY());
-    expect(sunday.blocked).not.toBe(true);
-    expect(sunday.text).toContain("הצטבר בזמן החסימה");
+    // 1) אין שום ערוץ מוגדר (סביבת הבדיקה): הדיגסט לא הגיע לאף אחד — הדחויים נשארים בתור, בלי זריקה
+    const noChannels = await cron.runMorningDigest(SUNDAY());
+    expect(noChannels.delivered).toBe(false);
+    expect(noChannels.text).toContain("הצטבר בזמן החסימה");
+    expect(await prisma.deferredNotification.count({ where: { deliveredAt: null } })).toBe(pendingBefore);
+
+    // 2) ערוץ מוגדר שנכשל: DeliveryError (כדי שה-tick הבא ינסה שוב) והדחויים נשארים
+    const failing: typeof import("../notify").notifyAll = async () => ({ push: { configured: true, sent: 0, failed: 2 }, whatsapp: { ok: false, error: "HTTP 500" } });
+    await expect(cron.runMorningDigest(SUNDAY(), { notify: failing })).rejects.toThrow(cron.DeliveryError);
+    expect(await prisma.deferredNotification.count({ where: { deliveredAt: null } })).toBe(pendingBefore);
+
+    // 3) שליחה מוצלחת באחד הערוצים: כולל את הדחויים מקובצים לפי ליד ומסמן אותם כנשלחו
+    const ok: typeof import("../notify").notifyAll = async () => ({ push: { configured: true, sent: 1, failed: 0 }, whatsapp: { ok: false, error: "skipped" } });
+    const sunday = await cron.runMorningDigest(SUNDAY(), { notify: ok });
+    expect(sunday.delivered).toBe(true);
+    expect(sunday.deferredDelivered).toBe(pendingBefore);
     expect(sunday.text).toContain("בדיקה — חוזה: חוזה ממתין לחתימה ×2");
     expect(sunday.text).toContain("בדיקה — מוסך שבת:");
     expect(await prisma.deferredNotification.count({ where: { deliveredAt: null } })).toBe(0);
