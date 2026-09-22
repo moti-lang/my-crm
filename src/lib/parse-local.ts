@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ACTION_TYPES, HEATS, KNOWN_CATEGORIES, LEAD_STATUSES, TIMES_OF_DAY, defaultTimeOfDay, type ActionType } from "./categories";
 import { dateAtIL, ymdIL } from "./dates";
 import {
+  DEFAULT_CALENDAR_SETTINGS,
   PROMISE_RE,
   addDaysYmd,
   afterPromiseBuffer,
@@ -15,6 +16,7 @@ import {
   nextFullWorkdayYmd,
   normalizeHebrewText,
   resolveDateExpression,
+  type CalendarSettings,
 } from "./hebrew-dates";
 import { normalizePhone } from "./phone";
 
@@ -156,7 +158,7 @@ function sentencesMatching(t: string, re: RegExp): string | null {
   return hits.length ? hits.join(". ") : null;
 }
 
-export function localParse(raw: string, now = new Date()): ParsedLead {
+export function localParse(raw: string, now = new Date(), settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): ParsedLead {
   const t = normalizeHebrewText(raw);
   const today = ymdIL(now);
 
@@ -199,7 +201,7 @@ export function localParse(raw: string, now = new Date()): ParsedLead {
   else if (/פגישה/.test(t)) nextActionType = "MEETING";
   else if (/לקפוץ|להיכנס|לעבור|לחזור אליהם|לבקר/.test(t)) nextActionType = "VISIT";
 
-  const resolved = resolveDateExpression(t, now);
+  const resolved = resolveDateExpression(t, now, settings);
   let nextActionDate: string | null = null;
   let nextActionIsApproximate = false;
   let nextActionNote: string | null = null;
@@ -208,7 +210,7 @@ export function localParse(raw: string, now = new Date()): ParsedLead {
   const who = contactName ?? (feminine ? "היא" : "הוא");
   if (resolved) {
     if (promise) {
-      nextActionDate = afterPromiseBuffer(resolved.ymd);
+      nextActionDate = afterPromiseBuffer(resolved.ymd, settings);
       nextActionIsApproximate = resolved.isApproximate;
       nextActionNote = `${who} ${feminine ? "הבטיחה" : "הבטיח"} לחזור ${resolved.phrase} — ${verbGo} אם לא ${feminine ? "חזרה" : "חזר"}`;
     } else {
@@ -263,7 +265,7 @@ export function localParse(raw: string, now = new Date()): ParsedLead {
 
 // ---------- עיבוד אחרי ----------
 
-export function postProcess(lead: ParsedLead, text: string, now: Date): { lead: ParsedLead; warnings: string[]; dateConflict: ParseResult["dateConflict"] } {
+export function postProcess(lead: ParsedLead, text: string, now: Date, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): { lead: ParsedLead; warnings: string[]; dateConflict: ParseResult["dateConflict"] } {
   const warnings: string[] = [];
   const out: ParsedLead = { ...lead };
   const today = ymdIL(now);
@@ -283,7 +285,7 @@ export function postProcess(lead: ParsedLead, text: string, now: Date): { lead: 
     warnings.push("התאריך שחושב כבר עבר — נא לבדוק");
   }
   if (!out.nextActionDate && out.dateExpression) {
-    const r = resolveDateExpression(out.dateExpression, now);
+    const r = resolveDateExpression(out.dateExpression, now, settings);
     if (r) {
       out.nextActionDate = r.ymd;
       out.nextActionIsApproximate = out.nextActionIsApproximate || r.isApproximate;
@@ -294,13 +296,13 @@ export function postProcess(lead: ParsedLead, text: string, now: Date): { lead: 
 
   let dateConflict: ParseResult["dateConflict"] = null;
   if (out.nextActionDate) {
-    const info = getDayInfoYmd(out.nextActionDate);
+    const info = getDayInfoYmd(out.nextActionDate, settings);
     if (info.severity === "block") {
       const shifted = nextFullWorkdayYmd(out.nextActionDate, false);
       warnings.push(`${info.message} — הוזז ל-${shifted}`);
       out.nextActionDate = shifted;
     }
-    const c = checkDateConflict(dateAtIL(out.nextActionDate));
+    const c = checkDateConflict(dateAtIL(out.nextActionDate), settings);
     if (c) dateConflict = { level: c.level, message: c.message, suggestionYmd: c.suggestionYmd };
   }
   return { lead: out, warnings, dateConflict };

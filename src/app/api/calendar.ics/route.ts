@@ -4,6 +4,7 @@ import { safeEqual } from "@/lib/auth";
 import { addDaysIL } from "@/lib/dates";
 import { buildIcs } from "@/lib/ics";
 import { appUrl, getSetting } from "@/lib/settings";
+import { getCalendarSettings } from "@/lib/calendar-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export const GET = withErrors(async (req) => {
     orderBy: { dueAt: "asc" },
     take: 2000,
   });
-  return new Response(buildIcs(tasks, { appUrl: appUrl() }), {
+  return new Response(buildIcs(tasks, { appUrl: appUrl(), settings: await getCalendarSettings() }), {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": 'inline; filename="sevev.ics"',

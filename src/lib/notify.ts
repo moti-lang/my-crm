@@ -1,19 +1,31 @@
 /**
  * בניית טקסטים של דיגסטים ושליחה בכל הערוצים (Push + WhatsApp).
  */
-import { sendPushToAll, type PushPayload } from "./push";
-import { sendWhatsApp } from "./whatsapp";
+import { sendPushToAll, type PushPayload, type PushSendResult } from "./push";
+import { sendWhatsApp, type WhatsAppResult } from "./whatsapp";
+import { canNotifyAt } from "./notify-gate";
+import type { BlackoutReason } from "./hebrew-dates";
 import type { DailyReport, LeadSummary, TaskWithLead, TodayBoard, WeeklyReport } from "./leads";
 import { leadTitle } from "./utils";
 import { actionEmoji, actionLabel, statusLabel } from "./categories";
 import { agoLabel, formatIL, hmIL, WEEKDAY_NAMES, weekdayIL } from "./dates";
 import { getDayInfo, hebrewDateLabel } from "./hebrew-dates";
 
-export async function notifyAll(push: PushPayload, whatsappText?: string) {
-  const [p, w] = await Promise.all([
-    sendPushToAll(push),
-    whatsappText ? sendWhatsApp(whatsappText) : Promise.resolve({ ok: false, error: "skipped" as const }),
-  ]);
+export interface NotifyResult {
+  push: PushSendResult;
+  whatsapp: WhatsAppResult;
+  blocked?: boolean;
+  reason?: BlackoutReason | null;
+}
+
+/** שליחה בכל הערוצים — אחרי השער. ביום חסום לא נשלח דבר. */
+export async function notifyAll(push: PushPayload, whatsappText?: string, opts: { at?: Date } = {}): Promise<NotifyResult> {
+  const at = opts.at ?? new Date();
+  const gate = await canNotifyAt(at);
+  if (!gate.allowed) {
+    return { push: { configured: false, sent: 0, failed: 0, blocked: true, reason: gate.reason }, whatsapp: { ok: false, blocked: true, reason: gate.reason, error: "blocked" }, blocked: true, reason: gate.reason };
+  }
+  const [p, w] = await Promise.all([sendPushToAll(push, { at }), whatsappText ? sendWhatsApp(whatsappText, { at }) : Promise.resolve<WhatsAppResult>({ ok: false, error: "skipped" })]);
   return { push: p, whatsapp: w };
 }
 

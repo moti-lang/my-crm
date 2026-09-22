@@ -221,3 +221,21 @@ model Snapshot {
   data      Json
   leadCount Int      @default(0)
 }
+
+/// התראה שנחסמה (שבת/חג/ערב חג/חול המועד) ונכנסת לדיגסט הבוקר הראשון שאחרי.
+model DeferredNotification {
+  id          String    @id @default(cuid())
+  kind        String // reminder | contract | evening | weekly | other
+  title       String
+  body        String    @db.Text
+  url         String?
+  leadId      String?
+  taskId      String?
+  count       Int       @default(1)
+  blockedOn   String // yyyy-MM-dd בשעון ישראל
+  reason      String // SHABBAT | EREV_SHABBAT | YOM_TOV | EREV_YOM_TOV | CHOL_HAMOED
+  createdAt   DateTime  @default(now())
+  deliveredAt DateTime?
+
+  @@index([deliveredAt])
+}
