@@ -29,7 +29,18 @@ export interface DayInfo {
   /** block = לא לקבוע, warn = אפשר אבל כדאי לדעת */
   severity: "block" | "warn" | null;
   message?: string;
+  /** יום טוב (איסור מלאכה) לפי לוח ישראל */
+  isYomTov: boolean;
+  isCholHamoed: boolean;
+  /** מחר יום טוב */
+  isErevYomTov: boolean;
 }
+
+export interface CalendarSettings {
+  /** חול המועד חסום — להתראות ולקביעת תאריכים (ברירת מחדל: כן) */
+  blockCholHamoed: boolean;
+}
+export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = { blockCholHamoed: true };
 
 export interface ResolvedDate {
   ymd: string;
@@ -81,30 +92,31 @@ const DAY_OFF_MODERN = ["Yom HaAtzmaut"];
 const MEMORIAL_MODERN = ["Yom HaZikaron"];
 const WARN_MINOR = ["Purim", "Shushan Purim", "Tish'a B'Av"];
 
-const dayCache = new Map<string, DayInfo>();
+interface DayFlags {
+  weekday: number;
+  isYomTov: boolean;
+  isCholHamoed: boolean;
+  best: { kind: DayKind; name: string; desc: string } | null;
+}
+const flagCache = new Map<string, DayFlags>();
 
-/** מידע על יום נתון (מפתח: yyyy-MM-dd) */
-export function getDayInfoYmd(ymd: string): DayInfo {
-  const cached = dayCache.get(ymd);
+const RANK: Record<DayKind, number> = { HOLIDAY: 6, EREV: 5, CHOL_HAMOED: 4, MEMORIAL: 3, MINOR: 2, SHABBAT: 1, FRIDAY: 0, WORKDAY: -1 };
+
+/** דגלי היום מ-hebcal (לוח ישראל), עם cache — לא תלוי בהגדרות */
+function dayFlags(ymd: string): DayFlags {
+  const cached = flagCache.get(ymd);
   if (cached) return cached;
-
   const weekday = weekdayOfYmd(ymd);
   const evs = HebrewCalendar.getHolidaysOnDate(plainDate(ymd), true) ?? [];
-
-  let kind: DayKind = weekday === 6 ? "SHABBAT" : weekday === 5 ? "FRIDAY" : "WORKDAY";
-  let holidayName: string | undefined;
-  let holidayDesc: string | undefined;
-  let severity: DayInfo["severity"] = weekday === 6 ? "block" : weekday === 5 ? "warn" : null;
-  let message: string | undefined = weekday === 6 ? "התאריך נופל בשבת" : weekday === 5 ? "יום שישי — יום עבודה קצר" : undefined;
-
-  // עדיפות: חג > ערב חג > חול המועד > זיכרון > מינורי
-  const rank = (k: DayKind) =>
-    ({ HOLIDAY: 6, EREV: 5, CHOL_HAMOED: 4, MEMORIAL: 3, MINOR: 2, SHABBAT: 1, FRIDAY: 0, WORKDAY: -1 })[k];
-  let best: { kind: DayKind; name: string; desc: string } | null = null;
+  let best: DayFlags["best"] = null;
+  let isYomTov = false;
+  let isCholHamoed = false;
   for (const ev of evs) {
     const f = ev.getFlags();
     const desc = ev.getDesc();
     const name = prettyHolidayName(ev.render("he"));
+    if (f & flags.CHAG) isYomTov = true;
+    if (f & flags.CHOL_HAMOED) isCholHamoed = true;
     let k: DayKind | null = null;
     if (f & flags.CHAG) k = "HOLIDAY";
     else if (f & flags.EREV) k = "EREV";
@@ -113,8 +125,25 @@ export function getDayInfoYmd(ymd: string): DayInfo {
       if (DAY_OFF_MODERN.some((n) => desc.startsWith(n))) k = "HOLIDAY";
       else if (MEMORIAL_MODERN.some((n) => desc.startsWith(n))) k = "MEMORIAL";
     } else if ((f & flags.MINOR_HOLIDAY || f & flags.MAJOR_FAST) && WARN_MINOR.some((n) => desc.startsWith(n))) k = "MINOR";
-    if (k && (!best || rank(k) > rank(best.kind))) best = { kind: k, name, desc };
+    if (k && (!best || RANK[k] > RANK[best.kind])) best = { kind: k, name, desc };
   }
+  const out: DayFlags = { weekday, isYomTov, isCholHamoed, best };
+  flagCache.set(ymd, out);
+  return out;
+}
+
+/** מידע על יום נתון (מפתח: yyyy-MM-dd). ההגדרות קובעות אם חול המועד חסום. */
+export function getDayInfoYmd(ymd: string, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): DayInfo {
+  const f = dayFlags(ymd);
+  const { weekday, best } = f;
+  const tomorrow = dayFlags(addDaysYmd(ymd, 1));
+  const isErevYomTov = tomorrow.isYomTov;
+
+  let kind: DayKind = weekday === 6 ? "SHABBAT" : weekday === 5 ? "FRIDAY" : "WORKDAY";
+  let holidayName: string | undefined;
+  let holidayDesc: string | undefined;
+  let severity: DayInfo["severity"] = weekday === 6 ? "block" : weekday === 5 ? "warn" : null;
+  let message: string | undefined = weekday === 6 ? "התאריך נופל בשבת" : weekday === 5 ? "יום שישי — יום עבודה קצר" : undefined;
 
   if (best) {
     holidayName = best.name;
@@ -129,8 +158,8 @@ export function getDayInfoYmd(ymd: string): DayInfo {
       message = `ערב חג (${best.name}) — יום קצר, רוב העסקים סגורים מוקדם`;
     } else if (best.kind === "CHOL_HAMOED" && weekday !== 6) {
       kind = "CHOL_HAMOED";
-      severity = "warn";
-      message = `חול המועד (${best.name}) — עסקים רבים סגורים או עובדים חלקית`;
+      severity = settings.blockCholHamoed ? "block" : "warn";
+      message = settings.blockCholHamoed ? `חול המועד (${best.name}) — לא קובעים ולא שולחים התראות` : `חול המועד (${best.name}) — עסקים רבים סגורים או עובדים חלקית`;
     } else if (best.kind === "MEMORIAL" && weekday !== 6) {
       kind = "MEMORIAL";
       severity = "warn";
@@ -141,14 +170,19 @@ export function getDayInfoYmd(ymd: string): DayInfo {
       message = `${best.name} — עסקים רבים סגורים`;
     }
   }
+  // ערב יום טוב בלי דגל מפורש (למשל הושענא רבה לפני שמיני עצרת)
+  if (isErevYomTov && (kind === "WORKDAY" || kind === "FRIDAY" || kind === "CHOL_HAMOED" || kind === "MINOR")) {
+    kind = "EREV";
+    severity = "block";
+    holidayName = holidayName ?? `ערב ${tomorrow.best?.name ?? "חג"}`;
+    message = `ערב חג (${tomorrow.best?.name ?? "יום טוב"}) — יום קצר, רוב העסקים סגורים מוקדם`;
+  }
 
-  const info: DayInfo = { ymd, weekday, kind, holidayName, holidayDesc, severity, message };
-  dayCache.set(ymd, info);
-  return info;
+  return { ymd, weekday, kind, holidayName, holidayDesc, severity, message, isYomTov: f.isYomTov, isCholHamoed: f.isCholHamoed, isErevYomTov };
 }
 
-export function getDayInfo(d: Date): DayInfo {
-  return getDayInfoYmd(ymdIL(d));
+export function getDayInfo(d: Date, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): DayInfo {
+  return getDayInfoYmd(ymdIL(d), settings);
 }
 
 /** יום עבודה מלא (א׳–ה׳, בלי חג/ערב חג/חול המועד/זיכרון) */
@@ -184,8 +218,8 @@ export interface DateConflict {
 }
 
 /** התרעה על התנגשות (שבת/חג/ערב חג/חול המועד) + הצעת תאריך חלופי */
-export function checkDateConflict(d: Date): DateConflict | null {
-  const info = getDayInfo(d);
+export function checkDateConflict(d: Date, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): DateConflict | null {
+  const info = getDayInfo(d, settings);
   if (!info.severity) return null;
   const suggestionYmd = nextFullWorkdayYmd(info.ymd, false);
   return {
@@ -372,10 +406,11 @@ function finalize(
   isApproximate: boolean,
   time?: string,
   extraNote?: string,
+  settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS,
 ): ResolvedDate {
   let target = ymd;
   let note = extraNote;
-  const info = getDayInfoYmd(target);
+  const info = getDayInfoYmd(target, settings);
   if (info.severity === "block") {
     const shifted = nextFullWorkdayYmd(target, false);
     note = `${note ? note + ". " : ""}הוזז מ-${WEEKDAY_NAMES[info.weekday]} (${info.message}) ליום ${WEEKDAY_NAMES[weekdayOfYmd(shifted)]}`;
@@ -389,7 +424,8 @@ function finalize(
  * @param text הטקסט החופשי
  * @param now רגע הייחוס (ברירת מחדל: עכשיו)
  */
-export function resolveDateExpression(text: string, now: Date = new Date()): ResolvedDate | null {
+export function resolveDateExpression(text: string, now: Date = new Date(), settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): ResolvedDate | null {
+  const fin = (ymd: string, phrase: string, approx: boolean, time?: string, note?: string) => finalize(ymd, phrase, approx, time, note, settings);
   const t = normalizeHebrewText(text);
   const today = ymdIL(now);
   const time = extractTime(t);
@@ -398,13 +434,13 @@ export function resolveDateExpression(text: string, now: Date = new Date()): Res
   // אחרי החגים (תשרי)
   if ((m = t.match(/אחרי החגים/))) {
     const st = findNamedHoliday(today, ["Shmini Atzeret", "Simchat Torah"]);
-    if (st) return finalize(nextFullWorkdayYmd(st.end, false), m[0], true);
+    if (st) return fin(nextFullWorkdayYmd(st.end, false), m[0], true);
   }
 
   // בין כיפור לסוכות
   if ((m = t.match(/בין (יום )?כיפור לסוכות/))) {
     const yk = findNamedHoliday(today, ["Yom Kippur"]);
-    if (yk) return finalize(nextFullWorkdayYmd(yk.end, false), m[0], true);
+    if (yk) return fin(nextFullWorkdayYmd(yk.end, false), m[0], true);
   }
 
   // אחרי <חג בשם>
@@ -414,7 +450,7 @@ export function resolveDateExpression(text: string, now: Date = new Date()): Res
       const block = findNamedHoliday(today, h.descs);
       if (block) {
         const end = endOfClosedBlock(block.end);
-        return finalize(nextFullWorkdayYmd(end, false), m[0], true);
+        return fin(nextFullWorkdayYmd(end, false), m[0], true);
       }
     }
   }
@@ -422,61 +458,61 @@ export function resolveDateExpression(text: string, now: Date = new Date()): Res
   // לפני החג
   if ((m = t.match(/לפני (ה)?חג/))) {
     const block = nextHolidayBlock(today);
-    if (block) return finalize(prevFullWorkdayYmd(block.start, false), m[0], true);
+    if (block) return fin(prevFullWorkdayYmd(block.start, false), m[0], true);
   }
 
   // אחרי החג / למחרת החג
   if ((m = t.match(/(אחרי|לאחר|למחרת) (ה)?חג(?![א-ת])/))) {
     const block = nextHolidayBlock(today);
-    if (block) return finalize(nextFullWorkdayYmd(block.end, false), m[0], true);
+    if (block) return fin(nextFullWorkdayYmd(block.end, false), m[0], true);
   }
 
   // אחרי שבת / מוצ"ש
   if ((m = t.match(/אחרי (ה)?שבת|מוצ"ש|מוצאי שבת/))) {
     const wd = weekdayOfYmd(today);
     const daysToSunday = ((7 - wd) % 7) || 7;
-    return finalize(addDaysYmd(today, daysToSunday), m[0], false, time);
+    return fin(addDaysYmd(today, daysToSunday), m[0], false, time);
   }
 
   // מחרתיים / מחר
-  if ((m = t.match(/מחרתיים/))) return finalize(addDaysYmd(today, 2), m[0], false, time);
-  if ((m = t.match(/(?<![א-ת])מחר(?![א-ת])/))) return finalize(addDaysYmd(today, 1), m[0], false, time);
+  if ((m = t.match(/מחרתיים/))) return fin(addDaysYmd(today, 2), m[0], false, time);
+  if ((m = t.match(/(?<![א-ת])מחר(?![א-ת])/))) return fin(addDaysYmd(today, 1), m[0], false, time);
 
   // בעוד X ימים / יומיים / שבוע / שבועיים / חודש / חודשיים / חצי שנה / שנה
   if ((m = t.match(/בעוד (\d+|[א-ת]+) ימים/))) {
     const n = num(m[1]);
-    if (n > 0) return finalize(addDaysYmd(today, n), m[0], m[1] === "כמה", time);
+    if (n > 0) return fin(addDaysYmd(today, n), m[0], m[1] === "כמה", time);
   }
-  if ((m = t.match(/בעוד יומיים|עוד יומיים/))) return finalize(addDaysYmd(today, 2), m[0], false, time);
-  if ((m = t.match(/בעוד שבועיים|עוד שבועיים|שבועיים/))) return finalize(addDaysYmd(today, 14), m[0], false, time);
+  if ((m = t.match(/בעוד יומיים|עוד יומיים/))) return fin(addDaysYmd(today, 2), m[0], false, time);
+  if ((m = t.match(/בעוד שבועיים|עוד שבועיים|שבועיים/))) return fin(addDaysYmd(today, 14), m[0], false, time);
   if ((m = t.match(/בעוד (\d+|[א-ת]+) שבועות/))) {
     const n = num(m[1]);
-    if (n > 0) return finalize(addDaysYmd(today, n * 7), m[0], m[1] === "כמה", time);
+    if (n > 0) return fin(addDaysYmd(today, n * 7), m[0], m[1] === "כמה", time);
   }
-  if ((m = t.match(/בעוד שבוע|עוד שבוע|בשבוע הבא|שבוע הבא/))) return finalize(addDaysYmd(today, 7), m[0], false, time);
-  if ((m = t.match(/בעוד חודשיים|עוד חודשיים/))) return finalize(addDaysYmd(today, 60), m[0], true);
+  if ((m = t.match(/בעוד שבוע|עוד שבוע|בשבוע הבא|שבוע הבא/))) return fin(addDaysYmd(today, 7), m[0], false, time);
+  if ((m = t.match(/בעוד חודשיים|עוד חודשיים/))) return fin(addDaysYmd(today, 60), m[0], true);
   if ((m = t.match(/בעוד (\d+|[א-ת]+) חודשים/))) {
     const n = num(m[1]);
-    if (n > 0) return finalize(addDaysYmd(today, n * 30), m[0], true);
+    if (n > 0) return fin(addDaysYmd(today, n * 30), m[0], true);
   }
-  if ((m = t.match(/בעוד חצי שנה/))) return finalize(addDaysYmd(today, 182), m[0], true);
-  if ((m = t.match(/בעוד שנה/))) return finalize(addDaysYmd(today, 365), m[0], true);
+  if ((m = t.match(/בעוד חצי שנה/))) return fin(addDaysYmd(today, 182), m[0], true);
+  if ((m = t.match(/בעוד שנה/))) return fin(addDaysYmd(today, 365), m[0], true);
   if ((m = t.match(/בתחילת החודש הבא|תחילת החודש הבא/))) {
     const d = plainDate(today);
     const first = new Date(d.getFullYear(), d.getMonth() + 1, 1, 12);
-    return finalize(toYmd(first), m[0], true);
+    return fin(toYmd(first), m[0], true);
   }
   if ((m = t.match(/בסוף החודש|סוף החודש/))) {
     const d = plainDate(today);
     const last = new Date(d.getFullYear(), d.getMonth() + 1, 0, 12);
-    return finalize(prevFullWorkdayYmd(toYmd(last)), m[0], true);
+    return fin(prevFullWorkdayYmd(toYmd(last)), m[0], true);
   }
-  if ((m = t.match(/בעוד חודש|עוד חודש|בחודש הבא|חודש הבא/))) return finalize(addDaysYmd(today, 30), m[0], true);
+  if ((m = t.match(/בעוד חודש|עוד חודש|בחודש הבא|חודש הבא/))) return fin(addDaysYmd(today, 30), m[0], true);
   if ((m = t.match(/בסוף השבוע|סוף השבוע|בסופ"ש|סופ"ש/))) {
     // סוף שבוע העבודה = יום חמישי
     const wd = weekdayOfYmd(today);
     const n = wd <= 4 ? 4 - wd || 7 : 4 + (7 - wd);
-    return finalize(addDaysYmd(today, n), m[0], true);
+    return fin(addDaysYmd(today, n), m[0], true);
   }
 
   // יום בשבוע
@@ -490,7 +526,7 @@ export function resolveDateExpression(text: string, now: Date = new Date()): Res
         const daysLeftThisWeek = 6 - cur;
         if (n <= daysLeftThisWeek) n += 7;
       }
-      return finalize(addDaysYmd(today, n), m[0], false, time);
+      return fin(addDaysYmd(today, n), m[0], false, time);
     }
   }
 
@@ -503,7 +539,7 @@ export function resolveDateExpression(text: string, now: Date = new Date()): Res
       if (y < 100) y += 2000;
       let cand = new Date(y, mo - 1, d, 12);
       if (!m[3] && toYmd(cand) < today) cand = new Date(y + 1, mo - 1, d, 12);
-      return finalize(toYmd(cand), m[0], false, time);
+      return fin(toYmd(cand), m[0], false, time);
     }
   }
 
@@ -513,25 +549,25 @@ export function resolveDateExpression(text: string, now: Date = new Date()): Res
     const base = plainDate(today);
     let cand = new Date(base.getFullYear(), base.getMonth(), d, 12);
     if (toYmd(cand) < today) cand = new Date(base.getFullYear(), base.getMonth() + 1, d, 12);
-    return finalize(toYmd(cand), m[0], false, time);
+    return fin(toYmd(cand), m[0], false, time);
   }
 
   return null;
 }
 
 /** היום הראשון שאפשר לעבוד בו (לא שבת/חג/ערב חג; שישי וחול המועד מותרים) */
-export function nextOpenDayYmd(ymd: string, includeSelf = true): string {
+export function nextOpenDayYmd(ymd: string, includeSelf = true, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): string {
   let cur = includeSelf ? ymd : addDaysYmd(ymd, 1);
   for (let i = 0; i < 60; i++) {
-    if (getDayInfoYmd(cur).severity !== "block") return cur;
+    if (getDayInfoYmd(cur, settings).severity !== "block") return cur;
     cur = addDaysYmd(cur, 1);
   }
   return cur;
 }
 
 /** "הבטיח לחזור אליי" → יום-יומיים אחרי מה שהבטיחו (מדלג רק על שבת/חג/ערב חג) */
-export function afterPromiseBuffer(ymd: string): string {
-  return nextOpenDayYmd(addDaysYmd(ymd, 1));
+export function afterPromiseBuffer(ymd: string, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): string {
+  return nextOpenDayYmd(addDaysYmd(ymd, 1), true, settings);
 }
 
 export const PROMISE_RE = /(יחזור|תחזור|יחזרו|אחזור|מבטיח|מבטיחה|הבטיח|הבטיחה|יתקשר|תתקשר|יתקשרו|ידבר איתי|יעדכן|תעדכן|יחזרו אליי|יחזור אליי)/;
@@ -540,4 +576,57 @@ export const PROMISE_RE = /(יחזור|תחזור|יחזרו|אחזור|מבטי
 export function hebrewDateLabel(d: Date): string {
   const hd = new HDate(plainDate(ymdIL(d)));
   return stripNikud(hd.renderGematriya(true));
+}
+
+// ---------- חסימת התראות (שבת, יום טוב, ערב שבת, ערב יום טוב, חול המועד) ----------
+
+export type BlackoutReason = "SHABBAT" | "EREV_SHABBAT" | "YOM_TOV" | "EREV_YOM_TOV" | "CHOL_HAMOED";
+
+export const BLACKOUT_LABELS: Record<BlackoutReason, string> = {
+  SHABBAT: "שבת",
+  EREV_SHABBAT: "ערב שבת",
+  YOM_TOV: "יום טוב",
+  EREV_YOM_TOV: "ערב יום טוב",
+  CHOL_HAMOED: "חול המועד",
+};
+
+/**
+ * סיבת החסימה של יום (לפי תאריך בשעון ישראל, לוח ארץ ישראל). null = מותר.
+ * הערב חסום כל היום. יום טוב גובר על שבת, ערב יום טוב גובר על ערב שבת.
+ */
+export function blackoutReasonYmd(ymd: string, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): BlackoutReason | null {
+  const f = dayFlags(ymd);
+  if (f.isYomTov) return "YOM_TOV";
+  if (f.weekday === 6) return "SHABBAT";
+  if (dayFlags(addDaysYmd(ymd, 1)).isYomTov) return "EREV_YOM_TOV";
+  if (f.weekday === 5) return "EREV_SHABBAT";
+  if (f.isCholHamoed && settings.blockCholHamoed) return "CHOL_HAMOED";
+  return null;
+}
+
+/** סיבת החסימה של רגע נתון — לפי היום שלו בשעון ישראל, לא לפי השעה */
+export function blackoutReasonAt(at: Date, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): BlackoutReason | null {
+  return blackoutReasonYmd(ymdIL(at), settings);
+}
+
+/** היום הראשון שאינו חסום, החל מהתאריך הנתון */
+export function nextAllowedDayYmd(ymd: string, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS, includeSelf = true): string {
+  let cur = includeSelf ? ymd : addDaysYmd(ymd, 1);
+  for (let i = 0; i < 60; i++) {
+    if (!blackoutReasonYmd(cur, settings)) return cur;
+    cur = addDaysYmd(cur, 1);
+  }
+  return cur;
+}
+
+/** ימים חסומים בטווח (לתצוגה בהגדרות) */
+export function blackoutDaysInRange(fromYmd: string, days: number, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): Array<{ ymd: string; reason: BlackoutReason; label: string }> {
+  const out: Array<{ ymd: string; reason: BlackoutReason; label: string }> = [];
+  let cur = fromYmd;
+  for (let i = 0; i < days; i++) {
+    const reason = blackoutReasonYmd(cur, settings);
+    if (reason) out.push({ ymd: cur, reason, label: BLACKOUT_LABELS[reason] });
+    cur = addDaysYmd(cur, 1);
+  }
+  return out;
 }

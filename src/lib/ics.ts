@@ -4,7 +4,7 @@
 import type { Task } from "@prisma/client";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { TZ, ymdIL } from "./dates";
-import { addDaysYmd } from "./hebrew-dates";
+import { DEFAULT_CALENDAR_SETTINGS, addDaysYmd, blackoutReasonYmd, type CalendarSettings } from "./hebrew-dates";
 import { leadTitle } from "./utils";
 import { addressString } from "./geo";
 import { displayPhone } from "./phone";
@@ -43,8 +43,9 @@ function utcStamp(d: Date): string {
   return formatInTimeZone(d, "UTC", "yyyyMMdd'T'HHmmss'Z'");
 }
 
-export function buildIcs(tasks: TaskForIcs[], opts: { appUrl: string; calName?: string }): string {
+export function buildIcs(tasks: TaskForIcs[], opts: { appUrl: string; calName?: string; settings?: CalendarSettings }): string {
   const now = new Date();
+  const settings = opts.settings ?? DEFAULT_CALENDAR_SETTINGS;
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -85,18 +86,24 @@ export function buildIcs(tasks: TaskForIcs[], opts: { appUrl: string; calName?: 
       lines.push(`URL:${opts.appUrl}/leads/${t.lead.id}`);
     }
     lines.push(`STATUS:${t.isApproximate ? "TENTATIVE" : "CONFIRMED"}`);
-    if (!t.done) {
-      lines.push("BEGIN:VALARM");
-      lines.push("ACTION:DISPLAY");
-      lines.push(`DESCRIPTION:${esc(t.title)}`);
+    // התראות: לא על יום חסום (שבת/חג/ערב/חול המועד), ולא כשזמן ההפעלה נופל על יום חסום
+    if (!t.done && !blackoutReasonYmd(ymdIL(t.dueAt), settings)) {
+      let trigger: string | null = null;
       if (t.allDay) {
-        // התראה ב-08:00 בבוקר של אותו יום (שעון ישראל)
-        const eight = formatInTimeZone(t.dueAt, TZ, "yyyy-MM-dd") + "T08:00:00";
-        lines.push(`TRIGGER;VALUE=DATE-TIME:${utcStamp(fromZonedTime(eight, TZ))}`);
+        // 08:00 בבוקר של אותו יום (שעון ישראל) — היום עצמו אינו חסום
+        trigger = `TRIGGER;VALUE=DATE-TIME:${utcStamp(fromZonedTime(`${ymdIL(t.dueAt)}T08:00:00`, TZ))}`;
       } else {
-        lines.push(`TRIGGER:-PT${t.remindMinutesBefore ?? 30}M`);
+        const mins = t.remindMinutesBefore ?? 30;
+        const at = new Date(t.dueAt.getTime() - mins * 60_000);
+        if (!blackoutReasonYmd(ymdIL(at), settings)) trigger = `TRIGGER:-PT${mins}M`;
       }
-      lines.push("END:VALARM");
+      if (trigger) {
+        lines.push("BEGIN:VALARM");
+        lines.push("ACTION:DISPLAY");
+        lines.push(`DESCRIPTION:${esc(t.title)}`);
+        lines.push(trigger);
+        lines.push("END:VALARM");
+      }
     }
     lines.push("END:VEVENT");
   }

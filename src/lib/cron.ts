@@ -2,16 +2,21 @@
  * Cron: נקודת כניסה אחת (tick) שמפעילה עבודות לפי שעון ישראל.
  * מומלץ כל 15 דקות (Vercel Pro או cron-job.org). בתוכנית Hobby של Vercel: פעמיים ביום (05:30 ו-17:30 UTC, ראה vercel.json).
  * מניעת כפילויות דרך טבלת CronRun (job + runKey ייחודיים).
+ * כל שליחה עוברת דרך שער ההתראות (notify-gate): בשבת/חג/ערב חג/חול המועד — אפס התראות,
+ * ומה שנחסם נכנס לדיגסט הבוקר הראשון שאחרי.
  */
 import { formatInTimeZone } from "date-fns-tz";
 import { prisma } from "./db";
-import { TZ, addDaysIL, endOfDayIL, formatIL, hmIL, startOfDayIL, weekdayIL, ymdIL } from "./dates";
+import { TZ, addDaysIL, dateAtIL, endOfDayIL, formatIL, hmIL, startOfDayIL, weekdayIL, ymdIL } from "./dates";
 import { getDailyReport, getStuckLeads, getTodayBoard, getWeeklyReport, leadSummarySelect } from "./leads";
 import { buildEveningSummary, buildMorningDigest, buildWeeklySummary, notifyAll } from "./notify";
 import { sendPushToAll } from "./push";
 import { createSnapshot } from "./snapshot";
 import { leadTitle } from "./utils";
 import { appUrl } from "./settings";
+import { getCalendarSettings } from "./calendar-settings";
+import { nextAllowedDayYmd } from "./hebrew-dates";
+import { buildDeferredSection, canNotifyAt, deferNotification, markDeferredDelivered, pendingDeferred } from "./notify-gate";
 
 export type JobName = "reminders" | "morning" | "evening" | "weekly" | "automations" | "snapshot";
 export const JOB_NAMES: JobName[] = ["reminders", "morning", "evening", "weekly", "automations", "snapshot"];
@@ -29,7 +34,9 @@ async function release(job: string, runKey: string) {
   await prisma.cronRun.deleteMany({ where: { job, runKey } });
 }
 
+/** תזכורות למשימות עם remindMinutesBefore. ביום חסום — נדחות לדיגסט הבא במקום להישלח. */
 export async function runReminders(now = new Date()) {
+  const gate = await canNotifyAt(now);
   const tasks = await prisma.task.findMany({
     where: {
       done: false,
@@ -41,44 +48,82 @@ export async function runReminders(now = new Date()) {
   });
   const due = tasks.filter((t) => t.dueAt.getTime() - (t.remindMinutesBefore ?? 0) * 60_000 <= now.getTime());
   let sent = 0;
+  let deferred = 0;
   for (const t of due) {
     const when = t.allDay ? formatIL(t.dueAt, "d.M") : `${formatIL(t.dueAt, "d.M")} ${hmIL(t.dueAt)}`;
-    const res = await sendPushToAll({
+    const payload = {
       title: `⏰ ${t.title}`,
       body: `${when}${t.lead?.area ? ` · ${t.lead.area}` : ""}${t.notes ? `\n${t.notes}` : ""}`,
       url: t.leadId ? appUrl(`/leads/${t.leadId}`) : appUrl("/"),
       tag: `task-${t.id}`,
-    });
+    };
+    if (!gate.allowed) {
+      await deferNotification({ kind: "reminder", title: `${t.title} (${when})`, body: payload.body, url: payload.url, leadId: t.leadId, taskId: t.id }, gate);
+      deferred++;
+    } else {
+      const res = await sendPushToAll(payload, { at: now });
+      if (res.sent) sent++;
+    }
     await prisma.task.update({ where: { id: t.id }, data: { notifiedAt: now } });
-    if (res.sent) sent++;
   }
-  return { checked: tasks.length, due: due.length, sent };
+  return { checked: tasks.length, due: due.length, sent, deferred, blocked: !gate.allowed, reason: gate.reason };
 }
 
+/** דיגסט בוקר — ביום מותר בלבד; כולל את מה שנחסם מאז הדיגסט הקודם, מקובץ לפי ליד. */
 export async function runMorningDigest(now = new Date()) {
+  const gate = await canNotifyAt(now);
+  if (!gate.allowed) return { blocked: true, reason: gate.reason, text: null };
   const board = await getTodayBoard(now);
   const digest = buildMorningDigest(board, now);
-  const res = await notifyAll({ title: digest.title, body: digest.body, url: appUrl("/"), tag: "morning" }, digest.text);
-  return { ...res, text: digest.text };
+  const deferred = await pendingDeferred();
+  let text = digest.text;
+  let body = digest.body;
+  if (deferred.length) {
+    const section = await buildDeferredSection(deferred);
+    text = `${text}\n\n${section.join("\n")}`;
+    body = `🔕 ${deferred.length} התראות הצטברו בזמן החסימה\n${body}`;
+  }
+  const res = await notifyAll({ title: digest.title, body, url: appUrl("/"), tag: "morning" }, text, { at: now });
+  if (!res.blocked) await markDeferredDelivered(deferred.map((d) => d.id));
+  return { ...res, text, deferredDelivered: deferred.length };
 }
 
 export async function runEveningSummary(now = new Date()) {
+  const gate = await canNotifyAt(now);
   const report = await getDailyReport(now);
   const s = buildEveningSummary(report, now);
-  const res = await notifyAll({ title: s.title, body: s.body, url: appUrl("/reports"), tag: "evening" }, s.text);
+  if (!gate.allowed) {
+    await deferNotification({ kind: "evening", title: `סיכום יום ${formatIL(now, "d.M")}`, body: s.body, url: appUrl("/reports") }, gate);
+    return { blocked: true, reason: gate.reason, deferred: true, text: s.text };
+  }
+  const res = await notifyAll({ title: s.title, body: s.body, url: appUrl("/reports"), tag: "evening" }, s.text, { at: now });
   return { ...res, text: s.text };
 }
 
 export async function runWeeklySummary(now = new Date()) {
+  const gate = await canNotifyAt(now);
   const [weekly, stuck] = await Promise.all([getWeeklyReport(now), getStuckLeads(now)]);
   const s = buildWeeklySummary(weekly, stuck);
-  const res = await notifyAll({ title: s.title, body: s.body, url: appUrl("/reports?tab=week"), tag: "weekly" }, s.text);
+  if (!gate.allowed) {
+    await deferNotification({ kind: "weekly", title: "סיכום שבועי", body: s.body, url: appUrl("/reports?tab=week") }, gate);
+    return { blocked: true, reason: gate.reason, deferred: true, text: s.text };
+  }
+  const res = await notifyAll({ title: s.title, body: s.body, url: appUrl("/reports?tab=week"), tag: "weekly" }, s.text, { at: now });
   return { ...res, text: s.text };
 }
 
-/** אוטומציות יומיות: WAITING_THEM שפג + 2 ימים → משימת VISIT; חוזה מעל 7 ימים → תזכורת */
+/**
+ * אוטומציות יומיות: WAITING_THEM שפג + 2 ימים → משימת VISIT (לעולם לא על יום חסום); חוזה מעל 7 ימים → תזכורת.
+ */
 export async function runAutomations(now = new Date()) {
   const start = startOfDayIL(now);
+  const settings = await getCalendarSettings();
+  const gate = await canNotifyAt(now);
+  const todayYmd = ymdIL(now);
+  const dueYmd = nextAllowedDayYmd(todayYmd, settings);
+  const dueAt = dateAtIL(dueYmd);
+  const shifted = dueYmd !== todayYmd;
+
   // 1. הבטיחו לחזור ולא חזרו
   const waiting = await prisma.lead.findMany({
     where: { status: "WAITING_THEM", nextActionAt: { lte: addDaysIL(start, -2) } },
@@ -91,30 +136,33 @@ export async function runAutomations(now = new Date()) {
       data: {
         leadId: lead.id,
         title: `לקפוץ — ${leadTitle(lead)} (הבטיחו לחזור ולא חזרו)`,
-        dueAt: start,
+        dueAt,
         allDay: true,
         type: "VISIT",
         source: "AUTO_WAITING",
-        notes: lead.nextActionNote ? `${lead.nextActionNote}\nעברו יומיים מהמועד שהבטיחו — כניסה פיזית` : "עברו יומיים מהמועד שהבטיחו — כניסה פיזית",
+        notes: `${lead.nextActionNote ? `${lead.nextActionNote}\n` : ""}עברו יומיים מהמועד שהבטיחו — כניסה פיזית${shifted ? ` (נקבע ל-${formatIL(dueAt, "d.M")}, אחרי יום חסום)` : ""}`,
       },
     });
     createdVisits++;
   }
-  // 2. חוזה שממתין מעל 7 ימים — תזכורת יומית
+
+  // 2. חוזה שממתין מעל 7 ימים — תזכורת יומית (ביום חסום: נדחית לדיגסט)
   const contracts = await prisma.lead.findMany({
     where: { status: "CONTRACT", statusChangedAt: { lte: addDaysIL(now, -7) } },
     select: { id: true, name: true, descriptor: true, statusChangedAt: true },
   });
+  let contractDeferred = 0;
   for (const lead of contracts) {
     const days = Math.floor((now.getTime() - lead.statusChangedAt.getTime()) / 86_400_000);
-    await sendPushToAll({
-      title: `📄 חוזה ממתין ${days} ימים`,
-      body: `${leadTitle(lead)} — לבדוק מה קורה עם החתימה`,
-      url: appUrl(`/leads/${lead.id}`),
-      tag: `contract-${lead.id}`,
-    });
+    const payload = { title: `📄 חוזה ממתין ${days} ימים`, body: `${leadTitle(lead)} — לבדוק מה קורה עם החתימה`, url: appUrl(`/leads/${lead.id}`), tag: `contract-${lead.id}` };
+    if (!gate.allowed) {
+      await deferNotification({ kind: "contract", title: "חוזה ממתין לחתימה", body: payload.body, url: payload.url, leadId: lead.id }, gate);
+      contractDeferred++;
+    } else {
+      await sendPushToAll(payload, { at: now });
+    }
   }
-  return { createdVisits, contractReminders: contracts.length };
+  return { createdVisits, visitsDueOn: dueYmd, contractReminders: contracts.length, contractDeferred, blocked: !gate.allowed, reason: gate.reason };
 }
 
 export async function runSnapshot() {
@@ -144,7 +192,8 @@ export async function runTick(now = new Date(), force: JobName[] = []) {
   const [h, m] = formatInTimeZone(now, TZ, "HH:mm").split(":").map(Number);
   const minutes = h * 60 + m;
   const weekday = weekdayIL(now);
-  const results: Record<string, unknown> = { at: now.toISOString(), il: formatIL(now, "yyyy-MM-dd HH:mm") };
+  const gate = await canNotifyAt(now);
+  const results: Record<string, unknown> = { at: now.toISOString(), il: formatIL(now, "yyyy-MM-dd HH:mm"), notifications: gate.allowed ? "allowed" : `blocked (${gate.label})` };
 
   const daily = async (job: JobName, when: boolean, key = ymd) => {
     if (!(force.includes(job) || when)) return;

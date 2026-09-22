@@ -34,7 +34,8 @@ describe("day info (Israel calendar)", () => {
     const c = checkDateConflict(dateAtIL("2026-09-21"));
     expect(c?.level).toBe("block");
     expect(c?.suggestionYmd).toBe("2026-09-22");
-    expect(checkDateConflict(dateAtIL("2026-09-28"))?.level).toBe("warn");
+    expect(checkDateConflict(dateAtIL("2026-09-28"))?.level).toBe("block"); // חול המועד חסום כברירת מחדל
+    expect(checkDateConflict(dateAtIL("2026-09-28"), { blockCholHamoed: false })?.level).toBe("warn");
     expect(checkDateConflict(dateAtIL("2026-09-22"))).toBeNull();
     expect(checkDateConflict(dateAtIL("2026-09-19"))?.message).toContain("שבת");
   });
@@ -97,11 +98,12 @@ describe("resolveDateExpression", () => {
   it("returns null when nothing matches", () => {
     expect(r("נגריה בלי טלפון")).toBeNull();
   });
-  it("promise buffer moves the date a day or two later, skipping only closed days", () => {
+  it("promise buffer moves the date a day or two later, skipping closed days (chol hamoed included by default)", () => {
     expect(afterPromiseBuffer("2026-09-22")).toBe("2026-09-23");
-    // 25.9 ערב סוכות (שישי) → 26.9 סוכות → 27.9 ראשון חול המועד (פתוח חלקית)
-    expect(afterPromiseBuffer("2026-09-24")).toBe("2026-09-27");
-    expect(afterPromiseBuffer("2026-09-17")).toBe("2026-09-18"); // שישי מותר
+    // 25.9 ערב סוכות → סוכות → חול המועד חסום → 4.10; כשחול המועד פתוח → 27.9
+    expect(afterPromiseBuffer("2026-09-24")).toBe("2026-10-04");
+    expect(afterPromiseBuffer("2026-09-24", { blockCholHamoed: false })).toBe("2026-09-27");
+    expect(afterPromiseBuffer("2026-09-17")).toBe("2026-09-18"); // שישי מותר לקביעה (יום קצר)
   });
   it("weekday phrase keeps the leading ב", () => {
     expect(r("מבטיחה לחזור ביום חמישי")?.phrase).toBe("ביום חמישי");

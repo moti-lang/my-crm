@@ -104,8 +104,9 @@ export function PushControls({ configured, publicKey, subscriptions }: { configu
   async function test() {
     setBusy(true);
     try {
-      const r = await api<{ sent: number; failed: number; configured: boolean }>("/api/push/test", { method: "POST" });
-      toast(r.configured ? `נשלח ל-${r.sent} מכשירים${r.failed ? `, ${r.failed} נכשלו` : ""}` : "VAPID לא מוגדר בשרת", r.configured ? "success" : "error");
+      const r = await api<{ sent: number; failed: number; configured: boolean; blocked?: boolean; message?: string }>("/api/push/test", { method: "POST" });
+      if (r.blocked) toast(r.message ?? "היום יום חסום — ההתראות מושתקות", "info");
+      else toast(r.configured ? `נשלח ל-${r.sent} מכשירים${r.failed ? `, ${r.failed} נכשלו` : ""}` : "VAPID לא מוגדר בשרת", r.configured ? "success" : "error");
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {

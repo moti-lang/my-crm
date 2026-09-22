@@ -1,5 +1,7 @@
 import webpush from "web-push";
 import { prisma } from "./db";
+import { canNotifyAt } from "./notify-gate";
+import type { BlackoutReason } from "./hebrew-dates";
 
 let configured = false;
 
@@ -26,8 +28,19 @@ export interface PushPayload {
   tag?: string;
 }
 
-/** שליחת התראה לכל המכשירים הרשומים. מנויים שפגו (404/410) נמחקים. */
-export async function sendPushToAll(payload: PushPayload): Promise<{ configured: boolean; sent: number; failed: number }> {
+export interface PushSendResult {
+  configured: boolean;
+  sent: number;
+  failed: number;
+  /** נחסם על ידי השער (שבת/חג) — לא נשלח דבר */
+  blocked?: boolean;
+  reason?: BlackoutReason | null;
+}
+
+/** שליחת התראה לכל המכשירים הרשומים — דרך השער. מנויים שפגו (404/410) נמחקים. */
+export async function sendPushToAll(payload: PushPayload, opts: { at?: Date } = {}): Promise<PushSendResult> {
+  const gate = await canNotifyAt(opts.at ?? new Date());
+  if (!gate.allowed) return { configured: pushConfigured(), sent: 0, failed: 0, blocked: true, reason: gate.reason };
   if (!ensureConfigured()) return { configured: false, sent: 0, failed: 0 };
   const subs = await prisma.pushSubscription.findMany();
   let sent = 0;

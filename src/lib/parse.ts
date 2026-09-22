@@ -6,7 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { formatIL, WEEKDAY_NAMES, weekdayIL, ymdIL } from "./dates";
-import { hebrewDateLabel, upcomingSpecialDays } from "./hebrew-dates";
+import { DEFAULT_CALENDAR_SETTINGS, hebrewDateLabel, upcomingSpecialDays, type CalendarSettings } from "./hebrew-dates";
 import { ParsedLeadSchema, localParse, postProcess, type ParseResult, type ParsedLead } from "./parse-local";
 
 export { ParsedLeadSchema, localParse, postProcess } from "./parse-local";
@@ -20,7 +20,7 @@ export function claudeConfigured(): boolean {
 
 // ---------- פרומפט ----------
 
-export function buildSystemPrompt(now: Date): string {
+export function buildSystemPrompt(now: Date, settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): string {
   const today = ymdIL(now);
   const specials = upcomingSpecialDays(today, 120)
     .map((d) => `${d.ymd} (יום ${d.weekday}) — ${d.name} [${d.kind === "HOLIDAY" ? "חג, סגור" : d.kind === "EREV" ? "ערב חג, יום קצר" : d.kind === "CHOL_HAMOED" ? "חול המועד" : d.kind === "MEMORIAL" ? "יום זיכרון" : "חג קטן"}]`)
@@ -29,7 +29,7 @@ export function buildSystemPrompt(now: Date): string {
 המשתמש מכתיב או מקליד הערה חופשית בעברית אחרי ביקור/שיחה עם עסק. עליך להחזיר JSON לפי הסכמה בלבד.
 
 היום: יום ${WEEKDAY_NAMES[weekdayIL(now)]}, ${formatIL(now, "d.M.yyyy")} (${today}), ${hebrewDateLabel(now)}.
-ימי עבודה: ראשון–חמישי. שישי יום קצר. שבת, חג וערב חג — לא קובעים.
+ימי עבודה: ראשון–חמישי. שישי יום קצר. שבת, חג וערב חג — לא קובעים.${settings.blockCholHamoed ? " גם חול המועד — לא קובעים (להזיז ליום העבודה המלא הבא)." : ""}
 ימים מיוחדים בתקופה הקרובה (לוח ישראל):
 ${specials || "(אין)"}
 
@@ -57,12 +57,12 @@ ${specials || "(אין)"}
 
 // ---------- Claude ----------
 
-export async function parseWithClaude(text: string, now = new Date()): Promise<ParsedLead> {
+export async function parseWithClaude(text: string, now = new Date(), settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): Promise<ParsedLead> {
   const client = new Anthropic({ timeout: 30_000, maxRetries: 1 });
   const response = await client.messages.parse({
     model: MODEL,
     max_tokens: 4096,
-    system: buildSystemPrompt(now),
+    system: buildSystemPrompt(now, settings),
     messages: [{ role: "user", content: text }],
     output_config: { format: zodOutputFormat(ParsedLeadSchema), effort: "medium" },
   });
@@ -72,20 +72,20 @@ export async function parseWithClaude(text: string, now = new Date()): Promise<P
 }
 
 /** נקודת הכניסה: Claude אם מוגדר, אחרת מקומי; תמיד עם עיבוד-אחרי */
-export async function parseLeadText(text: string, now = new Date()): Promise<ParseResult> {
+export async function parseLeadText(text: string, now = new Date(), settings: CalendarSettings = DEFAULT_CALENDAR_SETTINGS): Promise<ParseResult> {
   let lead: ParsedLead | null = null;
   let source: ParseResult["source"] = "local";
   let error: string | undefined;
   if (claudeConfigured()) {
     try {
-      lead = await parseWithClaude(text, now);
+      lead = await parseWithClaude(text, now, settings);
       source = "claude";
     } catch (e) {
       error = e instanceof Anthropic.APIError ? `Claude API ${e.status}: ${e.message}` : (e as Error).message;
       console.error("parseWithClaude failed, falling back to local:", error);
     }
   }
-  if (!lead) lead = localParse(text, now);
-  const processed = postProcess(lead, text, now);
+  if (!lead) lead = localParse(text, now, settings);
+  const processed = postProcess(lead, text, now, settings);
   return { ...processed, source, error };
 }

@@ -7,6 +7,7 @@ import { appUrl, getOrCreateIcsToken } from "@/lib/settings";
 import { Card, PageTitle } from "@/components/ui/card";
 import { Appearance, FailedQueuePanel, IcsControls, InstallHelp, JobsPanel, LogoutButton, PushControls, SnapshotsPanel } from "./settings-client";
 import { ImportPanel } from "./import-panel";
+import { CalendarPanel } from "./calendar-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "הגדרות" };
@@ -38,6 +39,9 @@ export default async function SettingsPage() {
         <p className="text-xs text-muted-foreground">
           לוח זמנים: דיגסט בוקר (07:30–08:30) · סיכום יום (19:30–20:30) · ראשון בבוקר סיכום שבועי · תזכורות למשימות בכל הרצה (כל 15 דק׳ עם cron-job.org / Vercel Pro). ב-iOS ההתראות עובדות רק כשהאפליקציה מותקנת למסך הבית.
         </p>
+      </Section>
+      <Section title="🕯 שבת וחג — חסימת התראות">
+        <CalendarPanel />
       </Section>
       <Section title="💬 ערוץ גיבוי — וואטסאפ">
         <p className="text-sm">{whatsappConfigured() ? "✓ מוגדר (Green API). הדיגסט של הבוקר וסיכום היום נשלחים גם לוואטסאפ." : "לא מוגדר. הגדר GREEN_API_ID_INSTANCE, GREEN_API_TOKEN ו-WHATSAPP_TO כדי לקבל את הדיגסט גם בוואטסאפ."}</p>
