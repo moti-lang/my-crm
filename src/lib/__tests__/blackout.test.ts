@@ -3,6 +3,7 @@
  * לפי תאריך בשעון ישראל, לוח ארץ ישראל.
  */
 import { describe, expect, it } from "vitest";
+import { HebrewCalendar, flags } from "@hebcal/core";
 import { dateAtIL } from "../dates";
 import {
   afterPromiseBuffer,
@@ -65,6 +66,37 @@ describe("blackoutReasonYmd — לוח תשרי תשפ״ז (ישראל)", () => 
     expect(blackoutReasonYmd("2027-04-27")).toBe("EREV_YOM_TOV"); // ערב שביעי של פסח
     expect(blackoutReasonYmd("2027-04-28")).toBe("YOM_TOV");
     expect(blackoutReasonYmd("2027-04-29")).toBeNull();
+  });
+});
+
+describe("לוח ארץ ישראל — יום טוב שני של גלויות אינו חסום", () => {
+  const diasporaChag = (ymd: string) => {
+    const [y, m, d] = ymd.split("-").map(Number);
+    return (HebrewCalendar.getHolidaysOnDate(new Date(y, m - 1, d, 12), false) ?? []).some((e) => (e.getFlags() & flags.CHAG) !== 0);
+  };
+  it("שמחת תורה בגולה (כ״ג תשרי, 4.10.2026) הוא יום חול בישראל", () => {
+    expect(diasporaChag("2026-10-04")).toBe(true); // בלוח הגולה זה יום טוב — כאן טעות בהגדרת הלוח הייתה מתגלה
+    expect(blackoutReasonYmd("2026-10-04")).toBeNull();
+    expect(getDayInfoYmd("2026-10-04").kind).toBe("WORKDAY");
+    expect(nextAllowedDayYmd("2026-09-25")).toBe("2026-10-04");
+  });
+  it("אחרון של פסח בגולה (כ״ב ניסן, 29.4.2027) הוא יום חול בישראל", () => {
+    expect(diasporaChag("2027-04-29")).toBe(true);
+    expect(blackoutReasonYmd("2027-04-29")).toBeNull();
+    expect(getDayInfoYmd("2027-04-29").kind).toBe("WORKDAY");
+    expect(blackoutReasonYmd("2027-04-28")).toBe("YOM_TOV"); // שביעי של פסח — כן חסום
+  });
+  it("יום טוב שני של סוכות בגולה (ט״ז תשרי, 27.9.2026) הוא חול המועד בישראל — נחסם רק לפי ההגדרה, לא כיום טוב", () => {
+    expect(diasporaChag("2026-09-27")).toBe(true);
+    expect(blackoutReasonYmd("2026-09-27")).toBe("CHOL_HAMOED");
+    expect(blackoutReasonYmd("2026-09-27", OPEN_CHM)).toBeNull();
+  });
+  it("שבועות ב׳ בגולה (12.6.2027) חסום רק מפני שהוא שבת; ערב שבועות ושבועות עצמו חסומים; למחרת מותר", () => {
+    expect(diasporaChag("2027-06-12")).toBe(true);
+    expect(blackoutReasonYmd("2027-06-12")).toBe("SHABBAT");
+    expect(blackoutReasonYmd("2027-06-10")).toBe("EREV_YOM_TOV");
+    expect(blackoutReasonYmd("2027-06-11")).toBe("YOM_TOV");
+    expect(blackoutReasonYmd("2027-06-13")).toBeNull();
   });
 });
 
