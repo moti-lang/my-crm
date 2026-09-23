@@ -21,6 +21,7 @@ import type { TaskWithLead } from "@/lib/leads";
 import { InlineSelect, InlineText } from "./inline-field";
 import { SaveIndicator } from "./save-indicator";
 import { TouchTimeline } from "./touch-timeline";
+import { LocationPanel } from "./location-panel";
 
 type TextField = "name" | "descriptor" | "area" | "addressNote" | "category" | "contactName" | "contactRole" | "phone" | "email" | "website" | "observation" | "painPoints" | "currentTools" | "notes";
 type Patch = Record<string, unknown>;
@@ -29,6 +30,7 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
   const router = useRouter();
   const [overlay, setOverlay] = useState<Partial<Record<TextField, string>>>({});
   const [menuOpen, setMenuOpen] = useState(false);
+  const [coords, setCoords] = useState<{ lat: number | null; lng: number | null } | null>(null);
   const nextDirty = useRef(false);
   const [next, setNext] = useState<NextActionValue>(() => instantToNext(lead.nextActionAt, lead.nextActionType, lead.nextActionNote, lead.nextActionIsApproximate));
 
@@ -43,6 +45,7 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
         return n;
       });
       if ("nextActionAt" in patch) nextDirty.current = false;
+      if ("lat" in patch) setCoords(null);
       router.refresh();
     },
   });
@@ -62,6 +65,12 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
     autosave.save({ [field]: value.trim() ? value : null }, immediate);
   };
   const setField = (field: string, value: string) => autosave.save({ [field]: value }, true);
+  const setLocation = (lat: number | null, lng: number | null) => {
+    setCoords({ lat, lng });
+    autosave.save({ lat, lng }, true);
+  };
+  const viewLat = coords ? coords.lat : lead.lat;
+  const viewLng = coords ? coords.lng : lead.lng;
   const changeNext = (n: NextActionValue) => {
     nextDirty.current = true;
     setNext(n);
@@ -139,7 +148,7 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
         {!hasPhone && <NoPhoneTag className="mt-2" />}
       </div>
 
-      <LeadCardActions lead={{ ...lead, openTasks: openTasks.length }} />
+      <LeadCardActions lead={{ ...lead, lat: viewLat, lng: viewLng, openTasks: openTasks.length }} />
 
       {/* הפעולה הבאה — עריכה ישירה */}
       <Card className={cn("border-2", overdue ? "border-danger/60 bg-danger/5" : lead.nextActionAt ? "border-primary/40" : "border-dashed")}>
@@ -169,6 +178,8 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
         <div className="font-bold">👁 מה ראיתי</div>
         {text("observation", { placeholder: "ניירת על השולחן, תור בכניסה, לוח מחיק, כמה עובדים… (לחץ לכתיבה)", multiline: true, big: true })}
       </Card>
+
+      <LocationPanel lat={viewLat} lng={viewLng} area={view.area ?? null} addressNote={view.addressNote ?? null} onChange={setLocation} />
 
       <Card className="grid gap-3 sm:grid-cols-2">
         <div>
