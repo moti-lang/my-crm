@@ -15,6 +15,8 @@ import { requireEnv } from './env.ts';
  *     בכותרת, השוואה בזמן קבוע. הגוף הוא רמז בלבד; האמת נשאלת מהספק.
  *   requirePayToken — /pay/<טוקן>: הטוקן עצמו הוא ההרשאה (64 תווי הקס),
  *     והמסד מאמת אותו. כאן רק הצורה, כדי לא להריץ כלום על קלט זבל.
+ *   requireEnrollBody — דף ההרשמה (ציבורי בכוונה): הצורה בלבד — POST, JSON
+ *     קטן, עם שדות ההרשמה. ההרשאה האמיתית היא הגבלת הקצב במסד.
  * wa-webhook מוגנת בחתימת HMAC של ה-Hub (verifyHubSignature) ואינה כאן.
  */
 const deny = (status: number, error: string) =>
@@ -65,5 +67,18 @@ export async function requireSharedSecret(req: Request, envKey: string, header =
 export function requirePayToken(req: Request): Response | null {
   const token = new URL(req.url).searchParams.get('token') ?? '';
   if (!/^[0-9a-f]{64}$/.test(token)) return deny(401, 'קישור לא תקין');
+  return null;
+}
+
+const ENROLL_FIELDS = ['first_name', 'last_name', 'grade', 'school', 'phone', 'email', 'branch_id', 'terms_accepted'];
+export async function requireEnrollBody(req: Request): Promise<Response | null> {
+  if (req.method !== 'POST') return deny(405, 'שיטה לא נתמכת');
+  const len = Number(req.headers.get('content-length') ?? '0');
+  if (len > 4096) return deny(413, 'הבקשה גדולה מדי');
+  let body: unknown;
+  try { body = await req.clone().json(); } catch { return deny(400, 'גוף הבקשה אינו JSON'); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return deny(400, 'גוף הבקשה אינו אובייקט');
+  const keys = Object.keys(body as object);
+  if (keys.length > 12 || !ENROLL_FIELDS.every((k) => k in (body as object))) return deny(400, 'חסרים שדות הרשמה');
   return null;
 }

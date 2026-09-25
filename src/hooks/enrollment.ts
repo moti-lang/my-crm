@@ -31,10 +31,11 @@ export type EnrollInput = {
 export type EnrollResult = { ok: true; pay_url: string; amount: number; student: string; branch: string } | { ok: false; error: string };
 
 export async function enroll(input: EnrollInput): Promise<EnrollResult> {
-  // ה-IP לא ידוע לדפדפן; השרת (PostgREST) לא מעביר אותו. הגבלת הקצב לפי טלפון עובדת תמיד.
-  const { data, error } = await supabase.rpc('rpc_enroll', { p: input as never, p_ip: '' });
+  // דרך ה-Edge Function `enroll`, לא RPC ישיר: רק היא רואה את ה-IP, וההגבלה
+  // לפי IP חלה במסד. ה-RPC עצמה סגורה ל-anon (0024).
+  const { data, error } = await supabase.functions.invoke('enroll', { body: input });
   if (error) throw new Error(error.message);
-  return data as unknown as EnrollResult;
+  return data as EnrollResult;
 }
 
 // ─────────── הבעלים ───────────

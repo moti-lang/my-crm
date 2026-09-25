@@ -24,6 +24,7 @@ export const EXPECTED = {
   'ai-answer': 'requireUserJwt', 'ai-command': 'requireUserJwt',
   // SUMIT: סוד משותף בכותרת (webhook), והטוקן של הקישור עצמו (checkout).
   'sumit-webhook': 'requireSharedSecret', 'sumit-checkout': 'requirePayToken',
+  'enroll': 'requireEnrollBody',
 };
 const dirs = readdirSync(ROOT).filter((d) => !d.startsWith('_') && statSync(join(ROOT, d)).isDirectory() && readdirSync(join(ROOT, d)).includes('index.ts'));
 check(`יש ${dirs.length} פונקציות`, dirs.length >= 12);

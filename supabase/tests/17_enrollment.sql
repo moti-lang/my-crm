@@ -10,6 +10,10 @@ language sql security definer set search_path = public, pg_temp as $$
     'phone', p_phone, 'email', lower(p_first) || '@example.com', 'branch_id', 'bbbbbbbb-0000-0000-0000-000000000001',
     'mailing_consent', true, 'terms_accepted', p_terms), p_ip) $$;
 
+-- כמו הפונקציה enroll: service_role מעביר את הגוף כמו שהוא. anon אינו קורא ל-rpc_enroll ישירות (0024).
+create or replace function t_enroll_raw(p jsonb, p_ip text default '1.2.3.4') returns jsonb
+language sql security definer set search_path = public, pg_temp as $$ select rpc_enroll(p, p_ip) $$;
+
 \echo 'מבנה התשלום — מההגדרות, ומסתכם בדיוק:'
 begin;
 select assert_eq((f_enrollment_plan() ->> 'annual_total')::bigint, 1200, 'סך שנתי 1,200');
@@ -30,6 +34,8 @@ select assert_true(length(rpc_enrollment_public() ->> 'terms') > 500 and (rpc_en
 select assert_eq((select count(*) from jsonb_array_elements(rpc_enrollment_public() -> 'branches')), 5, 'הסניפים הפעילים');
 select assert_true(rpc_enrollment_public()::text !~ '(972|parent_phone|tuition_total|default_tuition|supervisor)', '★ הדף לא חושף טלפונים או נתונים פנימיים');
 select assert_no_table_privilege('anon', '{students,enrollment_requests,payment_links}');
+select assert_no_execute('anon', 'rpc_enroll(jsonb, text)');
+select assert_no_execute('authenticated', 'rpc_enroll(jsonb, text)');
 rollback;
 
 \echo 'הרשמה: תלמידה ממתינה + קישור 210 + הודעה:'
@@ -57,18 +63,22 @@ begin;
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select assert_true((t_enroll('א', '12345') ->> 'error') like '%טלפון%', 'טלפון לא תקין — הודעה בעברית');
-select assert_true((rpc_enroll('{"first_name":"<script>","last_name":"x","grade":"ד","school":"s","phone":"0521112233","email":"a@b.co","branch_id":"bbbbbbbb-0000-0000-0000-000000000001","terms_accepted":true}') ->> 'error') like '%אותיות%', '★ שם עם תווים זרים נדחה');
+select assert_true((t_enroll_raw('{"first_name":"<script>","last_name":"x","grade":"ד","school":"s","phone":"0521112233","email":"a@b.co","branch_id":"bbbbbbbb-0000-0000-0000-000000000001","terms_accepted":true}') ->> 'error') like '%אותיות%', '★ שם עם תווים זרים נדחה');
 select assert_true((t_enroll('שרה', '0521112233', '1.2.3.4', false) ->> 'error') like '%תקנון%', '★ בלי אישור תקנון — נדחה');
-select assert_true((rpc_enroll('{"first_name":"שרה","last_name":"לוי","grade":"ד","school":"s","phone":"0521112233","email":"a@b.co","branch_id":"00000000-0000-0000-0000-000000000000","terms_accepted":true}') ->> 'error') like '%סניף%', 'סניף לא קיים — נדחה');
-select assert_true((rpc_enroll('{"first_name":"שרה","last_name":"לוי","grade":"ד","school":"s","phone":"0521112233","email":"a@b.co","branch_id":"bbbbbbbb-0000-0000-0000-000000000001","terms_accepted":true,"tuition_total":1,"status":"active"}') ->> 'ok')::boolean, 'שדות זרים בבקשה מתעלמים');
+select assert_true((t_enroll_raw('{"first_name":"שרה","last_name":"לוי","grade":"ד","school":"s","phone":"0521112233","email":"a@b.co","branch_id":"00000000-0000-0000-0000-000000000000","terms_accepted":true}') ->> 'error') like '%סניף%', 'סניף לא קיים — נדחה');
+select assert_true((t_enroll_raw('{"first_name":"שרה","last_name":"לוי","grade":"ד","school":"s","phone":"0521112233","email":"a@b.co","branch_id":"bbbbbbbb-0000-0000-0000-000000000001","terms_accepted":true,"tuition_total":1,"status":"active"}') ->> 'ok')::boolean, 'שדות זרים בבקשה מתעלמים');
 reset role;
 select assert_true((select tuition_total = 1100 and status = 'pending' from students where full_name = 'שרה לוי'), '★ אי אפשר להזריק סכום או סטטוס דרך הדף');
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select t_enroll('בת-שבע', '0529999999', '9.9.9.9'); select t_enroll('בתיה', '0529999999', '9.9.9.9'); select t_enroll('ברכה', '0529999999', '9.9.9.9');
 select assert_true((t_enroll('בלומה', '0529999999', '9.9.9.9') ->> 'error') like '%יותר מדי%', '★ הרשמה רביעית מאותו טלפון בשעה — נחסמת');
+-- IP: עשרה טלפונים שונים מאותו IP — ה-11 נחסם.
+select count(t_enroll('גילה' || chr(1487 + i), '05210000' || lpad(i::text, 2, '0'), '7.7.7.7')) from generate_series(1, 10) i;
+select assert_true((t_enroll('גאולה', '0529876543', '7.7.7.7') ->> 'error') like '%יותר מדי%', '★ הרשמה 11 מאותו IP בשעה — נחסמת גם עם טלפון חדש');
+select assert_true((t_enroll('גאולה', '0529876543', '8.8.8.8') ->> 'ok')::boolean, 'מ-IP אחר — עוברת');
 reset role;
-select assert_eq((select count(*) from system_alerts where kind = 'enrollment_flood'), 1, 'התראה לבעלים על הצפה');
+select assert_eq((select count(*) from system_alerts where kind = 'enrollment_flood'), 2, 'התראה לבעלים על הצפה — אחת לטלפון, אחת ל-IP');
 rollback;
 
 \echo 'תשלום נקלט → פעילה; כרטיס התלמידה:'
@@ -133,5 +143,6 @@ select assert_true((rpc_enrollment_digest(current_date) -> 'overdue')::text like
 rollback;
 
 drop function if exists t_enroll(text, text, text, boolean);
+drop function if exists t_enroll_raw(jsonb, text);
 select drop_assert_helpers();
 \echo '─────────────────────────────────────────'

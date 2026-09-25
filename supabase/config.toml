@@ -79,3 +79,5 @@ verify_jwt = false
 verify_jwt = false
 [functions.cron-sumit-sync]
 verify_jwt = false
+[functions.enroll]
+verify_jwt = false          # ציבורי: דף ההרשמה. ההגבלה במסד (לפי IP מכאן, טלפון, כללי)
