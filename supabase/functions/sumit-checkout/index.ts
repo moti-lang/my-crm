@@ -4,6 +4,7 @@
 // את הכתובת, ומחזירה אותה. קישור שפג או בוטל — מסרב. הקריאה חוזרת על
 // עצמה בטוח: דף שכבר נוצר מוחזר שוב.
 import { adminClient } from '../_shared/supabase.ts';
+import { preflight, withCors } from '../_shared/cors.ts';
 import { requirePayToken } from '../_shared/guard.ts';
 import { sumitProvider } from '../_shared/sumit.ts';
 import { env } from '../_shared/env.ts';
@@ -12,6 +13,12 @@ const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
 
 Deno.serve(async (req) => {
+  const pre = preflight(req);
+  if (pre) return pre;
+  return withCors(req, await handle(req));
+});
+
+async function handle(req: Request): Promise<Response> {
   const denied = requirePayToken(req);
   if (denied) return denied;
 
@@ -47,4 +54,4 @@ Deno.serve(async (req) => {
     console.error('[sumit-checkout]', e);
     return json({ ok: false, error: 'משהו השתבש. נסי שוב.' }, 500);
   }
-});
+}

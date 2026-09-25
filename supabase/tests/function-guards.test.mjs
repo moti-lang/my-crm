@@ -34,7 +34,10 @@ for (const d of dirs) {
   const guardIdx = src.indexOf(`${want}(`);
   check(`★ ${d}: ${want}`, guardIdx !== -1, 'אין שומר');
   // השומר הוא המשפט הראשון בגוף ה-handler — לפני כל דבר אחר.
-  const handler = src.slice(src.indexOf('Deno.serve('));
+  // פונקציות שהדפדפן קורא: preflight (OPTIONS, בלי גוף ובלי טוקן) עונה לפני
+  // השומר, וה-handler האמיתי הוא handle(). השומר חייב להיות המשפט הראשון שלו.
+  const hasHandle = /async function handle\(req: Request\)/.test(src);
+  const handler = src.slice(src.indexOf(hasHandle ? 'async function handle(' : 'Deno.serve('));
   const body = handler.slice(handler.indexOf('{') + 1).trimStart();
   const first = want === 'verifyHubSignature'
     ? /^if \(req\.method[\s\S]{0,400}verifyHubSignature\(/.test(body)
@@ -45,6 +48,11 @@ for (const d of dirs) {
 // הקורא הפנימי של wa-send שולח את אותו סוד
 const rem = codeOf(join(ROOT, 'cron-reminders/index.ts'));
 check('★ cron-reminders קורא ל-wa-send עם CRON_SECRET', /requireEnv\('CRON_SECRET'\)/.test(rem) && !/SUPABASE_SERVICE_ROLE_KEY/.test(rem));
+// CORS: כל פונקציה שהדפדפן קורא (verify_jwt=false + נקראת מ-src) עונה ל-OPTIONS.
+for (const d of ['enroll', 'sumit-checkout']) {
+  const src = codeOf(join(ROOT, d, 'index.ts'));
+  check(`★ ${d}: עונה ל-preflight (OPTIONS) ומחזירה כותרות CORS — אחרת הדפדפן לא שולח את ה-POST`, /const pre = preflight\(req\);\s*if \(pre\) return pre;/.test(src) && /withCors\(req, await handle\(req\)\)/.test(src));
+}
 const guard = codeOf(join(ROOT, '_shared/guard.ts'));
 check('★ requireUserJwt דורש role=authenticated (מפתח anon נדחה)', /payload\.role !== 'authenticated'/.test(guard));
 check('requireCronSecret משווה ל-CRON_SECRET', /Bearer \$\{requireEnv\('CRON_SECRET'\)\}/.test(guard));

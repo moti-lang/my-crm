@@ -5,6 +5,7 @@
 // אין דרך לעקוף את הפונקציה ולהגיע למסד בלי IP.
 // כל האימות, הכפילויות והמגבלות (טלפון / IP / כללי) — במסד, כמו קודם.
 import { adminClient } from '../_shared/supabase.ts';
+import { preflight, withCors } from '../_shared/cors.ts';
 import { requireEnrollBody } from '../_shared/guard.ts';
 
 const json = (payload: unknown, status = 200) =>
@@ -18,6 +19,12 @@ export function clientIp(req: Request): string {
 }
 
 Deno.serve(async (req) => {
+  const pre = preflight(req);
+  if (pre) return pre;
+  return withCors(req, await handle(req));
+});
+
+async function handle(req: Request): Promise<Response> {
   const denied = await requireEnrollBody(req);
   if (denied) return denied;
 
@@ -29,4 +36,4 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: 'לא הצלחנו לשלוח את ההרשמה. נסי שוב.' }, 500);
   }
   return json(data);
-});
+}

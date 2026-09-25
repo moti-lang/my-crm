@@ -464,6 +464,11 @@ expect_fail_code "טופס ההרשמה: רכיב מוגדר בתוך הרכיב
   'sed -i "s/  const errors = useMemo(() => validateEnroll(form), \[form\]);/  const errors = useMemo(() => validateEnroll(form), [form]);\n  const Inner = () => null;/" "$F"' \
   "node supabase/tests/enrollment.test.mjs"
 
+expect_fail_code "enroll בלי תשובת preflight (הדפדפן לא שולח את ה-POST)" \
+  "$DIR/../../supabase/functions/enroll/index.ts" \
+  'sed -i "s/  if (pre) return pre;//" "$F"' \
+  "node supabase/tests/function-guards.test.mjs"
+
 expect_fail_code "הזרקת נוסחאות: ההגנה מוסרת מהייצוא" \
   "$DIR/../../src/lib/export-core.ts" \
   'sed -i "s/columns.map((c) => neutralizeCell(c.value(r)))/columns.map((c) => c.value(r))/" "$F"' \
