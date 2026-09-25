@@ -50,25 +50,18 @@ export function Enroll() {
     );
   }
 
-  const Field = ({ k, label, type = 'text', dir }: { k: keyof EnrollForm; label: string; type?: string; dir?: string }) => (
-    <label className="block text-sm">{label}
-      <input type={type} dir={dir} className="field mt-1" value={String(form[k])} onChange={(e) => set(k, e.target.value as never)} autoComplete="off" />
-      {touched && errors[k] && <span className="mt-0.5 block text-xs text-bad">{errors[k]}</span>}
-    </label>
-  );
-
   return (
     <main className="mx-auto max-w-md space-y-4 p-5 text-ink">
       <header className="text-center"><p className="text-xs text-soft">{program_name}</p><h1 className="text-2xl">הרשמה לחוג</h1></header>
       <form onSubmit={submit} className="card space-y-3 p-5" noValidate>
         <div className="grid grid-cols-2 gap-2">
-          <Field k="first_name" label="שם פרטי" />
-          <Field k="last_name" label="שם משפחה" />
-          <Field k="grade" label="כיתה" />
-          <Field k="school" label="בית ספר" />
+          <Field k="first_name" label="שם פרטי" form={form} set={set} error={touched ? errors.first_name : undefined} />
+          <Field k="last_name" label="שם משפחה" form={form} set={set} error={touched ? errors.last_name : undefined} />
+          <Field k="grade" label="כיתה" form={form} set={set} error={touched ? errors.grade : undefined} />
+          <Field k="school" label="בית ספר" form={form} set={set} error={touched ? errors.school : undefined} />
         </div>
-        <Field k="phone" label="טלפון (נייד)" type="tel" dir="ltr" />
-        <Field k="email" label="מייל" type="email" dir="ltr" />
+        <Field k="phone" label="טלפון (נייד)" type="tel" dir="ltr" form={form} set={set} error={touched ? errors.phone : undefined} />
+        <Field k="email" label="מייל" type="email" dir="ltr" form={form} set={set} error={touched ? errors.email : undefined} />
         <label className="block text-sm">סניף
           <select className="field mt-1" value={form.branch_id} onChange={(e) => set('branch_id', e.target.value)}>
             <option value="">בחרי סניף</option>
@@ -104,5 +97,20 @@ export function Enroll() {
         </button>
       </form>
     </main>
+  );
+}
+
+/**
+ * מחוץ ל-Enroll בכוונה: רכיב שמוגדר בתוך רכיב אחר נוצר מחדש בכל רינדור,
+ * React מחליף את ה-input, והפוקוס נופל אחרי כל אות.
+ */
+type TextKey = 'first_name' | 'last_name' | 'grade' | 'school' | 'phone' | 'email';
+function Field({ k, label, type = 'text', dir, form, set, error }:
+  { k: TextKey; label: string; type?: string; dir?: string; form: EnrollForm; set: (k: TextKey, v: string) => void; error?: string }) {
+  return (
+    <label className="block text-sm">{label}
+      <input type={type} dir={dir} className="field mt-1" value={form[k]} onChange={(e) => set(k, e.target.value)} autoComplete="off" />
+      {error && <span className="mt-0.5 block text-xs text-bad">{error}</span>}
+    </label>
   );
 }

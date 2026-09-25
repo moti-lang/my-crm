@@ -36,6 +36,15 @@ check('★ "1200", "210", "100 ₪ דמי רישום", "9 תשלומים", "110"
 const d2 = e.describePlan({ annual_total: 1500, registration_fee: 150, installments: 9, installment_amount: 150, first_charge: 300 });
 check('שנה הבאה עם מספרים אחרים — אותו קוד', /1500/.test(d2) && /8 תשלומים/.test(d2) && /300/.test(d2));
 
+console.log('\nהטופס שומר פוקוס:');
+{
+  const page = codeOf('src/pages/Enroll.tsx');
+  const start = page.indexOf('export function Enroll') + 'export function Enroll'.length;
+  const inside = page.slice(start, page.indexOf('\n}\n', start));
+  check('★ אף רכיב לא מוגדר בתוך Enroll (אחרת הפוקוס נופל אחרי כל אות)', !/const [A-Z]\w* = \(/.test(inside) && !/function [A-Z]\w*\(/.test(inside));
+  check('Field מוגדר ברמת המודול', /\nfunction Field\(/.test(page));
+}
+
 console.log('\nהסיכום היומי:');
 const summary = codeOf('supabase/functions/cron-summary/index.ts');
 check('★ cron-summary שואל rpc_enrollment_digest ומכניס שתי שורות', /rpc_enrollment_digest/.test(summary) && /enrollment: enrollmentLine/.test(summary) && /enrollment_overdue: overdueLine/.test(summary));

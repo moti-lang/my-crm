@@ -459,6 +459,11 @@ expect_fail_code "הרשמה: הדף קורא ל-RPC ישירות (בלי IP)" \
   'sed -i "s/await supabase.functions.invoke(.enroll., { body: input });/await supabase.rpc(\x27rpc_enroll\x27 as never, { p: input, p_ip: \x27\x27 } as never);/" "$F"' \
   "node supabase/tests/public-surface.test.mjs"
 
+expect_fail_code "טופס ההרשמה: רכיב מוגדר בתוך הרכיב (הפוקוס נופל אחרי כל אות)" \
+  "$DIR/../../src/pages/Enroll.tsx" \
+  'sed -i "s/  const errors = useMemo(() => validateEnroll(form), \[form\]);/  const errors = useMemo(() => validateEnroll(form), [form]);\n  const Inner = () => null;/" "$F"' \
+  "node supabase/tests/enrollment.test.mjs"
+
 expect_fail_code "הזרקת נוסחאות: ההגנה מוסרת מהייצוא" \
   "$DIR/../../src/lib/export-core.ts" \
   'sed -i "s/columns.map((c) => neutralizeCell(c.value(r)))/columns.map((c) => c.value(r))/" "$F"' \
