@@ -50,6 +50,14 @@ Deno.serve(async (req) => {
       db.from('unanswered_questions').select('id').eq('resolved', false),
     ]);
 
+    // הרשמות: כמה נרשמו ושילמו בתקופה, ומי מעל 3 ימים בלי תשלום — בשמות.
+    const { data: digest } = await db.rpc('rpc_enrollment_digest', { p_since: since });
+    const overdue = ((digest?.overdue ?? []) as { name: string; days: number }[]);
+    const enrollmentLine = `נרשמו ${digest?.enrolled ?? 0}, שילמו ${digest?.paid ?? 0}`;
+    const overdueLine = overdue.length
+      ? `ממתינות לתשלום מעל 3 ימים: ${overdue.map((o) => `${o.name} (${o.days} ימים)`).join(', ')}`
+      : 'אין נרשמות שממתינות לתשלום מעל 3 ימים';
+
     const lessonRows = (lessons.data ?? []) as { status: string }[];
     const debtRows = (debtors.data ?? []) as { balance: number }[];
     const income = ((payments.data ?? []) as { amount: number }[])
@@ -69,6 +77,8 @@ Deno.serve(async (req) => {
         debt: formatILS(debt),
         new_leads: String((leads.data ?? []).length),
         unanswered: String((unanswered.data ?? []).length),
+        enrollment: enrollmentLine,
+        enrollment_overdue: overdueLine,
       } as Record<string, string>,
       // סיכום אחד ליום/לשבוע, גם אם ה-cron ירוץ פעמיים.
       dedupeKey: `summary:${period}:${today}`,

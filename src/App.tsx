@@ -20,6 +20,8 @@ import { General } from '@/pages/General';
 import { Attendance } from '@/pages/Attendance';
 import { AttendanceSheet } from '@/pages/AttendanceSheet';
 import { Pay } from '@/pages/Pay';
+import { Enroll } from '@/pages/Enroll';
+import { MailingList } from '@/pages/MailingList';
 import { Reminders } from '@/pages/Reminders';
 import { Placeholder } from '@/pages/Placeholder';
 import { Productions } from '@/pages/Productions';
@@ -81,6 +83,7 @@ function Gate() {
         <Route path="/settings" element={<Settings />} />
         {/* ניהול משתמשים: הבעלים בלבד. לשאר התפקידים המסלול לא קיים. */}
         {profile.role === 'owner' && <Route path="/users" element={<Users />} />}
+        {profile.role === 'owner' && <Route path="/mailing" element={<MailingList />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -102,6 +105,8 @@ export default function App() {
           <Route path="/a/:token" element={<AttendanceSheet />} />
           {/* ציבורי: דף התשלום של ההורה. הטוקן הוא ההרשאה; המסד מאמת. */}
           <Route path="/pay/:token" element={<Pay />} />
+          {/* ציבורי: דף ההרשמה. RPC אחד, אימות והגבלת קצב במסד. */}
+          <Route path="/enroll" element={<Enroll />} />
           <Route
             path="*"
             element={

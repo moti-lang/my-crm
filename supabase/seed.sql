@@ -186,7 +186,7 @@ insert into message_templates (key, name, body, kind) values
  ('followup','מעקב אחרי פנייה','היי {parent_name}, מדברים מהחוג של הניה טייכטל. ביקשת שנחזור אלייך — נשמח לשמוע מה החלטתם 😊','followup'),
  ('lesson_cancel','ביטול שיעור','הודעה להורים: השיעור בסניף {branch} בתאריך {lesson_date} מבוטל. נעדכן על מועד חלופי.','general'),
  ('absence_alert','התראת היעדרות','היי {parent_name}, שמנו לב ש{student_name} לא הגיעה לשלושה שיעורים אחרונים. הכל בסדר? נשמח לדעת.','attendance'),
- ('owner_daily','סיכום יומי לבעלים','סיכום היום: נוכחות דווחה ב-{reported}/{total} סניפים · נכנסו {income} · {new_leads} פניות חדשות · {debtors} חייבות בסך {debt}.','owner_summary'),
+ ('owner_daily','סיכום יומי לבעלים',E'סיכום היום: נוכחות דווחה ב-{reported}/{total} סניפים · נכנסו {income} · {new_leads} פניות חדשות · {debtors} חייבות בסך {debt}.\nהרשמות היום: {enrollment}.\n{enrollment_overdue}.','owner_summary'),
  ('owner_weekly','סיכום שבועי לבעלים','סיכום שבועי: נגבו {income} · נותרו {debt} מ-{debtors} תלמידות · {unanswered} שאלות ממתינות לתשובה.','owner_summary'),
  ('supervisor_nudge','תזכורת לאחראית','היי {parent_name}, עדיין לא דיווחת נוכחות לשיעור של היום בסניף {branch}. הקישור: {link}','attendance');
 

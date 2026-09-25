@@ -51,6 +51,8 @@ const TRIGGER_FUNCTIONS = {
   f_allowlist_after:     /(insert into|update|delete from) allowed_users/,
   // הסניף על התשלום: מופעל בכל הוספה ל-payments; 14 מאמתת שהוא מולא
   f_payment_branch:      /הטריגר ממלא את הסניף/,
+  // הפעלה אחרי תשלום הרשמה: 17 רושמת תשלום SUMIT ובודקת שהתלמידה פעילה
+  f_activate_on_enrollment_payment: /אחרי החיוב הראשון — פעילה אוטומטית/,
 };
 
 let fails = 0;

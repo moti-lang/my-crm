@@ -31,11 +31,12 @@ select assert_eq((select round(sum(allocated_amount))::bigint from v_general_all
 select assert_eq((select round(sum(allocated_amount))::bigint from v_general_allocation), 12000, 'סך החלוקה נשאר 12,000 גם עם סניף ריק');
 -- הוצאה כללית "לפי תלמידות" כשאין תלמידות פעילות בכלל: לאן הכסף הולך?
 savepoint s1;
+select coalesce((select expenses_general from v_pnl_monthly where month = date_trunc('month', current_date)::date), 0) as gen_before \gset
 update students set status = 'stopped';
 insert into ledger_entries (season_id, kind, scope, entry_date, category, amount, split_method) values (:SEASON, 'expense', 'general', current_date, 'בדיקה', 900, 'by_students');
 -- 0020: "לפי תלמידות" בלי תלמידות פעילות נופל לחלוקה שווה — כל 12,900 מחולקים.
 select assert_eq((select round(sum(allocated_amount))::bigint from v_general_allocation), 12900, '★ אין תלמידות פעילות (חופשה): "לפי תלמידות" נופל לשווה, כל ההוצאה מחולקת');
-select assert_eq((select expenses_general::bigint from v_pnl_monthly where month = date_trunc('month', current_date)::date), 900, 'אבל היא כן נספרת ברווח והפסד הכללי');
+select assert_eq((select expenses_general::bigint from v_pnl_monthly where month = date_trunc('month', current_date)::date) - (:'gen_before')::numeric::bigint, 900, 'אבל היא כן נספרת ברווח והפסד הכללי');
 rollback to s1;
 -- מעבר סניף: התשלומים הולכים עם התלמידה
 select income_students as before_income from v_branch_pnl where branch_id = :BEITAR \gset

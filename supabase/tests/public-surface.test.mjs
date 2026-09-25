@@ -38,10 +38,16 @@ console.log('\nמסלולים מחוץ לשער ההתחברות:');
 for (const r of publicRoutes) console.log(`    ${r}`);
 
 // שניים בלבד: מסך האחראית ודף התשלום של ההורה. שניהם עם טוקן, שניהם RPC בלבד.
-check('★ שני מסלולים ציבוריים בלבד', publicRoutes.length === 2,
+check('★ שלושה מסלולים ציבוריים בלבד', publicRoutes.length === 3,
       `נמצאו: ${publicRoutes.join(', ')}`);
-check('★ והם /a/:token ו-/pay/:token', publicRoutes.join(',') === '/a/:token,/pay/:token',
+check('★ והם /a/:token, /pay/:token ו-/enroll', publicRoutes.join(',') === '/a/:token,/pay/:token,/enroll',
       `נמצא: ${publicRoutes.join(',')}`);
+const enrollPage = codeOf('src/pages/Enroll.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+// החלק הציבורי של ה-hooks: עד ה-hook הראשון של הבעלים.
+const enrollPublicHooks = codeOf('src/hooks/enrollment.ts').split('export function useEnrolledUnpaid')[0];
+check('★ דף ההרשמה ניגש רק דרך RPC (rpc_enrollment_public, rpc_enroll), לא לטבלאות', !/\.from\(/.test(enrollPage) && !/\.from\(/.test(enrollPublicHooks) && /rpc\('rpc_enroll'/.test(enrollPublicHooks));
+check('★ דף ההרשמה אינו מייבא את AuthProvider', !/AuthProvider|useAuth/.test(enrollPage));
+check('★ קישור התשלום בסיום מגיע מהשרת (pay_url), לא נבנה בדפדפן', /result\.pay_url/.test(enrollPage) && !/\/pay\/\$\{/.test(enrollPage));
 const pay = codeOf('src/pages/Pay.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 check('★ דף התשלום ניגש רק דרך RPC ופונקציה, לא לטבלאות', !/\.from\(/.test(pay) && /rpc\('rpc_payment_link_public'/.test(pay));
 check('★ דף התשלום אינו מייבא את AuthProvider', !/AuthProvider|useAuth/.test(pay));

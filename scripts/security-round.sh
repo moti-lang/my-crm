@@ -28,6 +28,9 @@ r node supabase/tests/public-surface.test.mjs >/dev/null && echo "  ✓ משטח
 s "10 · תשלומים (SUMIT): אישור רק מהספק, סוד משותף, קישור נעול"
 r node supabase/tests/sumit.test.mjs >/dev/null && echo "  ✓ webhook הוא רמז, הרישום רק אחרי SUMIT, הסוד בזמן קבוע"
 psql -h "${PGHOST:-/tmp}" -p "${PGPORT:-5433}" -U "${PGUSER:-postgres}" -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/16_payment_links.sql >/tmp/sec.out 2>&1 && echo "  ✓ 16_payment_links" || { echo "  ✗ 16_payment_links"; F=1; }
+s "11 · דף ההרשמה: אימות, הגבלת קצב, אין הזרקה"
+psql -h "${PGHOST:-/tmp}" -p "${PGPORT:-5433}" -U "${PGUSER:-postgres}" -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql >/tmp/sec.out 2>&1 && echo "  ✓ 17_enrollment" || { echo "  ✗ 17_enrollment"; F=1; }
+r node supabase/tests/enrollment.test.mjs >/dev/null && echo "  ✓ אימות זהה בלקוח ובמסד"
 s "7 · מכשיר שאבד: יציאה אוטומטית וניקוי זיכרון"
 r node supabase/tests/idle-logout.test.mjs >/dev/null && echo "  ✓ 30 דקות, אזהרה דקה לפני, מסך האחראית פטור, clear() בהחלפת משתמשת"
 s "5 · סודות (ריפו, בילד, היסטוריה)"

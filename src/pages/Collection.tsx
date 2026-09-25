@@ -2,6 +2,7 @@ import { humanError } from '@/lib/errors';
 import { useMemo, useState } from 'react';
 import { useDebtors, useTemplates, useCreateReminders, useReconciliation, useCancelPaymentLink } from '@/hooks/finance';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
+import { useEnrolledUnpaid } from '@/hooks/enrollment';
 import { useBranches } from '@/hooks/queries';
 import { formatILS, formatPhone, formatDate, formatPercent } from '@/lib/format';
 import { renderTemplate } from '@/lib/template';
@@ -29,7 +30,9 @@ export function Collection() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState(false);
   const [templateKey, setTemplateKey] = useState('debt_reminder');
-  const [view, setView] = useState<'debtors' | 'links'>('debtors');
+  const [view, setView] = useState<'debtors' | 'links' | 'enrolled'>('debtors');
+  const enrolled = useEnrolledUnpaid();
+  const enrolledCount = (enrolled.data ?? []).filter((e) => !branchId || e.branch_id === branchId).length;
 
   const rows = useMemo(
     () => (debtors.data ?? []).filter((d) => !branchId || d.branch_id === branchId),
@@ -98,13 +101,14 @@ export function Collection() {
       </header>
 
       <nav className="flex gap-1" aria-label="חלקי המסך">
-        {([['debtors', 'חייבות'], ['links', 'קישורי תשלום והתאמה']] as const).map(([k, label]) => (
+        {([['debtors', 'חייבות'], ['enrolled', `נרשמו ולא שילמו${enrolledCount ? ` (${enrolledCount})` : ''}`], ['links', 'קישורי תשלום והתאמה']] as const).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setView(k)} aria-pressed={view === k}
             className={`rounded-btn px-3 py-1.5 text-sm ${view === k ? 'bg-plum text-white' : 'border border-rule text-ink hover:bg-shade'}`}>{label}</button>
         ))}
       </nav>
 
       {view === 'links' && <Reconciliation branchId={branchId} />}
+      {view === 'enrolled' && <EnrolledUnpaid branchId={branchId} />}
 
       {view === 'debtors' && (<>
       <div className="grid grid-cols-3 gap-3">
@@ -197,6 +201,41 @@ export function Collection() {
           onConfirm={() => void send()}
         />
       )}
+    </div>
+  );
+}
+
+// ─────────── נרשמו ולא שילמו: הגיעו מדף ההרשמה, החיוב הראשון טרם נקלט ───────────
+function EnrolledUnpaid({ branchId }: { branchId: string }) {
+  const list = useEnrolledUnpaid();
+  const rows = (list.data ?? []).filter((e) => !branchId || e.branch_id === branchId);
+  if (list.isError) return <ErrorState error={list.error} onRetry={() => void list.refetch()} />;
+  if (list.isLoading) return <CardSkeleton rows={4} />;
+  if (rows.length === 0) return <EmptyState title="כל הנרשמות שילמו את החיוב הראשון" hint="תלמידה שנרשמת בדף ההרשמה מופיעה כאן עד שהתשלום נקלט מ-SUMIT." />;
+  return (
+    <div className="card table-wrap">
+      <table className="w-full min-w-[44rem] text-sm">
+        <thead className="border-b border-rule text-right text-soft"><tr>
+          <th className="px-3 py-2 font-medium">תלמידה</th><th className="px-3 py-2 font-medium">סניף</th><th className="px-3 py-2 font-medium">טלפון</th>
+          <th className="px-3 py-2 font-medium">נרשמה</th><th className="px-3 py-2 font-medium">ימים</th><th className="px-3 py-2 font-medium">חיוב ראשון</th><th className="px-3 py-2 font-medium">קישור</th><th className="px-3 py-2 font-medium"></th>
+        </tr></thead>
+        <tbody>{rows.map((e) => {
+          const days = Number(e.days_since ?? 0);
+          return (
+            <tr key={e.student_id} className={`border-b border-rule last:border-0 ${days > 3 ? 'bg-warn/10' : ''}`}>
+              <td className="px-3 py-2">{e.full_name}</td>
+              <td className="px-3 py-2">{e.branch_name}</td>
+              <td className="px-3 py-2" dir="ltr">{formatPhone(e.parent_phone)}</td>
+              <td className="px-3 py-2">{e.enrolled_at ? formatDate(e.enrolled_at) : ''}</td>
+              <td className="px-3 py-2 tabular-nums"><span className={`rounded-full px-2 py-0.5 text-xs ${days > 3 ? 'bg-warn/20 text-warn font-medium' : 'bg-shade text-soft'}`}>{days}</span></td>
+              <td className="px-3 py-2 tabular-nums">{formatILS(e.first_charge)}</td>
+              <td className="px-3 py-2 text-xs text-soft">{LINK_STATUS[e.link_status ?? ''] ?? e.link_status ?? '—'}</td>
+              <td className="px-3 py-2">{e.student_id && <PaymentLinkButton studentId={e.student_id} balance={Number(e.first_charge ?? 0)} hasPhone={Boolean(e.parent_phone)} compact />}</td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+      <p className="px-3 py-2 text-xs text-soft">"קישור תשלום" שולח מחדש את הקישור לחיוב הראשון. מעל 3 ימים מסומן; אותן תלמידות מופיעות גם בסיכום היומי בוואטסאפ.</p>
     </div>
   );
 }

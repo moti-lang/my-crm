@@ -304,8 +304,8 @@ expect_fail_code "אימות השחזור סופר שורות בלבד (שם ת�
   'sed -i "s/const got = (await ex.run(/const got = want.size ? [...want.keys()] : (await ex.run(/" "$F"' \
   "./scripts/restore-drill.sh >/dev/null && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal_drill -qc \"update students set full_name = full_name || \x27 X\x27 where id = (select id from students limit 1)\" && PGURL=postgresql://\${PGUSER:-postgres}@localhost:\${PGPORT:-5433}/teichtal_drill?host=\${PGHOST:-/tmp} node scripts/restore-verify.mjs \$(ls backups/teichtal-*.json | sort | tail -1)"
 
-expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (greatest מוסר מ-0020, ההגדרה האחרונה)" \
-  "$DIR/../migrations/0020_real_data_findings.sql" \
+expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (greatest מוסר מ-0023, ההגדרה האחרונה)" \
+  "$DIR/../migrations/0023_enrollment.sql" \
   'sed -i "s/sum(greatest(vb.balance, 0))/sum(vb.balance)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
@@ -316,7 +316,7 @@ expect_fail_code "רשימת המורשים פתוחה לכתיבה לכל מח�
 
 expect_fail_code "יציאה אוטומטית: מסך האחראית מאבד את הפטור" \
   "$DIR/../../src/lib/idle.ts" \
-  'sed -i "s#return /\\^\\\\/(a|pay)\\\\//.test(pathname);#return false;#" "$F"' \
+  'sed -i "s#return /\\^\\\\/(a|pay)\\\\//.test(pathname) || pathname === ./enroll.;#return false;#" "$F"' \
   "node supabase/tests/idle-logout.test.mjs"
 
 expect_fail_code "יציאה אוטומטית: 30 דקות הופכות ל-8 שעות" \
@@ -344,8 +344,8 @@ expect_fail_code "0020: חלוקה לפי תלמידות בלי תלמידות �
   'sed -i "s/case when (select students from totals) > 0 then ab.students::numeric else 1::numeric end/ab.students::numeric/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
-expect_fail_code "0020: הרווחיות חוזרת להישען על הסניף הנוכחי של התלמידה" \
-  "$DIR/../migrations/0020_real_data_findings.sql" \
+expect_fail_code "0020: הרווחיות חוזרת להישען על הסניף הנוכחי של התלמידה (ההגדרה האחרונה ב-0023)" \
+  "$DIR/../migrations/0023_enrollment.sql" \
   'sed -i "s/where p.branch_id = b.id and p.deleted_at is null and s.deleted_at is null/where s.branch_id = b.id and p.deleted_at is null and s.deleted_at is null/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
@@ -403,6 +403,46 @@ expect_fail_code "SUMIT: הרישום מפסיק להיות אידמפוטנטי
   "$DIR/../migrations/0022_payment_links.sql" \
   'sed -i "s/  if l.payment_id is not null then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/16_payment_links.sql"
+
+expect_fail_code "הרשמה: מבנה תשלום שלא מסתכם ל-1,200 עובר" \
+  "$DIR/../migrations/0023_enrollment.sql" \
+  'sed -i "s/  if v_fee + v_n \* v_each <> v_total then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "הרשמה: התקנון לא חובה" \
+  "$DIR/../migrations/0023_enrollment.sql" \
+  'sed -i "s/  if v_terms is distinct from true then return/  if false then return/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "הרשמה: הגבלת הקצב מוסרת" \
+  "$DIR/../migrations/0023_enrollment.sql" \
+  'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "הרשמה: הסכום נלקח מהבקשה (הזרקה)" \
+  "$DIR/../migrations/0023_enrollment.sql" \
+  'sed -i "s/          .pending., .enrollment., (v_plan ->> .tuition.)::numeric,/          \x27pending\x27, \x27enrollment\x27, coalesce((p ->> \x27tuition_total\x27)::numeric, (v_plan ->> \x27tuition\x27)::numeric),/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "הרשמה: תשלום נקלט ולא מפעיל את התלמידה" \
+  "$DIR/../migrations/0023_enrollment.sql" \
+  'sed -i "s/    update students set status = .active. where id = new.student_id and status = .pending. and cancelled_at is null;/    null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "הרשמה: ביטול אפשרי גם אחרי חודש הניסיון" \
+  "$DIR/../migrations/0023_enrollment.sql" \
+  'sed -i "s/  if current_date > s.trial_started_on + v_days then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "הרשמה: הדף מקבל שם עם תגיות" \
+  "$DIR/../../src/lib/enrollment.ts" \
+  'sed -i "s|  else if (!NAME_RE.test(f.first_name)) e.first_name = .אותיות בלבד.;||" "$F"' \
+  "node supabase/tests/enrollment.test.mjs"
+
+expect_fail_code "הסיכום היומי בלי שורות ההרשמה" \
+  "$DIR/../../supabase/functions/cron-summary/index.ts" \
+  'sed -i "s/        enrollment_overdue: overdueLine,//" "$F"' \
+  "node supabase/tests/enrollment.test.mjs"
 
 expect_fail_code "הזרקת נוסחאות: ההגנה מוסרת מהייצוא" \
   "$DIR/../../src/lib/export-core.ts" \

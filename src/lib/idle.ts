@@ -25,7 +25,7 @@ export function secondsLeft(lastActivity: number, now: number): number {
 
 /** המסכים הציבוריים (האחראית, ההורה) — לא כפופים ליציאה האוטומטית. */
 export function isIdleExempt(pathname: string): boolean {
-  return /^\/(a|pay)\//.test(pathname);
+  return /^\/(a|pay)\//.test(pathname) || pathname === '/enroll';
 }
 
 /** אירועי דפדפן שנחשבים פעילות. */

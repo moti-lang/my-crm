@@ -28,12 +28,15 @@ select assert_no_effect('★ מנהלת ביתר לא יוצרת קישור לת
 -- קישור שני לאותה תלמידה מבטל את הראשון
 select rpc_create_payment_link(t_debtor(:BEITAR), 100);
 select assert_eq((select count(*) from payment_links where student_id = t_debtor(:BEITAR) and status in ('pending','opened')), 1, 'קישור חי אחד לתלמידה בכל רגע (הקודם בוטל)');
-select rpc_cancel_payment_link((select id from payment_links where status = 'pending' limit 1));
-select assert_eq((select count(*) from payment_links where status in ('pending','opened')), 0, 'ביטול ידני עובד');
 reset role; -- f_payment_link_alive פנימית (לא ל-authenticated); נבדקת ישירות כבעל המסד
-select assert_true((select not f_payment_link_alive(l) from payment_links l where status = 'cancelled' limit 1), 'f_payment_link_alive: מבוטל מת');
-select assert_true((select f_payment_link_alive(l) from payment_links l where status = 'cancelled' limit 1) is false and (select f_payment_link_alive(row(l.id, l.token, l.external_identifier, l.student_id, l.branch_id, l.amount, 'pending', l.expires_at, l.opened_at, l.sumit_page_url, l.sumit_payment_id, l.sumit_document_id, l.sumit_amount, l.paid_at, l.payment_id, l.last_checked_at, l.reminder_id, l.created_by, l.created_at, l.updated_at)::payment_links) from payment_links l limit 1), 'f_payment_link_alive: pending עם תוקף — חי');
-select assert_eq((select jsonb_array_length(rpc_payment_links_to_sync())), 0, 'הסנכרון לא רואה קישורים מבוטלים');
+select assert_true((select f_payment_link_alive(l) from payment_links l where status = 'pending' and student_id = t_debtor(:BEITAR)), 'f_payment_link_alive: pending עם תוקף — חי');
+select assert_true((select bool_and(not f_payment_link_alive(l)) from payment_links l where status = 'cancelled' and student_id = t_debtor(:BEITAR)), 'f_payment_link_alive: מבוטל מת');
+set local role authenticated;
+select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
+select rpc_cancel_payment_link((select id from payment_links where status = 'pending' and student_id = t_debtor(:BEITAR)));
+select assert_eq((select count(*) from payment_links where status in ('pending','opened') and student_id = t_debtor(:BEITAR)), 0, 'ביטול ידני עובד');
+reset role;
+select assert_true(rpc_payment_links_to_sync()::text not like '%' || t_debtor(:BEITAR) || '%' and rpc_payment_links_to_sync()::text not like '%cancelled%', 'הסנכרון לא רואה קישורים מבוטלים');
 rollback;
 
 begin;
@@ -72,14 +75,16 @@ rollback;
 begin;
 set local role authenticated;
 select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
+-- ייתכנו קישורים אמיתיים במסד (הענן): הבדיקה יחסית לקישור הזה בלבד.
 select rpc_create_payment_link(t_debtor(:BEITAR));
 reset role;
-update payment_links set expires_at = now() - interval '1 hour' where token = t_link_token(t_debtor(:BEITAR));
-select assert_true((rpc_payment_link_public((select token from payment_links limit 1)) ->> 'state') = 'expired', '★ אחרי 7 ימים הדף אומר שפג');
-select assert_true((rpc_payment_link_set_page((select token from payment_links limit 1), 'https://x') ->> 'ok')::boolean = false, '★ ואי אפשר ליצור לו דף SUMIT');
-select assert_eq((select jsonb_array_length(rpc_payment_links_to_sync())), 1, 'קישור שפג לפני פחות מיומיים עדיין נבדק (תשלום ברגע האחרון)');
+create temp table t_exp as select t_link_token(t_debtor(:BEITAR)) as token;
+update payment_links set expires_at = now() - interval '1 hour' where token = (select token from t_exp);
+select assert_true((rpc_payment_link_public((select token from t_exp)) ->> 'state') = 'expired', '★ אחרי 7 ימים הדף אומר שפג');
+select assert_true((rpc_payment_link_set_page((select token from t_exp), 'https://x') ->> 'ok')::boolean = false, '★ ואי אפשר ליצור לו דף SUMIT');
+select assert_true(rpc_payment_links_to_sync()::text like '%' || (select token from t_exp) || '%', 'קישור שפג לפני פחות מיומיים עדיין נבדק (תשלום ברגע האחרון)');
 select assert_true(rpc_payment_links_mark_checked('{}') >= 1, 'הסנכרון מסמן אותו expired');
-select assert_eq((select count(*) from payment_links where status = 'expired'), 1, 'סטטוס expired');
+select assert_true((select status = 'expired' from payment_links where token = (select token from t_exp)), 'סטטוס expired');
 rollback;
 
 \echo 'רישום תשלום מ-SUMIT — אידמפוטנטי:'
@@ -88,15 +93,15 @@ set local role authenticated;
 select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
 select rpc_create_payment_link(t_debtor(:BEITAR));
 reset role;
-create temp table t_ctx as select external_identifier as ext, amount, student_id from payment_links limit 1;
+create temp table t_ctx as select external_identifier as ext, amount, student_id, token from payment_links where student_id = t_debtor(:BEITAR) and status in ('pending','opened');
 select assert_true((select (rpc_record_sumit_payment(ext, 'SUMIT-1', amount, now(), 'DOC-1') ->> 'ok')::boolean from t_ctx), '★ תשלום שאושר ב-SUMIT נרשם');
-select assert_eq((select count(*) from payments where source = 'sumit'), 1, 'תשלום אחד ב-payments, מקור sumit');
+select assert_eq((select count(*) from payments where source = 'sumit' and student_id = (select student_id from t_ctx)), 1, 'תשלום אחד ב-payments, מקור sumit');
 select assert_true((select balance = 0 from v_student_balance where student_id = (select student_id from t_ctx)), '★ היתרה התעדכנה לאפס');
 select assert_true((select (rpc_record_sumit_payment(ext, 'SUMIT-1', amount, now(), 'DOC-1') ->> 'duplicate')::boolean from t_ctx), '★ אותה הודעה פעמיים — לא נרשם שוב');
-select assert_eq((select count(*) from payments where source = 'sumit'), 1, 'עדיין תשלום אחד');
-select assert_eq((select count(*) from payment_links where status = 'paid'), 1, 'הקישור סומן paid');
-select assert_true((rpc_payment_link_public((select token from payment_links limit 1)) ->> 'state') = 'paid', 'הדף הציבורי מראה "שולם"');
-select assert_eq((select count(*) from v_payment_reconciliation where issue is not null), 0, 'ההתאמה נקייה');
+select assert_eq((select count(*) from payments where source = 'sumit' and student_id = (select student_id from t_ctx)), 1, 'עדיין תשלום אחד');
+select assert_true((select status = 'paid' from payment_links where token = (select token from t_ctx)), 'הקישור סומן paid');
+select assert_true((rpc_payment_link_public((select token from t_ctx)) ->> 'state') = 'paid', 'הדף הציבורי מראה "שולם"');
+select assert_eq((select count(*) from v_payment_reconciliation where issue is not null and student_id = (select student_id from t_ctx)), 0, 'ההתאמה נקייה');
 rollback;
 
 \echo 'הפרש סכום ותשלום יתום — התראה, לא שקט:'
@@ -105,9 +110,10 @@ set local role authenticated;
 select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
 select rpc_create_payment_link(t_debtor(:BEITAR));
 reset role;
-select assert_true((select (rpc_record_sumit_payment(external_identifier, 'SUMIT-2', amount - 50, now(), null) ->> 'status') = 'mismatch' from payment_links limit 1), '★ סכום שונה — נרשם מה שנגבה בפועל, מסומן mismatch');
+create temp table t_mm as select student_id from payment_links where student_id = t_debtor(:BEITAR) and status in ('pending','opened');
+select assert_true((select (rpc_record_sumit_payment(external_identifier, 'SUMIT-2', amount - 50, now(), null) ->> 'status') = 'mismatch' from payment_links where student_id = (select student_id from t_mm) and status in ('pending','opened')), '★ סכום שונה — נרשם מה שנגבה בפועל, מסומן mismatch');
 select assert_eq((select count(*) from system_alerts where kind = 'sumit_amount_mismatch'), 1, '★ התראה לבעלים על ההפרש');
-select assert_eq((select count(*) from v_payment_reconciliation where issue = 'סכום שונה'), 1, 'ההפרש בולט במסך ההתאמה');
+select assert_eq((select count(*) from v_payment_reconciliation where issue = 'סכום שונה' and student_id = (select student_id from t_mm)), 1, 'ההפרש בולט במסך ההתאמה');
 select assert_true((rpc_record_sumit_payment('tl-does-not-exist', 'SUMIT-3', 100, now(), null) ->> 'reason') = 'no_link', 'תשלום בלי קישור אצלנו — לא נרשם');
 select assert_eq((select count(*) from system_alerts where kind = 'sumit_orphan_payment'), 1, '★ תשלום יתום — התראה קריטית');
 rollback;
@@ -119,12 +125,13 @@ select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
 select rpc_create_payment_link(t_debtor(:BEITAR));
 select rpc_create_payment_link(t_debtor(:MODIIN));
 select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
-select assert_eq((select count(*) from payment_links), 1, 'מנהלת ביתר רואה רק את הקישור של ביתר');
-select assert_eq((select count(*) from v_payment_reconciliation), 1, 'וגם בהתאמה');
+select assert_eq((select count(*) from payment_links where branch_id <> :BEITAR), 0, '★ מנהלת ביתר לא רואה קישור של סניף אחר');
+select assert_true((select count(*) from payment_links where branch_id = :BEITAR) >= 1, 'ורואה את של ביתר');
+select assert_eq((select count(*) from v_payment_reconciliation where branch_id <> :BEITAR), 0, 'וגם בהתאמה');
 select assert_no_effect('★ מנהלת לא כותבת ישירות לטבלת הקישורים', $a$update payment_links set amount = 1$a$, $p$select string_agg(amount::text, ',') from payment_links$p$);
 select assert_no_effect('★ מנהלת לא מריצה את רישום התשלום (service_role בלבד)', $a$select rpc_record_sumit_payment('x', 'y', 1, now(), null)$a$, 'select count(*)::text from payments');
 select set_config('request.jwt.claims', t_claims('accountant'::user_role), true);
-select assert_eq((select count(*) from v_payment_reconciliation), 2, 'רואת חשבון רואה את כל ההתאמה');
+select assert_true((select count(distinct branch_id) from v_payment_reconciliation) >= 2, 'רואת חשבון רואה את כל ההתאמה');
 rollback;
 
 drop function if exists t_debtor(uuid);

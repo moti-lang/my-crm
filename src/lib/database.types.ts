@@ -412,6 +412,33 @@ export type Database = {
           },
         ];
       };
+      enrollment_requests: {
+        Row: {
+          id: string;
+          phone: string | null;
+          ip: string | null;
+          ok: boolean;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          phone?: string | null;
+          ip?: string | null;
+          ok: boolean;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          phone?: string | null;
+          ip?: string | null;
+          ok?: boolean;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       faq_entries: {
         Row: {
           id: string;
@@ -681,6 +708,7 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          purpose: string;
         };
         Insert: {
           id?: string;
@@ -703,6 +731,7 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          purpose?: string;
         };
         Update: {
           id?: string;
@@ -725,6 +754,7 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+          purpose?: string;
         };
         Relationships: [
           {
@@ -1087,6 +1117,17 @@ export type Database = {
           deleted_at: string | null;
           created_at: string;
           updated_at: string;
+          first_name: string | null;
+          last_name: string | null;
+          school: string | null;
+          registration_fee: number;
+          installments_total: number | null;
+          terms_accepted_at: string | null;
+          mailing_consent: boolean;
+          trial_started_on: string | null;
+          enrolled_at: string | null;
+          cancelled_at: string | null;
+          refund_amount: number | null;
         };
         Insert: {
           id?: string;
@@ -1115,6 +1156,17 @@ export type Database = {
           deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          school?: string | null;
+          registration_fee?: number;
+          installments_total?: number | null;
+          terms_accepted_at?: string | null;
+          mailing_consent?: boolean;
+          trial_started_on?: string | null;
+          enrolled_at?: string | null;
+          cancelled_at?: string | null;
+          refund_amount?: number | null;
         };
         Update: {
           id?: string;
@@ -1143,6 +1195,17 @@ export type Database = {
           deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          school?: string | null;
+          registration_fee?: number;
+          installments_total?: number | null;
+          terms_accepted_at?: string | null;
+          mailing_consent?: boolean;
+          trial_started_on?: string | null;
+          enrolled_at?: string | null;
+          cancelled_at?: string | null;
+          refund_amount?: number | null;
         };
         Relationships: [
           {
@@ -1293,6 +1356,7 @@ export type Database = {
           branch_id: string | null;
           name: string | null;
           income_students: number | null;
+          income_registration_fees: number | null;
           income_other: number | null;
           expenses: number | null;
           open_debt: number | null;
@@ -1306,6 +1370,7 @@ export type Database = {
           name: string | null;
           active_students: number | null;
           income_students: number | null;
+          income_registration_fees: number | null;
           income_other: number | null;
           expenses: number | null;
           open_debt: number | null;
@@ -1331,6 +1396,22 @@ export type Database = {
           aging_from: string | null;
           days_outstanding: number | null;
           aging_bucket: number | null;
+        };
+        Relationships: [];
+      };
+      v_enrolled_unpaid: {
+        Row: {
+          student_id: string | null;
+          full_name: string | null;
+          parent_phone: string | null;
+          email: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          enrolled_at: string | null;
+          days_since: number | null;
+          first_charge: number | null;
+          link_status: string | null;
+          expires_at: string | null;
         };
         Relationships: [];
       };
@@ -1365,6 +1446,19 @@ export type Database = {
           attended: number | null;
           marked: number | null;
           expected: number | null;
+        };
+        Relationships: [];
+      };
+      v_mailing_list: {
+        Row: {
+          id: string | null;
+          full_name: string | null;
+          parent_name: string | null;
+          parent_phone: string | null;
+          email: string | null;
+          branch_name: string | null;
+          status: Database["public"]["Enums"]["student_status"] | null;
+          enrolled_at: string | null;
         };
         Relationships: [];
       };
@@ -1433,6 +1527,9 @@ export type Database = {
           paid: number | null;
           balance: number | null;
           last_paid_on: string | null;
+          registration_fee: number | null;
+          registration_paid: number | null;
+          tuition_paid: number | null;
         };
         Relationships: [];
       };
@@ -1460,6 +1557,17 @@ export type Database = {
           due: number | null;
           paid: number | null;
           balance: number | null;
+          registration_fee: number | null;
+          installments_total: number | null;
+          school: string | null;
+          email: string | null;
+          trial_started_on: string | null;
+          enrolled_at: string | null;
+          terms_accepted_at: string | null;
+          cancelled_at: string | null;
+          refund_amount: number | null;
+          mailing_consent: boolean | null;
+          source: string | null;
           last_paid_on: string | null;
           lessons_attended: number | null;
           lessons_total: number | null;
@@ -1481,6 +1589,12 @@ export type Database = {
           tuition_total: number | null;
           discount: number | null;
           installments: number | null;
+          registration_fee: number | null;
+          installments_total: number | null;
+          school: string | null;
+          enrolled_at: string | null;
+          cancelled_at: string | null;
+          refund_amount: number | null;
         };
         Relationships: [];
       };
@@ -1526,6 +1640,12 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_cancel_enrollment: {
+        Args: {
+          p_student: string;
+        };
+        Returns: Json;
+      };
       rpc_cancel_last_command: {
         Args: {
           p_phone: string;
@@ -1560,9 +1680,36 @@ export type Database = {
         };
         Returns: string;
       };
+      rpc_enroll: {
+        Args: {
+          p: Json;
+          p_ip: string;
+        };
+        Returns: Json;
+      };
+      rpc_enrollment_digest: {
+        Args: {
+          p_since: string;
+        };
+        Returns: Json;
+      };
+      rpc_enrollment_plan: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      rpc_enrollment_public: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
       rpc_execute_command: {
         Args: {
           p_command_id: string;
+        };
+        Returns: Json;
+      };
+      rpc_installment_progress: {
+        Args: {
+          p_student: string;
         };
         Returns: Json;
       };

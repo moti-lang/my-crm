@@ -3,6 +3,9 @@ import { useStudentPayments, useStudentProductions, STATUS_LABEL, STATUS_TONE } 
 import { formatILS, formatDate, formatPhone } from '@/lib/format';
 import { PaymentForm } from '@/components/PaymentForm';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
+import { useInstallmentProgress, useCancelEnrollment } from '@/hooks/enrollment';
+import { useAuth } from '@/auth/AuthProvider';
+import { humanError } from '@/lib/errors';
 import type { Views } from '@/lib/database.types';
 
 type Student = Views<'v_student_overview'>;
@@ -28,6 +31,12 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   if (!student) return null;
 
   const due = Number(student.due ?? 0);
+  const progressQ = useInstallmentProgress(student.id ?? null);
+  const inst = progressQ.data ?? null;
+  const { profile } = useAuth();
+  const cancelEnrollment = useCancelEnrollment();
+  const trialEnd = student.trial_started_on ? new Date(new Date(student.trial_started_on).getTime() + 30 * 86400_000) : null;
+  const inTrial = Boolean(trialEnd && trialEnd >= new Date(new Date().toDateString()) && !student.cancelled_at);
   const paid = Number(student.paid ?? 0);
   const balance = Number(student.balance ?? 0);
   const progress = due > 0 ? Math.min(100, Math.round((paid / due) * 100)) : 0;
@@ -83,6 +92,31 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             >
               <div className={`h-full ${balance > 0 ? 'bg-warn' : 'bg-ok'}`} style={{ width: `${progress}%` }} />
             </div>
+            {inst && Number(inst.registration_fee) > 0 && (
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 rounded-field bg-shade/60 p-3 text-xs">
+                <dt className="text-soft">דמי רישום</dt><dd className="tabular-nums">{formatILS(inst.registration_paid)} / {formatILS(inst.registration_fee)}</dd>
+                <dt className="text-soft">שכר לימוד</dt><dd className="tabular-nums">{formatILS(inst.tuition_paid)} / {formatILS(inst.tuition)}</dd>
+                {inst.installments_total ? (<>
+                  <dt className="text-soft">תשלומים</dt>
+                  <dd className="font-medium">{inst.installments_paid ?? 0} מתוך {inst.installments_total}{inst.installment_amount ? ` · ${formatILS(inst.installment_amount)} כל אחד` : ''}</dd>
+                </>) : null}
+                {student.terms_accepted_at && (<><dt className="text-soft">אישור תקנון</dt><dd>{new Date(student.terms_accepted_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })}</dd></>)}
+                {student.trial_started_on && trialEnd && (<><dt className="text-soft">חודש ניסיון</dt><dd>{formatDate(student.trial_started_on)} – {formatDate(trialEnd.toISOString().slice(0, 10))}{student.cancelled_at ? ' · בוטל' : inTrial ? '' : ' · הסתיים'}</dd></>)}
+                {student.refund_amount != null && Number(student.refund_amount) > 0 && (<><dt className="text-soft">החזר</dt><dd className="tabular-nums">{formatILS(student.refund_amount)}</dd></>)}
+              </dl>
+            )}
+            {profile?.role === 'owner' && student.trial_started_on && !student.cancelled_at && student.id && (
+              <div className="mt-2">
+                <button type="button" className="btn-ghost w-full text-bad" disabled={!inTrial || cancelEnrollment.isPending}
+                  title={inTrial ? 'ביטול בתוך חודש הניסיון — זיכוי מדמי הרישום לפי התקנון' : 'חודש הניסיון הסתיים. לפי התקנון, אחרי חודש הניסיון לא ניתן לבטל.'}
+                  onClick={() => { if (window.confirm(`לבטל את ההרשמה של ${student.full_name}? תירשם הפסקה וזיכוי מדמי הרישום לפי התקנון.`)) void cancelEnrollment.mutateAsync(student.id as string); }}>
+                  {cancelEnrollment.isPending ? 'מבטלת…' : 'ביטול הרשמה'}
+                </button>
+                {!inTrial && <p className="mt-1 text-xs text-soft">חודש הניסיון הסתיים ב-{trialEnd ? formatDate(trialEnd.toISOString().slice(0, 10)) : ''}. לפי התקנון, אחרי חודש הניסיון לא ניתן לבטל.</p>}
+                {cancelEnrollment.error != null && <p className="mt-1 text-xs text-bad" role="alert">{humanError(cancelEnrollment.error)}</p>}
+                {cancelEnrollment.data && <p className="mt-1 text-xs text-ok">ההרשמה בוטלה. זיכוי {formatILS(cancelEnrollment.data.refund)}.</p>}
+              </div>
+            )}
             {Number(student.discount ?? 0) > 0 && (
               <p className="mt-2 text-xs text-soft">
                 הנחה {formatILS(student.discount)}
