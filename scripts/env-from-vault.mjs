@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { makeExecutor, loadEnvFile, lit } from './supabase-api.mjs';
 if (existsSync('.env.verify')) loadEnvFile('.env.verify');
 if (!process.env.SUPABASE_ACCESS_TOKEN || !process.env.SUPABASE_PROJECT_REF) { console.error('  ✗ צריך SUPABASE_ACCESS_TOKEN ו-SUPABASE_PROJECT_REF בסביבה'); process.exit(2); }
-const NAMES = ['NETLIFY_AUTH_TOKEN','NETLIFY_SITE_ID','SUMIT_TEST_COMPANY_ID','SUMIT_TEST_API_KEY','CRON_SECRET','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET'];
+const NAMES = ['NETLIFY_AUTH_TOKEN','NETLIFY_SITE_ID','SUMIT_TEST_COMPANY_ID','SUMIT_TEST_API_KEY','SUMIT_LIVE_COMPANY_ID','SUMIT_LIVE_API_KEY','CRON_SECRET','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET'];
 const ex = await makeExecutor();
 if (process.argv.includes('--save')) {
   for (const n of NAMES) {
