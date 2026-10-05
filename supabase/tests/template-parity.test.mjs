@@ -52,5 +52,15 @@ const varsMatch = JSON.stringify(front.TEMPLATE_VARIABLES) === JSON.stringify(ed
 if (!varsMatch) fails++;
 console.log(`  ${varsMatch ? '✓' : '✗'} רשימת המשתנים זהה בשני העותקים`);
 
+{
+  // תזכורת לאחראית: נמענת היא האחראית, לא הורה. המשתנה הנכון קיים ומועבר.
+  const { codeOf } = await import('./_code.mjs');
+  const watch = codeOf('supabase/functions/cron-attendance-watch/index.ts');
+  const ok = edge.TEMPLATE_VARIABLES.includes('supervisor_name') && /supervisor_name: String\(branch\.supervisor_name/.test(watch)
+    && edge.renderTemplate('היי {supervisor_name}', { supervisor_name: 'מירי' }) === 'היי מירי';
+  if (!ok) fails++;
+  console.log(`  ${ok ? '✓' : '✗'} ★ תזכורת לאחראית פונה בשם האחראית ({supervisor_name})`);
+}
+
 console.log(fails === 0 ? '\nשני מנועי התבניות זהים' : `\n${fails} הבדלים בין העותקים`);
 process.exit(fails ? 1 : 0);

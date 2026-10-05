@@ -699,6 +699,11 @@ expect_fail_code "בחירה אוטומטית גם כשיש שני סניפים 
   'sed -i "s|branches.length === 1 ?|branches.length >= 1 ?|" "$F"' \
   "node supabase/tests/enrollment.test.mjs"
 
+expect_fail_code "התזכורת לאחראית בלי שם האחראית" \
+  "$DIR/../../supabase/functions/cron-attendance-watch/index.ts" \
+  'sed -i "/supervisor_name: String(branch.supervisor_name/d" "$F"' \
+  "node supabase/tests/template-parity.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

@@ -183,12 +183,12 @@ select id, replace(gen_random_uuid()::text, '-', '') from branches;
 -- ═══════════════════════ תבניות הודעה (7) ═══════════════════════
 insert into message_templates (key, name, body, kind) values
  ('debt_reminder','תזכורת חוב','היי {parent_name}, תזכורת קטנה — נותרה יתרה של {balance} עבור {student_name} בסניף {branch}. אפשר להעביר בביט או בהעברה, תודה רבה 🌸','debt'),
- ('followup','מעקב אחרי פנייה','היי {parent_name}, מדברים מהחוג של הניה טייכטל. ביקשת שנחזור אלייך — נשמח לשמוע מה החלטתם 😊','followup'),
+ ('followup','מעקב אחרי פנייה','היי {parent_name}, מדברים מדרמחול - החוגים של הניה. ביקשת שנחזור אלייך — נשמח לשמוע מה החלטתם 😊','followup'),
  ('lesson_cancel','ביטול שיעור','הודעה להורים: השיעור בסניף {branch} בתאריך {lesson_date} מבוטל. נעדכן על מועד חלופי.','general'),
  ('absence_alert','התראת היעדרות','היי {parent_name}, שמנו לב ש{student_name} לא הגיעה לשלושה שיעורים אחרונים. הכל בסדר? נשמח לדעת.','attendance'),
  ('owner_daily','סיכום יומי לבעלים',E'סיכום היום: נוכחות דווחה ב-{reported}/{total} סניפים · נכנסו {income} · {new_leads} פניות חדשות · {debtors} חייבות בסך {debt}.\nהרשמות היום: {enrollment}.\n{enrollment_overdue}.','owner_summary'),
  ('owner_weekly','סיכום שבועי לבעלים','סיכום שבועי: נגבו {income} · נותרו {debt} מ-{debtors} תלמידות · {unanswered} שאלות ממתינות לתשובה.','owner_summary'),
- ('supervisor_nudge','תזכורת לאחראית','היי {parent_name}, עדיין לא דיווחת נוכחות לשיעור של היום בסניף {branch}. הקישור: {link}','attendance');
+ ('supervisor_nudge','תזכורת לאחראית','היי {supervisor_name}, עדיין לא דיווחת נוכחות לשיעור של היום בסניף {branch}. הקישור: {link}','attendance');
 
 -- ═══════════════════════ מאגר שאלות (10) ═══════════════════════
 insert into faq_entries (question, answer, keywords) values
@@ -218,7 +218,7 @@ insert into holidays (day, name) values
  ('2026-09-12','ראש השנה א'),('2026-09-13','ראש השנה ב'),('2026-09-21','יום כיפור'),
  ('2026-09-26','סוכות א'),('2026-10-03','שמחת תורה'),('2026-12-05','חנוכה א'),
  ('2027-03-23','פורים'),('2027-04-22','פסח א'),('2027-04-28','שביעי של פסח'),
- ('2027-05-21','שבועות');
+ ('2027-06-11','שבועות');
 
 -- ═══════════════════════ הגדרות ═══════════════════════
 insert into settings (key, value) values

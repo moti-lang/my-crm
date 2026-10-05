@@ -65,7 +65,8 @@ Deno.serve(async (req) => {
         to_label: `${branch.supervisor_name ?? ''} · ${branch.name ?? ''}`.trim(),
         templateBody: template.body,
         vars: {
-          parent_name: String(branch.supervisor_name ?? ''),
+          supervisor_name: String(branch.supervisor_name ?? ''),
+          parent_name: String(branch.supervisor_name ?? ''), // תאימות לתבניות ישנות
           branch: String(branch.name ?? ''),
           lesson_date: String(lesson.lesson_date),
           link: link?.token ? `${siteUrl}/a/${link.token}` : '',

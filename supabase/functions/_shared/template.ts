@@ -7,7 +7,7 @@
  * על אותם קלטים ומוודאת פלט זהה. אם אחד ישתנה בלי השני — היא תיפול.
  */
 export const TEMPLATE_VARIABLES = [
-  'student_name', 'parent_name', 'branch', 'balance', 'total', 'paid',
+  'student_name', 'parent_name', 'supervisor_name', 'branch', 'balance', 'total', 'paid',
   'date', 'time', 'lesson_date', 'link',
   'reported', 'total', 'income', 'debtors', 'debt', 'new_leads', 'unanswered', 'enrollment', 'enrollment_overdue',
 ] as const;
