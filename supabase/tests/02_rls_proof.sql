@@ -16,11 +16,11 @@ begin;
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', (select t_user('owner'::user_role)), 'role','authenticated')::text, true);
 select assert_eq((select count(*) from branches), 5, 'בעלים רואה 5 סניפים');
-select assert_eq((select count(*) from students), 21,'בעלים רואה 21 תלמידות');
+select assert_eq((select count(*) from students where source is distinct from 'enrollment'), 21,'בעלים רואה 21 תלמידות (ללא נרשמות מהטופס)');
 select assert_eq((select count(*) from v_branch_pnl), 5, 'בעלים רואה רווחיות של 5 סניפים');
 select assert_eq((select round(sum(allocated_amount))::bigint from v_general_allocation), 12000,
                  'בעלים רואה חלוקה מלאה של 12,000');
-select assert_eq((select count(*) from v_debtors), 12, 'בעלים רואה 12 חייבות');
+select assert_eq((select count(*) from v_debtors d where (select source from students s where s.id = d.student_id) is distinct from 'enrollment'), 12, 'בעלים רואה 12 חייבות (ללא נרשמות מהטופס)');
 rollback;
 
 -- ═════════════ מידע על החוג: הבעלים בלבד ═════════════
@@ -151,7 +151,7 @@ select assert_eq((select count(*) from students), 0,
                  '★ רואת חשבון אינה קוראת מטבלת students ישירות');
 select assert_eq((select count(*) from v_student_overview), 0,
                  '★ רואת חשבון אינה רואה את תצוגת הסקירה (יש בה טלפונים)');
-select assert_eq((select count(*) from v_students_accounting), 21,
+select assert_eq((select count(*) from v_students_accounting where enrolled_at is null), 21,
                  'רואת חשבון רואה 21 תלמידות דרך התצוגה המסוננת');
 select assert_eq((select count(*) from information_schema.columns
                   where table_name='v_students_accounting'

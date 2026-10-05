@@ -141,7 +141,8 @@ begin
 
   -- ★ מה שאסור שיהיה שם
   raw := sheet::text;
-  perform assert_true(raw not like '%972%',      '★ אין אף מספר טלפון בגיליון');
+  -- תבנית טלפון ממש (972 + 9 ספרות / 05 + 8 ספרות), לא כל '972' — מזהי UUID אקראיים מכילים לפעמים את הרצף הזה.
+  perform assert_true(raw !~ '972\d{9}|05\d{8}',      '★ אין אף מספר טלפון בגיליון');
   perform assert_true(raw not like '%parent%',   '★ אין פרטי הורה');
   perform assert_true(raw not like '%tuition%',  '★ אין שכר לימוד');
   perform assert_true(raw not like '%balance%',  '★ אין יתרות');
