@@ -704,6 +704,11 @@ expect_fail_code "התזכורת לאחראית בלי שם האחראית" \
   'sed -i "/supervisor_name: String(branch.supervisor_name/d" "$F"' \
   "node supabase/tests/template-parity.test.mjs"
 
+expect_fail_code "פריסה כללית מעלה את פרוקסי SUMIT לייצור" \
+  "$DIR/../../scripts/functions-deploy-api.mjs" \
+  'sed -i "s|wanted.length ? wanted : all.filter((s) => !DEV_ONLY.includes(s))|wanted.length ? wanted : all|" "$F"' \
+  "node supabase/tests/function-guards.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

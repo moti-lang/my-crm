@@ -23,7 +23,10 @@ const ROOT = 'supabase/functions';
 const all = readdirSync(ROOT).filter((d) => !d.startsWith('_') && statSync(join(ROOT, d)).isDirectory()
   && readdirSync(join(ROOT, d)).includes('index.ts'));
 const wanted = process.argv.slice(2);
-const slugs = wanted.length ? wanted : all;
+// כלי פיתוח (פרוקסי גולמי ל-SUMIT עם המפתח של הארגון): נפרס רק כשמבקשים
+// אותו בשמו, ונמחק אחרי השימוש. פריסה כללית לא מעלה אותו לייצור.
+const DEV_ONLY = ['sumit-probe'];
+const slugs = wanted.length ? wanted : all.filter((s) => !DEV_ONLY.includes(s));
 const unknown = slugs.filter((s) => !all.includes(s));
 if (unknown.length) { console.error(`  ✗ פונקציות לא קיימות: ${unknown.join(', ')}`); process.exit(2); }
 

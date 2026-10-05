@@ -58,5 +58,6 @@ check('★ requireUserJwt דורש role=authenticated (מפתח anon נדחה)',
 check('requireCronSecret משווה ל-CRON_SECRET', /Bearer \$\{requireEnv\('CRON_SECRET'\)\}/.test(guard));
 const deploy = codeOf('scripts/functions-deploy-api.mjs');
 check('★ הפריסה מסרבת לפונקציה בלי שומר', /slugs\.filter\(\(s\) => !guardOf\(s\)\)/.test(deploy) && /if \(unguarded\.length\) \{[\s\S]*?process\.exit\(1\)/.test(deploy));
+check('★ פריסה כללית לא מעלה את sumit-probe (פרוקסי עם מפתח הארגון)', /DEV_ONLY = \['sumit-probe'\]/.test(deploy) && /wanted\.length \? wanted : all\.filter\(\(s\) => !DEV_ONLY\.includes\(s\)\)/.test(deploy));
 console.log(fails === 0 ? '\nכל הפונקציות מוגנות' : `\n${fails} בדיקות נכשלו`);
 process.exit(fails ? 1 : 0);
