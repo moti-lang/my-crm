@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { useDebtors, useTemplates, useCreateReminders, useReconciliation, useCancelPaymentLink } from '@/hooks/finance';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
 import { useEnrolledUnpaid } from '@/hooks/enrollment';
+import { useStudentFlags } from '@/hooks/students';
+import { StudentTags } from '@/components/StudentTags';
 import { useBranches } from '@/hooks/queries';
 import { formatILS, formatPhone, formatDate, formatPercent } from '@/lib/format';
 import { renderTemplate } from '@/lib/template';
@@ -32,6 +34,7 @@ export function Collection() {
   const [templateKey, setTemplateKey] = useState('debt_reminder');
   const [view, setView] = useState<'debtors' | 'links' | 'enrolled'>('debtors');
   const enrolled = useEnrolledUnpaid();
+  const flags = useStudentFlags();
   const enrolledCount = (enrolled.data ?? []).filter((e) => !branchId || e.branch_id === branchId).length;
 
   const rows = useMemo(
@@ -168,7 +171,7 @@ export function Collection() {
                       aria-label={`בחירת ${d.full_name}`}
                     />
                   </td>
-                  <td className="px-3 py-2">{d.full_name}</td>
+                  <td className="px-3 py-2">{d.full_name}{(() => { const f = flags.data?.get(d.student_id as string); return f ? <StudentTags method={f.payment_track?.method} label={f.payment_track?.label} whatsapp={f.whatsapp_opt_in} /> : null; })()}</td>
                   <td className="px-3 py-2">{d.branch_name}</td>
                   <td className="px-3 py-2">{d.parent_name ?? '—'}</td>
                   <td className="px-3 py-2" dir="ltr">
@@ -223,14 +226,14 @@ function EnrolledUnpaid({ branchId }: { branchId: string }) {
           const days = Number(e.days_since ?? 0);
           return (
             <tr key={e.student_id} className={`border-b border-rule last:border-0 ${days > 3 ? 'bg-warn/10' : ''}`}>
-              <td className="px-3 py-2">{e.full_name}</td>
+              <td className="px-3 py-2">{e.full_name}<StudentTags method={e.track_method} label={e.track_label} whatsapp={e.whatsapp_opt_in} /></td>
               <td className="px-3 py-2">{e.branch_name}</td>
               <td className="px-3 py-2" dir="ltr">{formatPhone(e.parent_phone)}</td>
               <td className="px-3 py-2">{e.enrolled_at ? formatDate(e.enrolled_at) : ''}</td>
               <td className="px-3 py-2 tabular-nums"><span className={`rounded-full px-2 py-0.5 text-xs ${days > 3 ? 'bg-warn/20 text-warn font-medium' : 'bg-shade text-soft'}`}>{days}</span></td>
-              <td className="px-3 py-2 tabular-nums">{formatILS(e.first_charge)}</td>
-              <td className="px-3 py-2 text-xs text-soft">{LINK_STATUS[e.link_status ?? ''] ?? e.link_status ?? '—'}</td>
-              <td className="px-3 py-2">{e.student_id && <PaymentLinkButton studentId={e.student_id} balance={Number(e.first_charge ?? 0)} hasPhone={Boolean(e.parent_phone)} compact />}</td>
+              <td className="px-3 py-2 tabular-nums">{e.track_method === 'cash' ? 'מזומן' : formatILS(e.first_charge)}</td>
+              <td className="px-3 py-2 text-xs text-soft">{e.track_method === 'cash' ? '—' : LINK_STATUS[e.link_status ?? ''] ?? e.link_status ?? '—'}</td>
+              <td className="px-3 py-2">{e.student_id && e.track_method !== 'cash' && <PaymentLinkButton studentId={e.student_id} balance={Number(e.first_charge ?? 0)} hasPhone={Boolean(e.parent_phone)} compact />}</td>
             </tr>
           );
         })}</tbody>

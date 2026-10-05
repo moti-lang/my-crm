@@ -414,23 +414,23 @@ expect_fail_code "SUMIT: הרישום מפסיק להיות אידמפוטנטי
   'sed -i "s/  if l.payment_id is not null then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/16_payment_links.sql"
 
-expect_fail_code "הרשמה: מבנה תשלום של סניף שלא מסתכם עובר" \
-  "$DIR/../migrations/0026_branch_unit.sql" \
-  'sed -i "s/  if v_fee + v_n \* v_each <> v_total then/  if false then/" "$F"' \
+expect_fail_code "הרשמה: מבנה תשלום של סניף לא תקין עובר" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  'sed -i "s/  if v_fee < 0 or v_total <= v_fee then raise exception/  if false then raise exception/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: התקנון לא חובה" \
-  "$DIR/../migrations/0026_branch_unit.sql" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
   'sed -i "s/  if v_terms is distinct from true then return/  if false then return/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת הקצב מוסרת" \
-  "$DIR/../migrations/0026_branch_unit.sql" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הסכום נלקח מהבקשה (הזרקה)" \
-  "$DIR/../migrations/0026_branch_unit.sql" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
   'sed -i "s/          .pending., .enrollment., (v_plan ->> .tuition.)::numeric,/          \x27pending\x27, \x27enrollment\x27, coalesce((p ->> \x27tuition_total\x27)::numeric, (v_plan ->> \x27tuition\x27)::numeric),/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -455,12 +455,12 @@ expect_fail_code "הסיכום היומי בלי שורות ההרשמה" \
   "node supabase/tests/enrollment.test.mjs"
 
 expect_fail_code "הרשמה: rpc_enroll נפתחת שוב ל-anon (עוקפים את הגבלת ה-IP)" \
-  "$DIR/../migrations/0026_branch_unit.sql" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
   'sed -i "s/grant execute on function rpc_enroll(jsonb, text) to service_role;/grant execute on function rpc_enroll(jsonb, text) to service_role, anon;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת ה-IP מוסרת" \
-  "$DIR/../migrations/0026_branch_unit.sql" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if v_n_phone >= 3 then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -471,7 +471,7 @@ expect_fail_code "הרשמה: הדף קורא ל-RPC ישירות (בלי IP)" \
 
 expect_fail_code "טופס ההרשמה: רכיב מוגדר בתוך הרכיב (הפוקוס נופל אחרי כל אות)" \
   "$DIR/../../src/pages/Enroll.tsx" \
-  'sed -i "s/  const errors = useMemo(() => validateEnroll(form), \[form\]);/  const errors = useMemo(() => validateEnroll(form), [form]);\n  const Inner = () => null;/" "$F"' \
+  'sed -i "s/  const errors = useMemo(() => validateEnroll(form, questions), \[form, questions\]);/  const errors = useMemo(() => validateEnroll(form, questions), [form, questions]);\n  const Inner = () => null;/" "$F"' \
   "node supabase/tests/enrollment.test.mjs"
 
 expect_fail_code "enroll בלי תשובת preflight (הדפדפן לא שולח את ה-POST)" \
@@ -727,6 +727,36 @@ expect_fail_code "סניף: /enroll בלי קישור בוחר סניף גם כ�
 expect_fail_code "סניף: ביטול לפי המבנה הנוכחי של הסניף ולא לפי מה שהתלמידה אישרה" \
   "$DIR/../migrations/0026_branch_unit.sql" \
   'sed -i "s/  v_plan := coalesce(s.plan_snapshot, /  v_plan := coalesce(null, /" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "מסלולים: התשלום הראשון לא סופג את ההפרש (סכום לא מסתכם)" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  'sed -i "s/    v_firsti := v_tuition - v_each \* (v_n - 1);/    v_firsti := v_each;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "מסלולים: הוראות קבע מוצגות להורים לפני סבב 3" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  'sed -i "s/   where t ->> .method. <> .standing_order./   where true/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "מזומן: נוצר קישור תשלום" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  'sed -i "s/  if v_track ->> .method. <> .cash. then/  if true then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "וואטסאפ: תזכורות יוצאות גם למי שענתה לא" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  'sed -i "s/     and exists (select 1 from students where id = new.student_id and whatsapp_opt_in = false) then/     and false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "צילום: התשובה לא נכתבת לשדה שחוסם הפקות" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  'sed -i "s/          coalesce(v_photo, false), case when v_photo is not null then b.photo_consent_text end,/          true, case when v_photo is not null then b.photo_consent_text end,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "שאלה מוסתרת: התשובה נלקחת מהבקשה בכל זאת" \
+  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  'sed -i "s/  if (v_opts ->> .ask_whatsapp.)::boolean then/  v_wa := (p ->> \x27whatsapp\x27) = \x27yes\x27;\n  if (v_opts ->> \x27ask_whatsapp\x27)::boolean then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.

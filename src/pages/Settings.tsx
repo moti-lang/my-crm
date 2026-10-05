@@ -1,7 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useOpenAlerts, useWaHealth, useLastBackup } from '@/hooks/system';
-import { useEnrollmentSettings, useSaveEnrollmentSettings, type EnrollmentPlan } from '@/hooks/enrollment';
+import { useEnrollmentSettings, useSaveEnrollmentSettings } from '@/hooks/enrollment';
+import { PlanEditor, planOk } from '@/components/PlanEditor';
+import type { PlanInput } from '@/lib/enrollment';
 import { humanError } from '@/lib/errors';
 import { useState, useEffect } from 'react';
 import { WaHealthBadge } from '@/components/WaHealthBadge';
@@ -99,15 +101,11 @@ function EnrollmentCard() {
   const save = useSaveEnrollmentSettings();
   const [name, setName] = useState('');
   const [terms, setTerms] = useState('');
-  const [plan, setPlan] = useState<Partial<EnrollmentPlan>>({});
+  const [plan, setPlan] = useState<PlanInput>({});
+  const [photo, setPhoto] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
-  useEffect(() => { if (q.data) { setName(q.data.program_name); setTerms(q.data.terms); setPlan(q.data.plan); } }, [q.data]);
-  const n = (k: keyof EnrollmentPlan) => Number(plan[k] ?? 0);
-  const sum = n('registration_fee') + n('installments') * n('installment_amount');
-  const consistent = sum === n('annual_total') && n('first_charge') === n('registration_fee') + n('installment_amount');
-  const num = (k: keyof EnrollmentPlan, label: string) => (
-    <label className="block text-sm">{label}<input type="number" className="field mt-1" value={plan[k] ?? ''} onChange={(e) => setPlan({ ...plan, [k]: Number(e.target.value) })} /></label>
-  );
+  useEffect(() => { if (q.data) { setName(q.data.program_name); setTerms(q.data.terms); setPlan(q.data.plan); setPhoto(q.data.photo_consent_text); } }, [q.data]);
+  const consistent = planOk(plan);
   if (q.isLoading) return <section className="card p-4"><CardSkeleton rows={3} /></section>;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   return (
@@ -118,25 +116,12 @@ function EnrollmentCard() {
         עותק משלו, עם קישור הרשמה משלו, במסך הסניף ← הגדרות.
       </p>
       <label className="block text-sm">שם החוג<input className="field mt-1" value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {num('annual_total', 'עלות שנתית (₪)')}
-        {num('registration_fee', 'דמי רישום (₪)')}
-        {num('installments', 'מספר תשלומים')}
-        {num('installment_amount', 'סכום כל תשלום (₪)')}
-        {num('first_charge', 'החיוב הראשון (₪)')}
-        {num('trial_days', 'חודש ניסיון (ימים)')}
-        {num('cancel_refund', 'החזר בביטול (₪)')}
-      </div>
-      <label className="block text-sm">ייעוד דמי הרישום<input className="field mt-1" value={plan.registration_fee_purpose ?? ''} onChange={(e) => setPlan({ ...plan, registration_fee_purpose: e.target.value })} /></label>
-      <p className={`text-sm ${consistent ? 'text-ok' : 'text-bad'}`} role="status">
-        {consistent
-          ? `✓ ${n('registration_fee')} + ${n('installments')} × ${n('installment_amount')} = ${n('annual_total')}, והחיוב הראשון = דמי רישום + תשלום אחד`
-          : `✗ המבנה לא מסתכם: ${n('registration_fee')} + ${n('installments')} × ${n('installment_amount')} = ${sum}, ולא ${n('annual_total')} (או שהחיוב הראשון שגוי). ההרשמה תסרב עד שזה יתוקן.`}
-      </p>
+      <PlanEditor plan={plan} onChange={setPlan} />
       <label className="block text-sm">התקנון לסניף חדש<textarea className="field mt-1 min-h-[14rem]" value={terms} onChange={(e) => setTerms(e.target.value)} /></label>
+      <label className="block text-sm">נוסח אישור הצילום לסניף חדש<textarea className="field mt-1 min-h-[7rem]" value={photo} onChange={(e) => setPhoto(e.target.value)} /></label>
       {msg && <p className={`text-sm ${msg.startsWith('נשמר') ? 'text-ok' : 'text-bad'}`} role="status">{msg}</p>}
       <button type="button" className="btn-primary" disabled={save.isPending || !consistent}
-        onClick={async () => { setMsg(null); try { await save.mutateAsync({ program_name: name, terms, plan }); setMsg('נשמר.'); } catch (e) { setMsg(humanError(e)); } }}>
+        onClick={async () => { setMsg(null); try { await save.mutateAsync({ program_name: name, terms, plan, photo_consent_text: photo }); setMsg('נשמר.'); } catch (e) { setMsg(humanError(e)); } }}>
         {save.isPending ? 'שומרת…' : 'שמירה'}
       </button>
     </section>

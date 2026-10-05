@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import type { PlanInput, Track, EnrollQuestions } from '@/lib/enrollment';
 
 /** מבנה התשלום, מההגדרות. הקוד לא מכיר סכומים. */
 export type EnrollmentPlan = {
@@ -9,7 +10,9 @@ export type EnrollmentPlan = {
 };
 export type EnrollmentPublic =
   | { ok: true; program_name: string; terms: string; plan: EnrollmentPlan; open: boolean; closed_reason: 'closed' | 'full' | 'inactive' | null;
-      branch: { name: string; city: string | null; schedule: string | null; age_groups: string | null } }
+      branch: { name: string; city: string | null; schedule: string | null; age_groups: string | null };
+      /** המסלולים שההורה רואה (הוראות קבע מוסתרות עד שיופעלו). */
+      tracks: Track[]; questions: EnrollQuestions; photo_consent_text: string | null }
   | { ok: false; error: string };
 
 /** הדף הציבורי: הסניף של הקישור — שם, תקנון, מבנה. anon. */
@@ -27,8 +30,11 @@ export function useEnrollmentPublic(token: string) {
 export type EnrollInput = {
   first_name: string; last_name: string; grade: string; school: string; phone: string; email: string;
   enroll_token: string; mailing_consent: boolean; terms_accepted: boolean;
+  whatsapp: '' | 'yes' | 'no'; photo: '' | 'yes' | 'no'; track: string;
 };
-export type EnrollResult = { ok: true; pay_url: string; amount: number; student: string; branch: string } | { ok: false; error: string };
+export type EnrollResult =
+  | { ok: true; pay_url: string | null; amount: number; method: Track['method']; track: string; student: string; branch: string }
+  | { ok: false; error: string };
 
 export async function enroll(input: EnrollInput): Promise<EnrollResult> {
   // דרך ה-Edge Function `enroll`, לא RPC ישיר: רק היא רואה את ה-IP, וההגבלה
@@ -94,13 +100,14 @@ export function useEnrollmentSettings() {
   return useQuery({
     queryKey: ['enrollment-settings'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('settings').select('key, value').in('key', ['program_name', 'enrollment_terms', 'enrollment_plan', 'app_base_url']);
+      const { data, error } = await supabase.from('settings').select('key, value').in('key', ['program_name', 'enrollment_terms', 'enrollment_plan', 'app_base_url', 'photo_consent_text']);
       if (error) throw new Error(error.message);
       const by = Object.fromEntries((data ?? []).map((r) => [r.key, r.value]));
       return {
         program_name: String(by.program_name ?? ''),
         terms: String(by.enrollment_terms ?? ''),
-        plan: (by.enrollment_plan ?? {}) as Partial<EnrollmentPlan>,
+        plan: (by.enrollment_plan ?? {}) as PlanInput,
+        photo_consent_text: String(by.photo_consent_text ?? ''),
         base_url: String(by.app_base_url ?? ''),
       };
     },
@@ -110,11 +117,12 @@ export function useEnrollmentSettings() {
 export function useSaveEnrollmentSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { program_name: string; terms: string; plan: Partial<EnrollmentPlan> }) => {
+    mutationFn: async (input: { program_name: string; terms: string; plan: PlanInput; photo_consent_text: string }) => {
       const rows = [
         { key: 'program_name', value: input.program_name },
         { key: 'enrollment_terms', value: input.terms },
         { key: 'enrollment_plan', value: input.plan },
+        { key: 'photo_consent_text', value: input.photo_consent_text },
       ];
       const { error } = await supabase.from('settings').upsert(rows, { onConflict: 'key' });
       if (error) throw new Error(error.message);

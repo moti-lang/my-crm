@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useBranchEnrollmentState, useUpdateBranch, type Branch, type BranchInput } from '@/hooks/branches';
+import { useBranchEnrollmentState, useUpdateBranch, DEFAULT_FORM_OPTIONS, type Branch, type BranchInput, type FormOptions } from '@/hooks/branches';
 import { useEnrollmentSettings } from '@/hooks/enrollment';
 import { BranchForm, normalizeBranchPhone } from '@/components/BranchForm';
 import { PlanEditor, planOk } from '@/components/PlanEditor';
@@ -20,6 +20,8 @@ export function BranchSettings({ branch }: { branch: Branch }) {
   const [terms, setTerms] = useState('');
   const [open, setOpen] = useState(true);
   const [capacity, setCapacity] = useState<string>('');
+  const [opts, setOpts] = useState<FormOptions>(DEFAULT_FORM_OPTIONS);
+  const [photoText, setPhotoText] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -33,6 +35,8 @@ export function BranchSettings({ branch }: { branch: Branch }) {
     setTerms(branch.terms ?? '');
     setOpen(branch.enrollment_open);
     setCapacity(branch.capacity ? String(branch.capacity) : '');
+    setOpts({ ...DEFAULT_FORM_OPTIONS, ...((branch.form_options ?? {}) as Partial<FormOptions>) });
+    setPhotoText(branch.photo_consent_text ?? '');
   }, [branch]);
 
   const base = settings.data?.base_url || window.location.origin;
@@ -47,6 +51,7 @@ export function BranchSettings({ branch }: { branch: Branch }) {
       await update.mutateAsync({
         id: branch.id, ...info, supervisor_phone: normalizeBranchPhone(info.supervisor_phone),
         plan: plan as BranchInput['plan'], terms, enrollment_open: open, capacity: cap,
+        form_options: opts, photo_consent_text: photoText,
       });
       setMsg('נשמר. השינויים חלים על הרשמות חדשות לסניף הזה בלבד.');
     } catch (e) { setMsg(humanError(e)); }
@@ -82,6 +87,26 @@ export function BranchSettings({ branch }: { branch: Branch }) {
       </section>
 
       <section className="card space-y-3 p-4">
+        <h2 className="text-lg">שאלות בדף ההרשמה</h2>
+        <p className="text-sm text-soft">שאלה מוצגת היא חובה. שאלה מוסתרת לא מופיעה בטופס.</p>
+        {([
+          ['ask_whatsapp', 'האם אתם מקבלים הודעות וואטסאפ? — מי שעונה "לא" לא תקבל תזכורות בוואטסאפ, ובגבייה יופיע "דרוש קשר אחר"'],
+          ['ask_photo', 'אישור צילום — התשובה נכתבת לשדה אישור הצילום, שחוסם צירוף להפקה'],
+          ['ask_track', 'אופן התשלום — המסלולים שבמבנה התשלום למטה'],
+        ] as const).map(([k, label]) => (
+          <label key={k} className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={opts[k]} onChange={(e) => setOpts({ ...opts, [k]: e.target.checked })} />
+            <span>{label}</span>
+          </label>
+        ))}
+        {opts.ask_photo && (
+          <label className="block text-sm">נוסח אישור הצילום של הסניף (נשמר אצל כל תלמידה כפי שאישרה)
+            <textarea className="field mt-1 min-h-[7rem]" value={photoText} onChange={(e) => setPhotoText(e.target.value)} />
+          </label>
+        )}
+      </section>
+
+      <section className="card space-y-3 p-4">
         <h2 className="text-lg">פרטי הסניף</h2>
         <BranchForm value={info} onChange={setInfo} />
       </section>
@@ -99,7 +124,7 @@ export function BranchSettings({ branch }: { branch: Branch }) {
       </section>
 
       {msg && <p className={`text-sm ${msg.startsWith('נשמר') ? 'text-ok' : 'text-bad'}`} role="status">{msg}</p>}
-      <button type="button" className="btn-primary" disabled={update.isPending || !planOk(plan) || !capOk || !(info.name ?? '').trim() || !terms.trim()} onClick={() => void save()}>
+      <button type="button" className="btn-primary" disabled={update.isPending || !planOk(plan) || !capOk || !(info.name ?? '').trim() || !terms.trim() || (opts.ask_photo && !photoText.trim())} onClick={() => void save()}>
         {update.isPending ? 'שומרת…' : 'שמירת הגדרות הסניף'}
       </button>
     </div>

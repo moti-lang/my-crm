@@ -80,6 +80,6 @@ export async function requireEnrollBody(req: Request): Promise<Response | null> 
   try { body = await req.clone().json(); } catch { return deny(400, 'גוף הבקשה אינו JSON'); }
   if (!body || typeof body !== 'object' || Array.isArray(body)) return deny(400, 'גוף הבקשה אינו אובייקט');
   const keys = Object.keys(body as object);
-  if (keys.length > 12 || !ENROLL_FIELDS.every((k) => k in (body as object))) return deny(400, 'חסרים שדות הרשמה');
+  if (keys.length > 16 || !ENROLL_FIELDS.every((k) => k in (body as object))) return deny(400, 'חסרים שדות הרשמה');
   return null;
 }

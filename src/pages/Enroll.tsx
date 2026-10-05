@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useEnrollmentPublic, enroll, type EnrollResult } from '@/hooks/enrollment';
-import { validateEnroll, describePlan, enrollTokenFromPath, type EnrollForm } from '@/lib/enrollment';
+import { validateEnroll, describeTrack, enrollTokenFromPath, type EnrollForm, type EnrollQuestions } from '@/lib/enrollment';
 import { formatILS } from '@/lib/format';
 
 /**
@@ -11,7 +11,8 @@ import { formatILS } from '@/lib/format';
  * (rpc_enroll) שמאמת שדות ומגביל קצב במסד; הדף לא נוגע בטבלאות.
  * בסיום: קישור התשלום על החיוב הראשון מוצג מיד, ונשלח גם בוואטסאפ.
  */
-const EMPTY: EnrollForm = { first_name: '', last_name: '', grade: '', school: '', phone: '', email: '', mailing_consent: false, terms_accepted: false };
+const EMPTY: EnrollForm = { first_name: '', last_name: '', grade: '', school: '', phone: '', email: '', mailing_consent: false, terms_accepted: false, whatsapp: '', photo: '', track: '' };
+const NO_QUESTIONS: EnrollQuestions = { whatsapp: false, photo: false, track: false };
 
 export function Enroll() {
   const token = enrollTokenFromPath(useLocation().pathname);
@@ -21,7 +22,8 @@ export function Enroll() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<EnrollResult | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
-  const errors = useMemo(() => validateEnroll(form), [form]);
+  const questions = info.data?.ok ? info.data.questions : NO_QUESTIONS;
+  const errors = useMemo(() => validateEnroll(form, questions), [form, questions]);
   const set = <K extends keyof EnrollForm>(k: K, v: EnrollForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   async function submit(e: FormEvent) {
@@ -37,18 +39,29 @@ export function Enroll() {
   if (info.isLoading) return <main className="p-6 text-center text-sm text-soft">טוען…</main>;
   if (info.isError || !info.data) return <main className="p-6 text-center text-sm text-bad">ההרשמה אינה זמינה כרגע. נסי שוב מאוחר יותר.</main>;
   if (!info.data.ok) return <main className="p-6 text-center text-sm text-bad">{info.data.error}</main>;
-  const { program_name, terms, plan, branch, open, closed_reason } = info.data;
+  const { program_name, terms, branch, open, closed_reason, tracks, photo_consent_text } = info.data;
 
   if (result?.ok) {
     return (
       <main className="mx-auto max-w-md space-y-4 p-5 text-ink">
         <header className="text-center"><p className="text-xs text-soft">{program_name}</p><h1 className="text-2xl">ההרשמה נקלטה 🌸</h1></header>
         <section className="card space-y-3 p-5">
-          <p className="text-sm">{result.student} רשומה ל{result.branch}. כדי להשלים את ההרשמה נשאר החיוב הראשון:</p>
-          <p className="text-center font-display text-3xl tabular-nums">{formatILS(result.amount)}</p>
-          <p className="text-xs text-soft">{plan.registration_fee} ₪ דמי רישום + {plan.installment_amount} ₪ תשלום ראשון מתוך שכר הלימוד.</p>
-          <a href={result.pay_url} className="btn-primary block w-full text-center text-base">לתשלום בכרטיס אשראי</a>
-          <p className="text-center text-xs text-soft">הקישור נשלח אלייך גם בוואטסאפ, ותקף 7 ימים. ההרשמה תאושר סופית אחרי התשלום.</p>
+          {result.method === 'cash' || !result.pay_url ? (
+            <>
+              <p className="text-sm">{result.student} רשומה ל{result.branch}, במסלול: {result.track}.</p>
+              <p className="text-center font-display text-3xl tabular-nums">{formatILS(result.amount)}</p>
+              <p className="text-sm text-soft">התשלום במזומן מתקבל בחוג. ההרשמה תאושר סופית כשהתשלום יירשם.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm">{result.student} רשומה ל{result.branch}, במסלול: {result.track}. כדי להשלים את ההרשמה נשאר התשלום:</p>
+              <p className="text-center font-display text-3xl tabular-nums">{formatILS(result.amount)}</p>
+              <a href={result.pay_url} className="btn-primary block w-full text-center text-base">לתשלום בכרטיס אשראי</a>
+              <p className="text-center text-xs text-soft">
+                {form.whatsapp === 'no' ? 'שמרי את הקישור: הוא תקף 7 ימים.' : 'הקישור נשלח אלייך גם בוואטסאפ, ותקף 7 ימים.'} ההרשמה תאושר סופית אחרי התשלום.
+              </p>
+            </>
+          )}
         </section>
       </main>
     );
@@ -84,10 +97,32 @@ export function Enroll() {
           <span>אני מאשרת הצטרפות לרשימת התפוצה במייל ולקו החוג (עדכונים על שיעורים, מופעים וצילומים)</span>
         </label>
 
-        <section className="rounded-field border border-rule bg-shade/50 p-3 text-sm">
-          <p className="font-medium">מבנה התשלום</p>
-          <p className="mt-1 text-soft">{describePlan(plan)}</p>
-        </section>
+        {questions.whatsapp && (
+          <YesNo label="האם אתם מקבלים הודעות וואטסאפ (לעדכונים)?" value={form.whatsapp} onChange={(v) => set('whatsapp', v)}
+            error={touched ? errors.whatsapp : undefined} />
+        )}
+
+        {questions.photo && (
+          <section className="rounded-field border border-rule p-3 text-sm">
+            <p className="whitespace-pre-wrap text-soft">{photo_consent_text}</p>
+            <YesNo label="אישור לצילום" value={form.photo} onChange={(v) => set('photo', v)} error={touched ? errors.photo : undefined} />
+          </section>
+        )}
+
+        {questions.track && (
+          <fieldset className="rounded-field border border-rule p-3 text-sm">
+            <legend className="px-1 font-medium">אני משלמת:</legend>
+            <div className="space-y-2">
+              {tracks.map((t) => (
+                <label key={t.key} className={`flex cursor-pointer items-start gap-2 rounded-field border p-2 ${form.track === t.key ? 'border-plum bg-plum/5' : 'border-rule'}`}>
+                  <input type="radio" name="track" className="mt-1" checked={form.track === t.key} onChange={() => set('track', t.key)} />
+                  <span><span className="font-medium">{t.label}</span><span className="block text-xs text-soft">{describeTrack(t)}</span></span>
+                </label>
+              ))}
+            </div>
+            {touched && errors.track && <span className="mt-1 block text-xs text-bad">{errors.track}</span>}
+          </fieldset>
+        )}
 
         <section className="rounded-field border border-rule p-3 text-sm">
           <button type="button" className="flex w-full items-center justify-between font-medium" onClick={() => setTermsOpen((o) => !o)} aria-expanded={termsOpen}>
@@ -123,5 +158,22 @@ function Field({ k, label, type = 'text', dir, form, set, error }:
       <input type={type} dir={dir} className="field mt-1" value={form[k]} onChange={(e) => set(k, e.target.value)} autoComplete="off" />
       {error && <span className="mt-0.5 block text-xs text-bad">{error}</span>}
     </label>
+  );
+}
+
+/** שאלת כן/לא — חובה, בלי ברירת מחדל: ההורה בוחרת בעצמה. */
+function YesNo({ label, value, onChange, error }: { label: string; value: '' | 'yes' | 'no'; onChange: (v: 'yes' | 'no') => void; error?: string }) {
+  return (
+    <fieldset className="text-sm">
+      <legend>{label}</legend>
+      <div className="mt-1 flex gap-2">
+        {(['yes', 'no'] as const).map((v) => (
+          <label key={v} className={`cursor-pointer rounded-btn border px-4 py-1 ${value === v ? 'border-plum bg-plum text-white' : 'border-rule'}`}>
+            <input type="radio" className="sr-only" checked={value === v} onChange={() => onChange(v)} />{v === 'yes' ? 'כן' : 'לא'}
+          </label>
+        ))}
+      </div>
+      {error && <span className="mt-0.5 block text-xs text-bad">{error}</span>}
+    </fieldset>
   );
 }

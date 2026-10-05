@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useStudentPayments, useStudentProductions, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
+import { useStudentPayments, useStudentProductions, useStudentFlags, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
+import { StudentTags } from '@/components/StudentTags';
 import { formatILS, formatDate, formatPhone } from '@/lib/format';
 import { PaymentForm } from '@/components/PaymentForm';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
@@ -15,6 +16,7 @@ const METHOD_LABEL: Record<string, string> = {
 };
 
 export function StudentDrawer({ student, onClose }: { student: Student | null; onClose: () => void }) {
+  const flags = useStudentFlags();
   const payments = useStudentPayments(student?.id ?? null);
   const productions = useStudentProductions(student?.id ?? null);
   const [adding, setAdding] = useState(false);
@@ -183,6 +185,18 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
               {student.stopped_on && <Row label="הפסיקה" value={formatDate(student.stopped_on)} />}
               {student.stop_reason && <Row label="סיבה" value={student.stop_reason} />}
               <Row label="אישור צילום" value={student.photo_consent ? 'יש' : 'אין'} />
+              {(() => {
+                const f = student.id ? flags.data?.get(student.id) : undefined;
+                if (!f) return null;
+                return (
+                  <>
+                    {f.payment_track?.label && <Row label="מסלול תשלום" value={f.payment_track.label} />}
+                    {f.whatsapp_opt_in === false && <div><StudentTags whatsapp={false} /> <span className="text-xs text-soft">ענתה שאינה מקבלת וואטסאפ — תזכורות אליה לא נשלחות.</span></div>}
+                    {f.photo_consent_text && <details className="text-xs text-soft"><summary className="cursor-pointer">נוסח אישור הצילום שאושר</summary><p className="mt-1 whitespace-pre-wrap">{f.photo_consent_text}</p></details>}
+                    {f.terms_text && <details className="text-xs text-soft"><summary className="cursor-pointer">התקנון שאושר</summary><p className="mt-1 whitespace-pre-wrap">{f.terms_text}</p></details>}
+                  </>
+                );
+              })()}
             </dl>
           </Section>
 

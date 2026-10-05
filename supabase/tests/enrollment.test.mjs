@@ -18,11 +18,18 @@ const dir = mkdtempSync(join(tmpdir(), 'enroll-'));
 const out = join(dir, 'e.cjs');
 execFileSync('npx', ['esbuild', 'src/lib/enrollment.ts', '--bundle', '--format=cjs', '--platform=node', `--outfile=${out}`, '--log-level=error']);
 const e = await import(out);
-const good = { first_name: 'רבקה', last_name: 'כהן', grade: 'ד', school: 'בית יעקב', phone: '052-111-2233', email: 'a@b.co.il', mailing_consent: true, terms_accepted: true };
+const good = { first_name: 'רבקה', last_name: 'כהן', grade: 'ד', school: 'בית יעקב', phone: '052-111-2233', email: 'a@b.co.il', mailing_consent: true, terms_accepted: true, whatsapp: '', photo: '', track: '' };
 
 console.log('\nאימות בדף:');
 check('טופס תקין — בלי שגיאות', Object.keys(e.validateEnroll(good)).length === 0, JSON.stringify(e.validateEnroll(good)));
 {
+  check('★ 8 תשלומים: הראשון סופג את ההפרש — 141 ואז 7 × 137', (() => { const t = e.computeTrack({ key: 'so8', label: '8', method: 'standing_order', installments: 8 }, 1200, 100); return t.first_installment === 141 && t.installment_amount === 137 && t.first_charge === 241; })());
+  check('הכלל זהה למסד: 12 תשלומים → 99 ואז 11 × 91', (() => { const t = e.computeTrack({ key: 'x', label: 'x', method: 'standing_order', installments: 12 }, 1200, 100); return t.first_installment === 99 && t.installment_amount === 91; })());
+  check('מזומן: אין חיוב בכרטיס; תשלום אחד: 1,200', e.computeTrack({ key: 'c', label: 'c', method: 'cash', installments: 1 }, 1200, 100).first_charge === 0 && e.computeTrack({ key: 'k', label: 'k', method: 'card_once', installments: 1 }, 1200, 100).first_charge === 1200);
+  check('★ שאלה מוצגת — חובה; מוסתרת — לא', e.validateEnroll(good, { whatsapp: true, photo: true, track: true }).whatsapp !== undefined
+        && e.validateEnroll(good, { whatsapp: true, photo: true, track: true }).track !== undefined
+        && Object.keys(e.validateEnroll(good, { whatsapp: false, photo: false, track: false })).length === 0);
+  check('מבנה בלי מסלולים — לא תקין', e.checkPlan({ annual_total: 1200, registration_fee: 100, tracks: [] }).ok === false);
   check('★ הטוקן נקרא מהקישור /enroll/<טוקן>', e.enrollTokenFromPath('/enroll/0123456789abcdef0123456789abcdef') === '0123456789abcdef0123456789abcdef');
   check('/enroll בלי טוקן — ריק (המסד מוביל לסניף הפעיל היחיד)', e.enrollTokenFromPath('/enroll') === '' && e.enrollTokenFromPath('/enroll/') === '');
   check('טוקן זבל — ריק', e.enrollTokenFromPath('/enroll/<script>') === '' && e.enrollTokenFromPath('/enroll/abc') === '');
@@ -30,6 +37,8 @@ check('טופס תקין — בלי שגיאות', Object.keys(e.validateEnroll(
   check('★ ההורה לא בוחרת סניף: אין בורר בדף', !/<select/.test(page) && !/branch_id/.test(page));
   check('★ הדף שולח את הטוקן מהקישור', /enroll\(\{ \.\.\.form, enroll_token: token \}\)/.test(page) && /useEnrollmentPublic\(token\)/.test(page));
   check('סניף סגור או מלא — אין טופס', /!open \?/.test(page));
+  check('★ השאלות לפי הגדרות הסניף, ובלי ברירת מחדל מסומנת', /questions\.whatsapp &&/.test(page) && /questions\.photo &&/.test(page) && /questions\.track &&/.test(page) && /whatsapp: '', photo: '', track: ''/.test(page));
+  check('★ מזומן: מסך סיום בלי קישור תשלום', /result\.method === 'cash'/.test(page));
 }
 check('★ בלי אישור תקנון — נחסם', e.validateEnroll({ ...good, terms_accepted: false }).terms_accepted !== undefined);
 check('★ שם עם תווים זרים — נחסם', e.validateEnroll({ ...good, first_name: '<b>x</b>' }).first_name !== undefined && e.validateEnroll({ ...good, first_name: 'רבקה1' }).first_name !== undefined);

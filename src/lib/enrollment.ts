@@ -18,10 +18,15 @@ export function isEmail(v: string): boolean {
 export type EnrollForm = {
   first_name: string; last_name: string; grade: string; school: string; phone: string; email: string;
   mailing_consent: boolean; terms_accepted: boolean;
+  /** השאלות שמוצגות לפי הגדרות הסניף. '' = טרם נענתה. */
+  whatsapp: '' | 'yes' | 'no'; photo: '' | 'yes' | 'no'; track: string;
 };
 
+/** אילו שאלות הסניף מציג. שאלה מוסתרת אינה חובה ואינה נשלחת. */
+export type EnrollQuestions = { whatsapp: boolean; photo: boolean; track: boolean };
+
 /** הודעה לכל שדה פגום, בעברית. ריק = תקין. */
-export function validateEnroll(f: EnrollForm): Partial<Record<keyof EnrollForm, string>> {
+export function validateEnroll(f: EnrollForm, q: EnrollQuestions = { whatsapp: false, photo: false, track: false }): Partial<Record<keyof EnrollForm, string>> {
   const e: Partial<Record<keyof EnrollForm, string>> = {};
   if (!f.first_name.trim()) e.first_name = 'יש למלא שם פרטי';
   else if (!NAME_RE.test(f.first_name)) e.first_name = 'אותיות בלבד';
@@ -31,6 +36,9 @@ export function validateEnroll(f: EnrollForm): Partial<Record<keyof EnrollForm, 
   if (!f.school.trim()) e.school = 'יש למלא בית ספר';
   if (!isIsraeliMobile(f.phone)) e.phone = 'נייד ישראלי, למשל 052-1234567';
   if (!isEmail(f.email)) e.email = 'כתובת מייל תקינה';
+  if (q.whatsapp && !f.whatsapp) e.whatsapp = 'יש לבחור כן או לא';
+  if (q.photo && !f.photo) e.photo = 'יש לבחור כן או לא';
+  if (q.track && !f.track) e.track = 'יש לבחור אופן תשלום';
   if (!f.terms_accepted) e.terms_accepted = 'יש לקרוא ולאשר את התקנון';
   return e;
 }
@@ -50,17 +58,52 @@ export function enrollTokenFromPath(pathname: string): string {
   return m ? m[1]!.toLowerCase() : '';
 }
 
+/** מסלול תשלום כפי שהבעלים מגדירה אותו. הסכומים מחושבים, לא מוקלדים. */
+export type TrackMethod = 'cash' | 'card_once' | 'standing_order';
+export type TrackDef = { key: string; label: string; method: TrackMethod; installments: number };
+/** מסלול מחושב — אותו כלל כמו f_plan_tracks במסד. */
+export type Track = TrackDef & { installment_amount: number; first_installment: number; first_charge: number; total: number };
+
+export const METHOD_LABEL: Record<TrackMethod, string> = {
+  cash: 'מזומן', card_once: 'אשראי בתשלום אחד', standing_order: 'הוראת קבע באשראי',
+};
+
+/**
+ * ★ הכלל: שכר הלימוד (סך − דמי רישום) מחולק שווה, עגול לשקל; כשלא יוצא
+ * עגול — התשלום הראשון סופג את ההפרש. 1,100 ב-8: 141 ואז 7 × 137.
+ */
+export function computeTrack(def: TrackDef, annualTotal: number, registrationFee: number): Track {
+  const tuition = annualTotal - registrationFee;
+  const n = def.method === 'standing_order' ? Math.max(1, Math.trunc(def.installments)) : 1;
+  const each = Math.floor(tuition / n);
+  const first = tuition - each * (n - 1);
+  const first_charge = def.method === 'cash' ? 0 : def.method === 'card_once' ? annualTotal : registrationFee + first;
+  return { ...def, installments: n, installment_amount: each, first_installment: first, first_charge, total: annualTotal };
+}
+
+/** ההסבר להורה, במילים. */
+export function describeTrack(t: Track): string {
+  if (t.method === 'cash') return `${t.total} ₪ במזומן, משולמים בחוג.`;
+  if (t.method === 'card_once') return `${t.total} ₪ בכרטיס אשראי, בתשלום אחד עכשיו.`;
+  const rest = t.installments - 1;
+  return `${t.first_charge} ₪ עכשיו (דמי רישום + תשלום ראשון), ואחריו ${rest} תשלומים חודשיים של ${t.installment_amount} ₪.`;
+}
+
 /** מבנה התשלום של סניף (או ברירת המחדל). אותם כללים כמו f_plan_check במסד. */
 export type PlanInput = {
-  annual_total?: number; registration_fee?: number; installments?: number; installment_amount?: number;
-  first_charge?: number; trial_days?: number; cancel_refund?: number; registration_fee_purpose?: string;
+  annual_total?: number; registration_fee?: number; trial_days?: number; cancel_refund?: number;
+  registration_fee_purpose?: string; tracks?: TrackDef[];
 };
-export function checkPlan(p: PlanInput): { ok: boolean; message: string; first_charge: number } {
-  const total = Number(p.annual_total), fee = Number(p.registration_fee), n = Number(p.installments), each = Number(p.installment_amount);
-  const first = fee + each;
-  if (![total, fee, n, each].every(Number.isFinite) || n < 1) return { ok: false, message: 'יש למלא שכר לימוד שנתי, דמי רישום, מספר תשלומים וסכום לתשלום', first_charge: first };
-  if (fee < 0 || each <= 0) return { ok: false, message: 'דמי רישום וסכום לתשלום חייבים להיות חיוביים', first_charge: first };
-  const sum = fee + n * each;
-  if (sum !== total) return { ok: false, message: `✗ המבנה לא מסתכם: ${fee} + ${n} × ${each} = ${sum}, ולא ${total}. ההרשמה לסניף תסרב עד שזה יתוקן.`, first_charge: first };
-  return { ok: true, message: `✓ ${fee} + ${n} × ${each} = ${total}. החיוב הראשון: ${first} (דמי רישום + תשלום אחד)`, first_charge: first };
+export function checkPlan(p: PlanInput): { ok: boolean; message: string; tracks: Track[] } {
+  const total = Number(p.annual_total), fee = Number(p.registration_fee);
+  const defs = p.tracks ?? [];
+  if (!Number.isFinite(total) || !Number.isFinite(fee)) return { ok: false, message: 'יש למלא שכר לימוד שנתי ודמי רישום', tracks: [] };
+  if (fee < 0 || total <= fee) return { ok: false, message: 'שכר הלימוד השנתי חייב להיות גדול מדמי הרישום', tracks: [] };
+  if (defs.length === 0) return { ok: false, message: 'צריך לפחות מסלול תשלום אחד', tracks: [] };
+  if (defs.some((d) => !d.label.trim())) return { ok: false, message: 'לכל מסלול צריך שם', tracks: [] };
+  if (defs.some((d) => d.method === 'standing_order' && (!Number.isInteger(d.installments) || d.installments < 1 || d.installments > 36))) {
+    return { ok: false, message: 'מספר תשלומים בהוראת קבע: בין 1 ל-36', tracks: [] };
+  }
+  const tracks = defs.map((d) => computeTrack(d, total, fee));
+  return { ok: true, message: `✓ כל מסלול מסתכם ל-${total} ₪ (${fee} דמי רישום + ${total - fee} שכר לימוד)`, tracks };
 }

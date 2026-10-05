@@ -270,6 +270,8 @@ export type Database = {
           terms: string | null;
           plan: Json | null;
           age_groups: string | null;
+          form_options: Json;
+          photo_consent_text: string | null;
         };
         Insert: {
           id?: string;
@@ -292,6 +294,8 @@ export type Database = {
           terms?: string | null;
           plan?: Json | null;
           age_groups?: string | null;
+          form_options?: Json;
+          photo_consent_text?: string | null;
         };
         Update: {
           id?: string;
@@ -314,6 +318,8 @@ export type Database = {
           terms?: string | null;
           plan?: Json | null;
           age_groups?: string | null;
+          form_options?: Json;
+          photo_consent_text?: string | null;
         };
         Relationships: [];
       };
@@ -1182,6 +1188,9 @@ export type Database = {
           refund_amount: number | null;
           terms_text: string | null;
           plan_snapshot: Json | null;
+          whatsapp_opt_in: boolean | null;
+          photo_consent_text: string | null;
+          payment_track: Json | null;
         };
         Insert: {
           id?: string;
@@ -1223,6 +1232,9 @@ export type Database = {
           refund_amount?: number | null;
           terms_text?: string | null;
           plan_snapshot?: Json | null;
+          whatsapp_opt_in?: boolean | null;
+          photo_consent_text?: string | null;
+          payment_track?: Json | null;
         };
         Update: {
           id?: string;
@@ -1264,6 +1276,9 @@ export type Database = {
           refund_amount?: number | null;
           terms_text?: string | null;
           plan_snapshot?: Json | null;
+          whatsapp_opt_in?: boolean | null;
+          photo_consent_text?: string | null;
+          payment_track?: Json | null;
         };
         Relationships: [
           {
@@ -1497,6 +1512,9 @@ export type Database = {
           first_charge: number | null;
           link_status: string | null;
           expires_at: string | null;
+          track_label: string | null;
+          track_method: string | null;
+          whatsapp_opt_in: boolean | null;
         };
         Relationships: [];
       };
@@ -1722,6 +1740,12 @@ export type Database = {
         Returns: Json;
       };
       rpc_branch_enrollment_state: {
+        Args: {
+          p_branch: string;
+        };
+        Returns: Json;
+      };
+      rpc_branch_tracks: {
         Args: {
           p_branch: string;
         };

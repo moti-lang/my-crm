@@ -8,17 +8,22 @@ drop function if exists t_enroll(text, text, text, boolean);
 create or replace function t_tok(p_branch uuid default 'bbbbbbbb-0000-0000-0000-000000000001') returns text
 language sql security definer set search_path = public, pg_temp as $$ select enroll_token from branches where id = p_branch $$;
 
+drop function if exists t_enroll(text, text, text, boolean, uuid);
 create or replace function t_enroll(p_first text, p_phone text default '0521112233', p_ip text default '1.2.3.4', p_terms boolean default true,
-                                    p_branch uuid default 'bbbbbbbb-0000-0000-0000-000000000001') returns jsonb
+                                    p_branch uuid default 'bbbbbbbb-0000-0000-0000-000000000001', p_track text default 'so10',
+                                    p_whatsapp text default 'yes', p_photo text default 'yes') returns jsonb
 language sql security definer set search_path = public, pg_temp as $$
   select rpc_enroll(jsonb_build_object('first_name', p_first, 'last_name', 'כהן', 'grade', 'ד', 'school', 'בית יעקב',
     'phone', p_phone, 'email', lower(p_first) || '@example.com', 'enroll_token', t_tok(p_branch),
-    'mailing_consent', true, 'terms_accepted', p_terms), p_ip) $$;
+    'mailing_consent', true, 'terms_accepted', p_terms, 'track', p_track, 'whatsapp', p_whatsapp, 'photo', p_photo), p_ip) $$;
 
 -- כמו הפונקציה enroll: service_role מעביר את הגוף כמו שהוא. anon אינו קורא ל-rpc_enroll ישירות (0024).
 create or replace function t_enroll_raw(p jsonb, p_ip text default '1.2.3.4') returns jsonb
 language sql security definer set search_path = public, pg_temp as $$
-  select rpc_enroll(case when p ? 'enroll_token' then p else p || jsonb_build_object('enroll_token', t_tok()) end, p_ip) $$;
+  select rpc_enroll(jsonb_build_object('enroll_token', t_tok(), 'track', 'so10', 'whatsapp', 'yes', 'photo', 'yes') || p, p_ip) $$;
+
+-- רוב החבילה בודקת את מסלול הוראת הקבע (210). מוסתר עד סבב 3 — פותחים כאן, ובודקים את ההסתרה בנפרד.
+update settings set value = 'true'::jsonb where key = 'standing_orders_enabled';
 
 \echo 'מבנה התשלום — מההגדרות, ומסתכם בדיוק:'
 begin;
@@ -26,8 +31,20 @@ select assert_eq((f_enrollment_plan() ->> 'annual_total')::bigint, 1200, 'סך �
 select assert_true(rpc_enrollment_plan() = f_enrollment_plan(), 'rpc_enrollment_plan (למסך ההגדרות) = אותו חישוב');
 select assert_eq((f_enrollment_plan() ->> 'first_charge')::bigint, 210, 'חיוב ראשון 210 = 100 דמי רישום + 110');
 select assert_eq((f_enrollment_plan() ->> 'tuition')::bigint, 1100, 'שכר לימוד = 1,200 − 100 דמי רישום');
-select assert_true((f_enrollment_plan() ->> 'registration_fee')::numeric + (f_enrollment_plan() ->> 'installments')::int * (f_enrollment_plan() ->> 'installment_amount')::numeric = 1200, '★ 100 + 10 × 110 = 1,200 בדיוק');
-select assert_no_effect('★ מבנה סניף שלא מסתכם — נדחה בשמירה', $a$update branches set plan = plan || '{"installment_amount": 100, "first_charge": 200}' where id = 'bbbbbbbb-0000-0000-0000-000000000001'$a$, $q$select plan::text from branches where id = 'bbbbbbbb-0000-0000-0000-000000000001'$q$);
+select assert_eq(jsonb_array_length(f_enrollment_plan() -> 'tracks'), 5, 'חמישה מסלולים: מזומן, תשלום אחד, הוראת קבע 5/8/10');
+select assert_true((select bool_and((t ->> 'first_installment')::numeric + ((t ->> 'installments')::int - 1) * (t ->> 'installment_amount')::numeric = 1100)
+                    from jsonb_array_elements(f_enrollment_plan() -> 'tracks') t), '★ בכל מסלול: התשלומים מסתכמים בדיוק לשכר הלימוד (1,100)');
+select assert_true((select (t ->> 'first_installment')::int = 141 and (t ->> 'installment_amount')::int = 137 and (t ->> 'first_charge')::int = 241
+                    from jsonb_array_elements(f_enrollment_plan() -> 'tracks') t where t ->> 'key' = 'so8'), '★ 8 תשלומים: הראשון סופג את ההפרש — 141 ואז 7 × 137');
+select assert_true((select (t ->> 'installment_amount')::int = 220 and (t ->> 'first_charge')::int = 320 from jsonb_array_elements(f_enrollment_plan() -> 'tracks') t where t ->> 'key' = 'so5'), '5 תשלומים: 220, חיוב ראשון 320');
+select assert_true((select (t ->> 'first_charge')::int = 1200 from jsonb_array_elements(f_enrollment_plan() -> 'tracks') t where t ->> 'key' = 'card1'), 'תשלום אחד: 1,200');
+select assert_true((select (t ->> 'first_charge')::int = 0 from jsonb_array_elements(f_enrollment_plan() -> 'tracks') t where t ->> 'key' = 'cash'), 'מזומן: אין חיוב בכרטיס');
+select assert_true((select (t ->> 'first_installment')::int = 99 and (t ->> 'installment_amount')::int = 91
+                    from jsonb_array_elements(f_plan_tracks('{"annual_total":1200,"registration_fee":100,"tracks":[{"key":"x","label":"12","method":"standing_order","installments":12}]}')) t),
+                   '★ הכלל כללי: 12 תשלומים של 1,100 → 99 ואז 11 × 91');
+select assert_no_effect('★ מבנה סניף לא תקין (דמי רישום מעל הסך) — נדחה בשמירה', $a$update branches set plan = plan || '{"registration_fee": 1300}' where id = 'bbbbbbbb-0000-0000-0000-000000000001'$a$, $q$select plan::text from branches where id = 'bbbbbbbb-0000-0000-0000-000000000001'$q$);
+select assert_no_effect('מסלול בלי שם — נדחה', $a$update branches set plan = jsonb_set(plan, '{tracks,0,label}', '""') where id = 'bbbbbbbb-0000-0000-0000-000000000001'$a$, $q$select plan::text from branches where id = 'bbbbbbbb-0000-0000-0000-000000000001'$q$);
+select assert_no_effect('מסלול בלי מסלולים בכלל — נדחה', $a$update branches set plan = jsonb_set(plan, '{tracks}', '[]') where id = 'bbbbbbbb-0000-0000-0000-000000000001'$a$, $q$select plan::text from branches where id = 'bbbbbbbb-0000-0000-0000-000000000001'$q$);
 rollback;
 
 \echo 'הדף הציבורי:'
@@ -223,6 +240,64 @@ select assert_no_execute('anon', 'rpc_branch_enrollment_state(uuid)');
 select assert_no_execute('authenticated', 'f_branch_enrollment_state(uuid)');
 rollback;
 
+\echo 'שאלות ההרשמה ומסלולי התשלום:'
+begin;
+-- ★ הוראות קבע מוסתרות עד סבב 3.
+update settings set value = 'false'::jsonb where key = 'standing_orders_enabled';
+select assert_true((select string_agg(t ->> 'key', ',' order by t ->> 'key') from jsonb_array_elements(rpc_enrollment_public(t_tok()) -> 'tracks') t) = 'card1,cash',
+                   '★ לפני סבב 3 ההורה רואה רק מזומן ותשלום אחד');
+select assert_true((t_enroll('עדי', '0521230001', '11.0.0.1', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'so10') ->> 'error') like '%אופן תשלום%', '★ מסלול הוראת קבע מוסתר — נדחה גם אם נשלח');
+select assert_eq(jsonb_array_length(f_visible_tracks((select plan from branches where id = 'bbbbbbbb-0000-0000-0000-000000000001'))), 2, 'f_visible_tracks: שניים גלויים');
+select assert_eq(jsonb_array_length(f_default_tracks()), 5, 'f_default_tracks: חמשת המסלולים לסניף חדש');
+
+-- מזומן: אין קישור, ממתינה, פעילה כשנרשם תשלום.
+select assert_true((t_enroll('מזל', '0521230002', '11.0.0.2', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'cash') ->> 'method') = 'cash', 'הרשמה במזומן');
+select assert_eq((select count(*) from payment_links l join students s on s.id = l.student_id where s.first_name = 'מזל'), 0, '★ מזומן: לא נוצר קישור תשלום');
+select assert_true((select status = 'pending' and payment_track ->> 'key' = 'cash' and installments_total = 1 from students where first_name = 'מזל'), '★ ממתינה, והמסלול שבחרה נשמר אצלה');
+insert into payments (student_id, branch_id, paid_on, amount, method, source) select id, branch_id, current_date, 1200, 'cash', 'manual' from students where first_name = 'מזל';
+select assert_true((select status = 'active' from students where first_name = 'מזל'), '★ הבעלים רשמה את המזומן — פעילה');
+
+-- תשלום אחד: קישור על הסכום המלא.
+select assert_true((t_enroll('אביטל', '0521230003', '11.0.0.3', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'card1') ->> 'amount')::numeric = 1200, 'תשלום אחד');
+select assert_eq((select amount::bigint from payment_links l join students s on s.id = l.student_id where s.first_name = 'אביטל'), 1200, '★ תשלום אחד: קישור על 1,200');
+
+-- וואטסאפ "לא": מסומנת, והתזכורות אליה לא יוצאות — מבוטלות עם הסבר.
+select t_enroll('ליבי', '0521230004', '11.0.0.4', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'card1', 'no');
+select assert_true((select whatsapp_opt_in = false from students where first_name = 'ליבי'), '★ ענתה "לא" — מסומנת בכרטיס');
+select assert_true((select r.status = 'cancelled' and r.error like '%דרוש קשר אחר%' from reminders r join students s on s.id = r.student_id where s.first_name = 'ליבי'),
+                   '★ הודעת הקישור לא יוצאת בוואטסאפ — מבוטלת עם "דרוש קשר אחר"');
+insert into reminders (kind, student_id, branch_id, to_phone, body, scheduled_at)
+  select 'debt', id, branch_id, parent_phone, 'תזכורת חוב', now() from students where first_name = 'ליבי';
+select assert_eq((select count(*) from reminders r join students s on s.id = r.student_id where s.first_name = 'ליבי' and r.status = 'scheduled'), 0, '★ גם תזכורת חוב מאוחרת — לא יוצאת');
+select assert_true((select r.status = 'scheduled' from reminders r join students s on s.id = r.student_id where s.first_name = 'אביטל' limit 1), 'מי שענתה "כן" — התזכורת יוצאת כרגיל');
+
+-- אישור צילום: התשובה = השדה הקיים, והנוסח נשמר.
+select assert_true((select photo_consent and photo_consent_text like 'אישור לצילום%' from students where first_name = 'אביטל'), '★ אישור צילום "כן" + הנוסח המדויק נשמר אצלה');
+select t_enroll('נוי', '0521230005', '11.0.0.5', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'card1', 'yes', 'no');
+select assert_true((select photo_consent = false from students where first_name = 'נוי'), 'אישור צילום "לא"');
+select assert_no_effect('★ "לא" לצילום — חוסם צירוף להפקה', $a$insert into production_cast (production_id, student_id) select (select id from productions limit 1), id from students where first_name = 'נוי'$a$, 'select count(*)::text from production_cast');
+
+-- חובה כשמוצגות.
+select assert_true((t_enroll('תהל', '0521230006', '11.0.0.6', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'card1', '') ->> 'error') like '%וואטסאפ%', 'בלי תשובה לוואטסאפ — נדחה');
+select assert_true((t_enroll('תהל', '0521230006', '11.0.0.6', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'card1', 'yes', 'maybe') ->> 'error') like '%צילום%', 'תשובה לא חוקית לצילום — נדחה');
+
+-- ★ מתגים: שאלה מוסתרת לא מופיעה ולא נלקחת מהבקשה.
+update branches set form_options = '{"ask_whatsapp": false, "ask_photo": false, "ask_track": false}' where id = 'bbbbbbbb-0000-0000-0000-000000000001';
+select assert_true(rpc_enrollment_public(t_tok()) -> 'questions' = '{"photo": false, "track": false, "whatsapp": false}'::jsonb
+                   and rpc_enrollment_public(t_tok()) -> 'photo_consent_text' = 'null'::jsonb, 'הדף יודע אילו שאלות מוסתרות');
+select assert_true((t_enroll('הודיה', '0521230007', '11.0.0.7', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'cash', 'no', 'yes') ->> 'ok')::boolean, 'הרשמה בלי השאלות');
+select assert_true((select whatsapp_opt_in is null and photo_consent = false and photo_consent_text is null and payment_track ->> 'key' = 'cash' from students where first_name = 'הודיה'),
+                   '★ שאלה מוסתרת: התשובה מהבקשה לא נשמרת; מסלול — הראשון שמוצג');
+rollback;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
+select assert_eq(jsonb_array_length(rpc_branch_tracks('bbbbbbbb-0000-0000-0000-000000000001')), 5, 'rpc_branch_tracks: הבעלים רואה את כל המסלולים, כולל הוראות קבע');
+select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
+select assert_no_effect('מנהלת לא רואה מסלולים של סניף אחר', $a$select rpc_branch_tracks('bbbbbbbb-0000-0000-0000-000000000002')$a$, 'select 1::text');
+rollback;
+
 \echo 'הוספת תלמידה ידנית:'
 begin;
 set local role authenticated;
@@ -241,8 +316,9 @@ select assert_no_effect('★ מנהלת לא מוסיפה לסניף שאינו 
 select assert_true((rpc_create_student('{"branch_id":"bbbbbbbb-0000-0000-0000-000000000001","first_name":"של","last_name":"המנהלת"}') ->> 'ok')::boolean, 'מנהלת מוסיפה לסניף שלה');
 rollback;
 
-drop function if exists t_enroll(text, text, text, boolean, uuid);
+drop function if exists t_enroll(text, text, text, boolean, uuid, text, text, text);
 drop function if exists t_tok(uuid);
+update settings set value = 'false'::jsonb where key = 'standing_orders_enabled';
 drop function if exists t_enroll_raw(jsonb, text);
 select drop_assert_helpers();
 \echo '─────────────────────────────────────────'
