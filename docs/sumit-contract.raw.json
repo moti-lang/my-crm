@@ -1,0 +1,201 @@
+[
+  {
+    "label": "beginredirect ריק",
+    "path": "/billing/payments/beginredirect/",
+    "payload": {},
+    "status": 200,
+    "ms": 431,
+    "contentType": "application/json; charset=utf-8",
+    "json": {
+      "Data": null,
+      "Status": 1,
+      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "TechnicalErrorDetails": null
+    }
+  },
+  {
+    "label": "beginredirect מלא",
+    "path": "/billing/payments/beginredirect/",
+    "payload": {
+      "Customer": {
+        "Name": "בדיקה אוטומטית",
+        "Phone": "0500000000",
+        "EmailAddress": "test@example.com",
+        "ExternalIdentifier": "tl-discover-1791205290817",
+        "SearchMode": 0
+      },
+      "Items": [
+        {
+          "Item": {
+            "Name": "שכר לימוד — בדיקה",
+            "Description": "גילוי חוזה"
+          },
+          "Quantity": 1,
+          "UnitPrice": 210,
+          "TotalPrice": 210,
+          "Currency": "ILS"
+        }
+      ],
+      "ExternalIdentifier": "tl-discover-1791205290817",
+      "RedirectURL": "https://teichtal-crm.netlify.app/pay/x?returned=1",
+      "IPNURL": "https://kzoxlusbocxjinfxckhe.supabase.co/functions/v1/sumit-webhook",
+      "Language": 0,
+      "VATIncluded": true,
+      "MaximumPayments": 1
+    },
+    "status": 200,
+    "ms": 348,
+    "contentType": "application/json; charset=utf-8",
+    "json": {
+      "Data": null,
+      "Status": 1,
+      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "TechnicalErrorDetails": null
+    }
+  },
+  {
+    "label": "שליפה /billing/payments/list/",
+    "path": "/billing/payments/list/",
+    "payload": {
+      "ExternalIdentifier": "tl-discover-1791205290817",
+      "PaymentID": null,
+      "StartDate": null
+    },
+    "status": 200,
+    "ms": 129,
+    "contentType": "application/json; charset=utf-8",
+    "json": {
+      "Data": null,
+      "Status": 1,
+      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "TechnicalErrorDetails": null
+    }
+  },
+  {
+    "label": "שליפה /billing/payments/get/",
+    "path": "/billing/payments/get/",
+    "payload": {
+      "ExternalIdentifier": "tl-discover-1791205290817",
+      "PaymentID": null,
+      "StartDate": null
+    },
+    "status": 200,
+    "ms": 278,
+    "contentType": "application/json; charset=utf-8",
+    "json": {
+      "Data": null,
+      "Status": 2,
+      "UserErrorMessage": "Invalid Request JSON / Request doesn't match the API properties. Please contact support@sumit.co.il for assistance.",
+      "TechnicalErrorDetails": "Invalid Request JSON / Request doesn't match the API properties. Please contact support@sumit.co.il for assistance.\r\nPaymentID: Error converting value {null}. Path 'PaymentID', line 1, position 166."
+    }
+  },
+  {
+    "label": "שליפה /billing/payments/getbyexternalidentifier/",
+    "path": "/billing/payments/getbyexternalidentifier/",
+    "payload": {
+      "ExternalIdentifier": "tl-discover-1791205290817",
+      "PaymentID": null,
+      "StartDate": null
+    },
+    "status": 0,
+    "ms": 1886,
+    "contentType": null,
+    "json": null,
+    "raw": "TypeError: Fetch failed: Maximum number of redirects (20) reached"
+  },
+  {
+    "label": "שליפה /billing/payments/search/",
+    "path": "/billing/payments/search/",
+    "payload": {
+      "ExternalIdentifier": "tl-discover-1791205290817",
+      "PaymentID": null,
+      "StartDate": null
+    },
+    "status": 0,
+    "ms": 1557,
+    "contentType": null,
+    "json": null,
+    "raw": "TypeError: Fetch failed: Maximum number of redirects (20) reached"
+  },
+  {
+    "label": "לקוח לפי ExternalIdentifier",
+    "path": "/accounting/customers/getbyexternalidentifier/",
+    "payload": {
+      "ExternalIdentifier": "tl-discover-1791205290817"
+    },
+    "status": 0,
+    "ms": 1764,
+    "contentType": null,
+    "json": null,
+    "raw": "TypeError: Fetch failed: Maximum number of redirects (20) reached"
+  },
+  {
+    "label": "לקוחות: רשימה",
+    "path": "/accounting/customers/list/",
+    "payload": {},
+    "status": 0,
+    "ms": 2035,
+    "contentType": null,
+    "json": null,
+    "raw": "TypeError: Fetch failed: Maximum number of redirects (20) reached"
+  },
+  {
+    "label": "charge: גוף ריק",
+    "path": "/billing/payments/charge/",
+    "payload": {},
+    "status": 200,
+    "ms": 113,
+    "contentType": "application/json; charset=utf-8",
+    "json": {
+      "Data": null,
+      "Status": 1,
+      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "TechnicalErrorDetails": null
+    }
+  },
+  {
+    "label": "charge: כרטיס דמה",
+    "path": "/billing/payments/charge/",
+    "payload": {
+      "Customer": {
+        "Name": "בדיקה אוטומטית",
+        "Phone": "0500000000",
+        "EmailAddress": "test@example.com",
+        "ExternalIdentifier": "tl-discover-1791205290817",
+        "SearchMode": 0
+      },
+      "Items": [
+        {
+          "Item": {
+            "Name": "שכר לימוד — בדיקה",
+            "Description": "גילוי חוזה"
+          },
+          "Quantity": 1,
+          "UnitPrice": 210,
+          "TotalPrice": 210,
+          "Currency": "ILS"
+        }
+      ],
+      "ExternalIdentifier": "tl-discover-1791205290817-charge",
+      "VATIncluded": true,
+      "Language": 0,
+      "PaymentMethod": {
+        "Type": 1,
+        "CreditCard_Number": "4580000000000000",
+        "CreditCard_ExpirationMonth": 12,
+        "CreditCard_ExpirationYear": 2030,
+        "CreditCard_CVV": "123",
+        "CreditCard_CitizenID": "000000000"
+      }
+    },
+    "status": 200,
+    "ms": 268,
+    "contentType": "application/json; charset=utf-8",
+    "json": {
+      "Data": null,
+      "Status": 1,
+      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "TechnicalErrorDetails": null
+    }
+  }
+]

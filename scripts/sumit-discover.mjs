@@ -13,10 +13,10 @@ loadEnvFile('.env.verify');
 const ref = process.env.SUPABASE_PROJECT_REF, secret = process.env.CRON_SECRET;
 if (!ref || !secret) { console.error('  ✗ חסרים SUPABASE_PROJECT_REF / CRON_SECRET'); process.exit(2); }
 const log = [];
-async function probe(label, path, payload, method = 'POST') {
+async function probe(label, path, payload, method = 'POST', host) {
   const res = await fetch(`https://${ref}.supabase.co/functions/v1/sumit-probe`, {
     method: 'POST', headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ path, payload, method }),
+    body: JSON.stringify({ path, payload, method, host }),
   });
   const out = await res.json();
   log.push({ label, path, payload, ...out });
@@ -29,7 +29,7 @@ const ext = `tl-discover-${Date.now()}`;
 const customer = { Name: 'בדיקה אוטומטית', Phone: '0500000000', EmailAddress: 'test@example.com', ExternalIdentifier: ext, SearchMode: 0 };
 const item = { Item: { Name: 'שכר לימוד — בדיקה', Description: 'גילוי חוזה' }, Quantity: 1, UnitPrice: 210, TotalPrice: 210, Currency: 'ILS' };
 const args = process.argv.slice(2);
-if (args[0] === '--one') { await probe('ידני', args[1], JSON.parse(args[2] ?? '{}'), args[3] ?? 'POST'); process.exit(0); }
+if (args[0] === '--one') { await probe('ידני', args[1], JSON.parse(args[2] ?? '{}'), args[3] ?? 'POST', args[4]); process.exit(0); }
 
 // ─── 1. beginredirect: גוף ריק → הודעת השגיאה אומרת מה חסר ───
 await probe('beginredirect ריק', '/billing/payments/beginredirect/', {});

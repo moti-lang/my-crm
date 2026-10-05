@@ -63,8 +63,26 @@
 - תפוגה 7 ימים אצלנו; דף SUMIT נוצר רק בלחיצה, עם הסכום מהרשומה.
 - "שולם" אצלנו רק אחרי תשובת SUMIT, לעולם לא מהדפדפן ולא מגוף ה-IPN.
 
+## מה אומת בסבב הגילוי הראשון (2026-10-05)
+
+**המעטפה** (אומת, בכל נקודת קצה): `{ "Data": …|null, "Status": 0|1|2, "UserErrorMessage": …, "TechnicalErrorDetails": … }`
+עם HTTP 200 גם בשגיאה. `Status: 1` = פרטי גישה שגויים; `Status: 2` = הגוף לא תואם
+לסכמה, ו-`TechnicalErrorDetails` אומר איזה שדה (למשל `PaymentID: Error converting value {null}`).
+
+**נקודות קצה קיימות** (אומת: עונות במעטפה, לא בהפניה אינסופית):
+`/billing/payments/beginredirect/`, `/billing/payments/list/`, `/billing/payments/get/`
+(דורשת `PaymentID` מספרי, לא null), `/billing/payments/charge/`, `/website/companies/getdetails/`.
+**לא קיימות** (אומת: שרשרת הפניות עד 20): `/billing/payments/getbyexternalidentifier/`,
+`/billing/payments/search/`, `/accounting/customers/getbyexternalidentifier/`,
+`/accounting/customers/list/`. **מארח**: רק `api.sumit.co.il` חי; `api.dev`/`dev`/`api-dev` לא.
+
+**חסום**: כל הקריאות מחזירות `Invalid Credentials (CompanyID/APIKey are incorrect)` עם
+הזוג 2410781753 / המפתח שנמסר, בכל ניסוח (מספר/מחרוזת, עם/בלי רווח). שדות
+beginredirect והשליפה לפי ExternalIdentifier נשארים **הנחה** עד שיתקבל זוג תקף.
+
 ## סטטוס הגילוי
 
-טרם רץ: הסנדבוקס איבד את טוקן ה-Supabase (קונטיינר חדש), ובלעדיו אי אפשר לפרוס
-את `sumit-probe` ולהריץ את הסבב. כשהטוקן יהיה: `node scripts/functions-deploy-api.mjs sumit-probe`
-← `node scripts/sumit-discover.mjs` ← לעדכן את הסעיפים כאן מ-"הנחה" ל-"אומת".
+רץ, ונעצר בפרטי הגישה. להמשך: זוג CompanyID/APIKey תקף של ארגון הבדיקה
+(ב-SUMIT: הגדרות ← API ← "מפתח API", לא "מפתח ציבורי"; מודול API מותקן בארגון
+הבדיקה עצמו; ה-CompanyID של אותו ארגון). ואז: `node scripts/sumit-discover.mjs`
+← לעדכן כאן מ-"הנחה" ל-"אומת" ← לחבר ב-`_shared/sumit.ts`.
