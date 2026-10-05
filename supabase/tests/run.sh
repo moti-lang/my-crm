@@ -69,6 +69,9 @@ node_test "template-parity.test.mjs" "✓|✗|זהים|הבדלים"
 echo "═══ סוכן הלקוחות ═══"
 node_test "customer-agent.test.mjs" "✗|התרחישים|נכשלו"
 
+echo "═══ שכבת הסניף לסוכן ═══"
+node_test "knowledge-layer.test.mjs" "✗|שכבת הסניף|נכשלו"
+
 echo "═══ ייצוא הדוחות ═══"
 node_test "reports-export.test.mjs" "✗|מייצאים|נכשלו"
 

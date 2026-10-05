@@ -17,7 +17,7 @@ export function isEmail(v: string): boolean {
 
 export type EnrollForm = {
   first_name: string; last_name: string; grade: string; school: string; phone: string; email: string;
-  branch_id: string; mailing_consent: boolean; terms_accepted: boolean;
+  mailing_consent: boolean; terms_accepted: boolean;
 };
 
 /** הודעה לכל שדה פגום, בעברית. ריק = תקין. */
@@ -31,7 +31,6 @@ export function validateEnroll(f: EnrollForm): Partial<Record<keyof EnrollForm, 
   if (!f.school.trim()) e.school = 'יש למלא בית ספר';
   if (!isIsraeliMobile(f.phone)) e.phone = 'נייד ישראלי, למשל 052-1234567';
   if (!isEmail(f.email)) e.email = 'כתובת מייל תקינה';
-  if (!f.branch_id) e.branch_id = 'יש לבחור סניף';
   if (!f.terms_accepted) e.terms_accepted = 'יש לקרוא ולאשר את התקנון';
   return e;
 }
@@ -43,13 +42,25 @@ export function describePlan(p: { annual_total: number; registration_fee: number
 }
 
 /**
- * סניף פעיל אחד בלבד → נבחר אוטומטית והבורר לא מוצג. שניים ומעלה → הבורר
- * חוזר, בלי הגדרה ידנית. הרשימה מגיעה מהמסד (רק סניפים פעילים שלא נמחקו).
+ * הסניף נקבע מהקישור (/enroll/<טוקן>), לא מבחירה של ההורה. בלי טוקן
+ * (/enroll) המסד מוביל לסניף הפעיל היחיד, ואם יש כמה — מבקש את הקישור.
  */
-export function autoBranch<B extends { id: string }>(branches: B[] | null | undefined): B | null {
-  return branches && branches.length === 1 ? (branches[0] ?? null) : null;
+export function enrollTokenFromPath(pathname: string): string {
+  const m = /^\/enroll\/([0-9a-f]{16,64})\/?$/i.exec(pathname);
+  return m ? m[1]!.toLowerCase() : '';
 }
-export function withAutoBranch(f: EnrollForm, branches: { id: string }[] | null | undefined): EnrollForm {
-  const only = autoBranch(branches);
-  return only ? { ...f, branch_id: only.id } : f;
+
+/** מבנה התשלום של סניף (או ברירת המחדל). אותם כללים כמו f_plan_check במסד. */
+export type PlanInput = {
+  annual_total?: number; registration_fee?: number; installments?: number; installment_amount?: number;
+  first_charge?: number; trial_days?: number; cancel_refund?: number; registration_fee_purpose?: string;
+};
+export function checkPlan(p: PlanInput): { ok: boolean; message: string; first_charge: number } {
+  const total = Number(p.annual_total), fee = Number(p.registration_fee), n = Number(p.installments), each = Number(p.installment_amount);
+  const first = fee + each;
+  if (![total, fee, n, each].every(Number.isFinite) || n < 1) return { ok: false, message: 'יש למלא שכר לימוד שנתי, דמי רישום, מספר תשלומים וסכום לתשלום', first_charge: first };
+  if (fee < 0 || each <= 0) return { ok: false, message: 'דמי רישום וסכום לתשלום חייבים להיות חיוביים', first_charge: first };
+  const sum = fee + n * each;
+  if (sum !== total) return { ok: false, message: `✗ המבנה לא מסתכם: ${fee} + ${n} × ${each} = ${sum}, ולא ${total}. ההרשמה לסניף תסרב עד שזה יתוקן.`, first_charge: first };
+  return { ok: true, message: `✓ ${fee} + ${n} × ${each} = ${total}. החיוב הראשון: ${first} (דמי רישום + תשלום אחד)`, first_charge: first };
 }

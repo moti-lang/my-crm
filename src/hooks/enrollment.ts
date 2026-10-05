@@ -7,17 +7,17 @@ export type EnrollmentPlan = {
   installments: number; installment_amount: number; first_charge: number; tuition: number;
   trial_days: number; cancel_refund: number;
 };
-export type EnrollmentPublic = {
-  program_name: string; terms: string; plan: EnrollmentPlan;
-  branches: { id: string; name: string; city: string | null }[];
-};
+export type EnrollmentPublic =
+  | { ok: true; program_name: string; terms: string; plan: EnrollmentPlan; open: boolean; closed_reason: 'closed' | 'full' | 'inactive' | null;
+      branch: { name: string; city: string | null; schedule: string | null; age_groups: string | null } }
+  | { ok: false; error: string };
 
-/** הדף הציבורי: שם, תקנון, מבנה, סניפים. anon. */
-export function useEnrollmentPublic() {
+/** הדף הציבורי: הסניף של הקישור — שם, תקנון, מבנה. anon. */
+export function useEnrollmentPublic(token: string) {
   return useQuery({
-    queryKey: ['enrollment-public'],
+    queryKey: ['enrollment-public', token],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('rpc_enrollment_public');
+      const { data, error } = await supabase.rpc('rpc_enrollment_public', { p_token: token });
       if (error) throw new Error(error.message);
       return data as unknown as EnrollmentPublic;
     },
@@ -26,7 +26,7 @@ export function useEnrollmentPublic() {
 
 export type EnrollInput = {
   first_name: string; last_name: string; grade: string; school: string; phone: string; email: string;
-  branch_id: string; mailing_consent: boolean; terms_accepted: boolean;
+  enroll_token: string; mailing_consent: boolean; terms_accepted: boolean;
 };
 export type EnrollResult = { ok: true; pay_url: string; amount: number; student: string; branch: string } | { ok: false; error: string };
 

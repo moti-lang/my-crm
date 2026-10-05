@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthProvider';
 import { useCloseBranch } from '@/hooks/queries';
 import { humanError } from '@/lib/errors';
 import { useBranch, useStudents, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
 import { useBranchPnl } from '@/hooks/queries';
 import { StudentDrawer } from '@/components/StudentDrawer';
+import { BranchSettings } from '@/components/BranchSettings';
 import { formatILS, formatPhone, formatWeekdays } from '@/lib/format';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
 import type { Views } from '@/lib/database.types';
@@ -24,7 +25,8 @@ export function BranchDetail() {
   const branch = useBranch(id);
   const pnl = useBranchPnl();
   const students = useStudents();
-  const [tab, setTab] = useState<Tab>('overview');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(params.get('tab') === 'settings' ? 'settings' : 'overview');
   const [selected, setSelected] = useState<Student | null>(null);
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -145,8 +147,11 @@ export function BranchDetail() {
         )
       )}
 
+      {tab === 'settings' && profile?.role === 'owner' && <BranchSettings branch={b} />}
+
       {tab === 'settings' && (
         <div className="card space-y-3 p-4">
+          {profile?.role !== 'owner' && (
           <dl className="space-y-2 text-sm">
             <Row label="אחראית" value={b.supervisor_name} />
             <Row label="טלפון האחראית" value={formatPhone(b.supervisor_phone)} ltr />
@@ -154,7 +159,9 @@ export function BranchDetail() {
             <Row label="שעת שיעור" value={b.lesson_time} />
             <Row label="מחיר ברירת מחדל" value={formatILS(b.default_tuition)} />
             <Row label="שכירות חודשית" value={formatILS(b.monthly_rent)} />
+            <Row label="קבוצות גיל" value={b.age_groups} />
           </dl>
+          )}
           {profile?.role === 'owner' && b.is_active && (
             <div className="border-t border-rule pt-3">
               <p className="text-xs text-soft">

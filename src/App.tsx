@@ -107,6 +107,7 @@ export default function App() {
           <Route path="/pay/:token" element={<Pay />} />
           {/* ציבורי: דף ההרשמה. RPC אחד, אימות והגבלת קצב במסד. */}
           <Route path="/enroll" element={<Enroll />} />
+          <Route path="/enroll/:token" element={<Enroll />} />
           <Route
             path="*"
             element={

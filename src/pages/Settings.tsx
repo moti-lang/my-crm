@@ -112,8 +112,11 @@ function EnrollmentCard() {
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   return (
     <section className="card space-y-3 p-4">
-      <h2 className="text-lg">הרשמה לחוג</h2>
-      <p className="text-sm text-soft">דף ההרשמה הציבורי: <code className="text-xs">{q.data?.base_url}/enroll</code>. כל מה שכאן מופיע בדף ונאכף בהרשמה, בלי לגעת בקוד.</p>
+      <h2 className="text-lg">ברירת מחדל לסניף חדש</h2>
+      <p className="text-sm text-soft">
+        תקנון ומבנה תשלום שמועתקים לכל סניף חדש. שינוי כאן לא משנה סניפים קיימים: לכל סניף יש
+        עותק משלו, עם קישור הרשמה משלו, במסך הסניף ← הגדרות.
+      </p>
       <label className="block text-sm">שם החוג<input className="field mt-1" value={name} onChange={(e) => setName(e.target.value)} /></label>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {num('annual_total', 'עלות שנתית (₪)')}
@@ -130,7 +133,7 @@ function EnrollmentCard() {
           ? `✓ ${n('registration_fee')} + ${n('installments')} × ${n('installment_amount')} = ${n('annual_total')}, והחיוב הראשון = דמי רישום + תשלום אחד`
           : `✗ המבנה לא מסתכם: ${n('registration_fee')} + ${n('installments')} × ${n('installment_amount')} = ${sum}, ולא ${n('annual_total')} (או שהחיוב הראשון שגוי). ההרשמה תסרב עד שזה יתוקן.`}
       </p>
-      <label className="block text-sm">התקנון (מוצג במלואו בדף ההרשמה)<textarea className="field mt-1 min-h-[14rem]" value={terms} onChange={(e) => setTerms(e.target.value)} /></label>
+      <label className="block text-sm">התקנון לסניף חדש<textarea className="field mt-1 min-h-[14rem]" value={terms} onChange={(e) => setTerms(e.target.value)} /></label>
       {msg && <p className={`text-sm ${msg.startsWith('נשמר') ? 'text-ok' : 'text-bad'}`} role="status">{msg}</p>}
       <button type="button" className="btn-primary" disabled={save.isPending || !consistent}
         onClick={async () => { setMsg(null); try { await save.mutateAsync({ program_name: name, terms, plan }); setMsg('נשמר.'); } catch (e) { setMsg(humanError(e)); } }}>

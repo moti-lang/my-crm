@@ -3,6 +3,7 @@ import { useStudents, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/ho
 import { useBranches } from '@/hooks/queries';
 import { StudentDrawer } from '@/components/StudentDrawer';
 import { ImportStudents } from '@/components/ImportStudents';
+import { AddStudent } from '@/components/AddStudent';
 import { exportXlsx } from '@/lib/export';
 import type { Column } from '@/lib/export-core';
 import { formatILS, formatPhone } from '@/lib/format';
@@ -48,6 +49,7 @@ export function Students() {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'full_name', dir: 'asc' });
   const [selected, setSelected] = useState<Student | null>(null);
   const [importing, setImporting] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -88,12 +90,16 @@ export function Students() {
             onClick={() => exportXlsx('תלמידות', [{ name: 'תלמידות', columns: EXPORT_COLUMNS as Column<unknown>[], rows }])}>
             ייצוא
           </button>
-          <button type="button" className="btn-primary px-3 py-1 text-xs" onClick={() => setImporting((v) => !v)} aria-pressed={importing}>
+          <button type="button" className="btn-primary px-3 py-1 text-xs" onClick={() => setAdding((v) => !v)} aria-pressed={adding}>
+            הוספת תלמידה
+          </button>
+          <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => setImporting((v) => !v)} aria-pressed={importing}>
             ייבוא אקסל
           </button>
         </div>
       </header>
 
+      {adding && <AddStudent onDone={() => setAdding(false)} />}
       {importing && <ImportStudents onClose={() => setImporting(false)} />}
 
       <div className="grid gap-2 sm:grid-cols-3">

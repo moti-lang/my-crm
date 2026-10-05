@@ -77,8 +77,12 @@ function Simulator() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [lead, setLead] = useState<Record<string, string | null> | null>(null);
+  // כמו בוואטסאפ: הורה מסניף ידוע מקבלת את שכבת הסניף מעל הכללי.
+  const [asBranch, setAsBranch] = useState<string>('');
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [turns]);
+
+  const activeBranches = (branches.data ?? []).filter((b) => b.is_active);
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -91,9 +95,11 @@ function Simulator() {
     try {
       const outcome = await simulateAnswer({
         text: t, history,
-        faq: (faq.data ?? []).filter((f) => f.is_active).map((f) => ({ question: f.question, answer: f.answer })),
-        knowledge: (knowledge.data ?? []).filter((k) => k.is_active).map((k) => ({ title: k.title, body: k.body })),
-        branches: (branches.data ?? []).map((b) => b.name),
+        faq: (faq.data ?? []).filter((f) => f.is_active).map((f) => ({ question: f.question, answer: f.answer, branch_id: f.branch_id })),
+        knowledge: (knowledge.data ?? []).filter((k) => k.is_active).map((k) => ({ title: k.title, body: k.body, branch_id: k.branch_id })),
+        branches: activeBranches.map((b) => b.name),
+        branchRows: activeBranches.map((b) => ({ id: b.id, name: b.name })),
+        branchId: asBranch || null,
         mayQuotePrices: may.data === true, lead,
       });
       if (outcome.ok) {
@@ -154,8 +160,14 @@ function Simulator() {
         ))}
         <div ref={endRef} />
       </div>
-      <form onSubmit={send} className="flex gap-2 border-t border-rule p-3">
-        <input className="field" value={text} onChange={(e) => setText(e.target.value)} placeholder="הודעה מהורה…" aria-label="הודעה" disabled={busy} />
+      <form onSubmit={send} className="flex flex-wrap gap-2 border-t border-rule p-3">
+        {activeBranches.length > 1 && (
+          <select className="field w-auto" value={asBranch} onChange={(e) => setAsBranch(e.target.value)} aria-label="הורה מסניף">
+            <option value="">הורה חדשה (סניף לא ידוע)</option>
+            {activeBranches.map((b) => <option key={b.id} value={b.id}>הורה מ{b.name}</option>)}
+          </select>
+        )}
+        <input className="field flex-1" value={text} onChange={(e) => setText(e.target.value)} placeholder="הודעה מהורה…" aria-label="הודעה" disabled={busy} />
         <button type="submit" className="btn-primary" disabled={busy || !text.trim()}>{busy ? '…' : 'שליחה'}</button>
         {turns.length > 0 && <button type="button" className="btn-ghost" onClick={() => { setTurns([]); setLead(null); }}>ניקוי</button>}
       </form>
@@ -255,6 +267,7 @@ function FaqTab({ draft, onDraftDone }: { draft: Unanswered | null; onDraftDone:
     try {
       await save.mutateAsync({
         id: editing.id, question: q, answer: a, keywords: editing.keywords ?? [], is_active: editing.is_active ?? true,
+        branch_id: editing.branch_id ?? null,
         resolveUnansweredId: draft && !editing.id ? draft.id : undefined,
       });
       setEditing(null);
@@ -282,6 +295,7 @@ function FaqTab({ draft, onDraftDone }: { draft: Unanswered | null; onDraftDone:
           <label className="block text-sm">תשובה (עד 3 משפטים, בלשון נקבה)
             <textarea className="field mt-1 min-h-[5rem]" value={editing.answer ?? ''} onChange={(e) => setEditing({ ...editing, answer: e.target.value })} required />
           </label>
+          <ScopeSelect value={editing.branch_id} onChange={(v) => setEditing({ ...editing, branch_id: v })} />
           <label className="block text-sm">מילות מפתח (מופרדות בפסיק)
             <input className="field mt-1" value={(editing.keywords ?? []).join(', ')}
               onChange={(e) => setEditing({ ...editing, keywords: e.target.value.split(',').map((k) => k.trim()).filter(Boolean) })} />
@@ -303,7 +317,7 @@ function FaqTab({ draft, onDraftDone }: { draft: Unanswered | null; onDraftDone:
             <li key={f.id} className={`px-3 py-2 text-sm ${f.is_active ? '' : 'opacity-60'}`}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-medium">{f.question}</p>
+                  <p className="font-medium">{f.question}<ScopeTag branchId={f.branch_id} /></p>
                   <p className="mt-0.5 whitespace-pre-wrap text-soft">{f.answer}</p>
                   {f.keywords.length > 0 && <p className="mt-1 text-xs text-soft">מילות מפתח: {f.keywords.join(' · ')}</p>}
                 </div>
@@ -319,6 +333,29 @@ function FaqTab({ draft, onDraftDone }: { draft: Unanswered | null; onDraftDone:
       )}
     </div>
   );
+}
+
+/** כללי, או שכבה לסניף שגוברת על הכללי עם אותה שאלה/כותרת. */
+function ScopeSelect({ value, onChange }: { value: string | null | undefined; onChange: (v: string | null) => void }) {
+  const branches = useBranches();
+  const list = (branches.data ?? []).filter((b) => b.is_active);
+  if (list.length === 0) return null;
+  return (
+    <label className="block text-sm">חל על
+      <select className="field mt-1" value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+        <option value="">כל הסניפים (כללי)</option>
+        {list.map((b) => <option key={b.id} value={b.id}>סניף {b.name} בלבד — גובר על הכללי</option>)}
+      </select>
+      <span className="mt-0.5 block text-xs text-soft">לתוספת לסניף: אותה שאלה/כותרת כמו בכללי, עם התשובה של הסניף. בשאר הסניפים נשאר הכללי.</span>
+    </label>
+  );
+}
+
+function ScopeTag({ branchId }: { branchId: string | null }) {
+  const branches = useBranches();
+  if (!branchId) return null;
+  const name = (branches.data ?? []).find((b) => b.id === branchId)?.name ?? 'סניף';
+  return <span className="mr-2 rounded-btn bg-plum/10 px-1.5 py-0.5 text-[11px] text-plum">{name}</span>;
 }
 
 // ─────────── מידע על החוג ───────────
@@ -340,7 +377,7 @@ function KnowledgeTab() {
     if (!title || !body) { setError('כותרת ותוכן הם חובה.'); return; }
     try {
       await save.mutateAsync({
-        id: editing.id, title, body, is_active: editing.is_active ?? true,
+        id: editing.id, title, body, is_active: editing.is_active ?? true, branch_id: editing.branch_id ?? null,
         position: editing.id ? undefined : (rows.length ? Math.max(...rows.map((r) => r.position)) + 1 : 0),
       });
       setEditing(null);
@@ -367,6 +404,7 @@ function KnowledgeTab() {
           <label className="block text-sm">תוכן
             <textarea className="field mt-1 min-h-[10rem]" value={editing.body ?? ''} onChange={(e) => setEditing({ ...editing, body: e.target.value })} required />
           </label>
+          <ScopeSelect value={editing.branch_id} onChange={(v) => setEditing({ ...editing, branch_id: v })} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={editing.is_active ?? true} onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })} /> פעיל (הסוכן רואה אותו)
           </label>
@@ -386,7 +424,7 @@ function KnowledgeTab() {
             <li key={k.id} className={`card p-3 text-sm ${k.is_active ? '' : 'opacity-60'}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-medium">{k.title}{!k.is_active && <span className="mr-2 text-xs text-warn">לא פעיל</span>}</h3>
+                  <h3 className="font-medium">{k.title}<ScopeTag branchId={k.branch_id} />{!k.is_active && <span className="mr-2 text-xs text-warn">לא פעיל</span>}</h3>
                   <p className="mt-1 whitespace-pre-wrap text-soft">{k.body}</p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1 text-xs">

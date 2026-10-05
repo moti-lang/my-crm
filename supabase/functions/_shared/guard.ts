@@ -70,7 +70,8 @@ export function requirePayToken(req: Request): Response | null {
   return null;
 }
 
-const ENROLL_FIELDS = ['first_name', 'last_name', 'grade', 'school', 'phone', 'email', 'branch_id', 'terms_accepted'];
+// הסניף נקבע מ-enroll_token (הקישור), לא מבחירה בדפדפן. ריק = סניף פעיל יחיד.
+const ENROLL_FIELDS = ['first_name', 'last_name', 'grade', 'school', 'phone', 'email', 'enroll_token', 'terms_accepted'];
 export async function requireEnrollBody(req: Request): Promise<Response | null> {
   if (req.method !== 'POST') return deny(405, 'שיטה לא נתמכת');
   const len = Number(req.headers.get('content-length') ?? '0');

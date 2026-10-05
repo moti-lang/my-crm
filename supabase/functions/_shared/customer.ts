@@ -1,3 +1,4 @@
+import { layerForBranch, type LayerFaq, type LayerKnowledge } from './knowledge-layer.ts';
 import { answerProvider, type AnswerContext } from './answer.ts';
 import { NO_ANSWER_REPLY, PROVIDER_ERROR_REPLY, isLeadComplete, type LeadFields, type AnswerSource } from './answer-schema.ts';
 import { resolveAnswer } from './answer-resolve.ts';
@@ -64,17 +65,30 @@ export async function answerCustomer(
   }
 
   // ─── 2. ההקשר ───
-  const [faqRes, knowledgeRes, settingRes, historyRes, branchesRes] = await Promise.all([
-    db.from('faq_entries').select('id, question, answer').eq('is_active', true).order('created_at'),
-    db.from('knowledge_sections').select('title, body').eq('is_active', true).order('position'),
+  const [faqRes, knowledgeRes, settingRes, historyRes, branchesRes, studentRes] = await Promise.all([
+    db.from('faq_entries').select('id, question, answer, branch_id').eq('is_active', true).order('created_at'),
+    db.from('knowledge_sections').select('title, body, branch_id').eq('is_active', true).order('position'),
     db.from('settings').select('value').eq('key', 'agent_may_quote_prices').maybeSingle(),
     db.from('wa_messages').select('direction, body').eq('phone', phone).order('created_at', { ascending: false }).limit(HISTORY_LIMIT + 1),
-    db.from('branches').select('id, name, default_tuition').is('deleted_at', null),
+    db.from('branches').select('id, name, default_tuition, plan').is('deleted_at', null).eq('is_active', true),
+    conversation?.student_id
+      ? db.from('students').select('branch_id').eq('id', conversation.student_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
-  const faq = (faqRes.data ?? []) as { id: string; question: string; answer: string }[];
-  const knowledge = ((knowledgeRes.data ?? []) as { title: string; body: string }[]).filter((k) => k.title && k.body);
   const mayQuotePrices = settingRes.data?.value === true || settingRes.data?.value === 'true';
-  const branches = (branchesRes.data ?? []) as { id: string; name: string; default_tuition: number | string }[];
+  const branches = (branchesRes.data ?? []) as { id: string; name: string; default_tuition: number | string; plan: Record<string, unknown> | null }[];
+  // ★ שכבת הסניף: אם ידוע לאיזה סניף הפונה שייכת — המידע של הסניף גובר על הכללי.
+  const leadBranch = (conversation?.lead_state as LeadFields | null)?.branch ?? null;
+  const knownBranchId = (studentRes.data as { branch_id?: string } | null)?.branch_id
+    ?? (leadBranch ? branches.find((b) => b.name === leadBranch)?.id ?? null : null);
+  const layered = layerForBranch(
+    ((faqRes.data ?? []) as LayerFaq[]),
+    ((knowledgeRes.data ?? []) as LayerKnowledge[]).filter((k) => k.title && k.body),
+    branches.map((b) => ({ id: b.id, name: b.name })),
+    knownBranchId,
+  );
+  const faq = layered.faq;
+  const knowledge = layered.knowledge;
   // ההודעה הנוכחית כבר נרשמה כנכנסת — מסירים אותה מההיסטוריה.
   const history = ((historyRes.data ?? []) as { direction: 'in' | 'out'; body: string | null }[])
     .slice(1).reverse()
@@ -186,7 +200,8 @@ export async function answerCustomer(
       parent_phone: normalizeIl(merged.parent_phone),
       status: 'pending',
       source: 'whatsapp',
-      tuition_total: Number(branch.default_tuition ?? 0),
+      // תנאי הסניף, כמו בהרשמה ובהוספה ידנית. סניף בלי מבנה תקין — לפי מחיר ברירת המחדל.
+      ...leadTerms(branch),
       notes: `גיל: ${merged.age}. נרשמה דרך סוכן הוואטסאפ.`,
     }).select('id').maybeSingle();
 
@@ -219,9 +234,19 @@ export async function answerCustomer(
 
   // ─── תשובה מהמאגר: מונה שימוש ───
   const hit = resolved.faqQuestion ? faq.find((f) => f.question === resolved.faqQuestion) : null;
-  if (hit) {
+  if (hit?.id) {
     const { data: current } = await db.from('faq_entries').select('hits').eq('id', hit.id).maybeSingle();
     await db.from('faq_entries').update({ hits: Number(current?.hits ?? 0) + 1 }).eq('id', hit.id);
   }
   return { route: 'customer_answer', phone, reply, faqQuestion: hit?.question ?? null, source: resolved.source, knowledgeTitle: resolved.knowledgeTitle };
+}
+
+/** תנאי הסניף לליד שנרשם בוואטסאפ: שכר לימוד, דמי רישום ותשלומים — ונשמרים אצלה. */
+function leadTerms(branch: { default_tuition: number | string; plan: Record<string, unknown> | null }) {
+  const p = branch.plan ?? {};
+  const total = Number(p.annual_total), fee = Number(p.registration_fee), n = Number(p.installments);
+  if (!Number.isFinite(total) || !Number.isFinite(fee) || !Number.isFinite(n) || n < 1) {
+    return { tuition_total: Number(branch.default_tuition ?? 0) };
+  }
+  return { tuition_total: total - fee, registration_fee: fee, installments: n, installments_total: n, plan_snapshot: p };
 }

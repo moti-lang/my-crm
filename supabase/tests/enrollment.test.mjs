@@ -18,26 +18,25 @@ const dir = mkdtempSync(join(tmpdir(), 'enroll-'));
 const out = join(dir, 'e.cjs');
 execFileSync('npx', ['esbuild', 'src/lib/enrollment.ts', '--bundle', '--format=cjs', '--platform=node', `--outfile=${out}`, '--log-level=error']);
 const e = await import(out);
-const good = { first_name: 'רבקה', last_name: 'כהן', grade: 'ד', school: 'בית יעקב', phone: '052-111-2233', email: 'a@b.co.il', branch_id: 'x', mailing_consent: true, terms_accepted: true };
+const good = { first_name: 'רבקה', last_name: 'כהן', grade: 'ד', school: 'בית יעקב', phone: '052-111-2233', email: 'a@b.co.il', mailing_consent: true, terms_accepted: true };
 
 console.log('\nאימות בדף:');
 check('טופס תקין — בלי שגיאות', Object.keys(e.validateEnroll(good)).length === 0, JSON.stringify(e.validateEnroll(good)));
 {
-  const one = [{ id: 'b1', name: 'דרך אמונה' }], two = [...one, { id: 'b2', name: 'אחר' }];
-  check('★ סניף פעיל יחיד — נבחר אוטומטית', e.autoBranch(one)?.id === 'b1' && e.withAutoBranch({ ...good, branch_id: '' }, one).branch_id === 'b1');
-  check('★ סניף יחיד — טופס בלי בחירה עובר בדיקה', Object.keys(e.validateEnroll(e.withAutoBranch({ ...good, branch_id: '' }, one))).length === 0);
-  check('★ שני סניפים — אין בחירה אוטומטית, הבורר חוזר', e.autoBranch(two) === null && e.withAutoBranch({ ...good, branch_id: '' }, two).branch_id === '');
-  check('אין סניפים — אין בחירה', e.autoBranch([]) === null && e.autoBranch(undefined) === null);
+  check('★ הטוקן נקרא מהקישור /enroll/<טוקן>', e.enrollTokenFromPath('/enroll/0123456789abcdef0123456789abcdef') === '0123456789abcdef0123456789abcdef');
+  check('/enroll בלי טוקן — ריק (המסד מוביל לסניף הפעיל היחיד)', e.enrollTokenFromPath('/enroll') === '' && e.enrollTokenFromPath('/enroll/') === '');
+  check('טוקן זבל — ריק', e.enrollTokenFromPath('/enroll/<script>') === '' && e.enrollTokenFromPath('/enroll/abc') === '');
   const page = codeOf('src/pages/Enroll.tsx');
-  check('★ הדף שולח ובודק את הטופס עם הסניף האוטומטי', /enroll\(effective\)/.test(page) && /validateEnroll\(effective\)/.test(page));
+  check('★ ההורה לא בוחרת סניף: אין בורר בדף', !/<select/.test(page) && !/branch_id/.test(page));
+  check('★ הדף שולח את הטוקן מהקישור', /enroll\(\{ \.\.\.form, enroll_token: token \}\)/.test(page) && /useEnrollmentPublic\(token\)/.test(page));
+  check('סניף סגור או מלא — אין טופס', /!open \?/.test(page));
 }
 check('★ בלי אישור תקנון — נחסם', e.validateEnroll({ ...good, terms_accepted: false }).terms_accepted !== undefined);
 check('★ שם עם תווים זרים — נחסם', e.validateEnroll({ ...good, first_name: '<b>x</b>' }).first_name !== undefined && e.validateEnroll({ ...good, first_name: 'רבקה1' }).first_name !== undefined);
 check("שם עם גרש ומקף — תקין", Object.keys(e.validateEnroll({ ...good, last_name: "כ״ץ-או'ברייאן" })).length === 0);
 check('טלפון קווי/קצר — נחסם; נייד מנורמל', e.validateEnroll({ ...good, phone: '03-1234567' }).phone !== undefined && e.normalizePhone('052-111-2233') === '972521112233');
 check('מייל לא תקין — נחסם', e.validateEnroll({ ...good, email: 'x@' }).email !== undefined);
-check('בלי סניף — נחסם', e.validateEnroll({ ...good, branch_id: '' }).branch_id !== undefined);
-check('כל השגיאות בעברית', Object.values(e.validateEnroll({ ...good, first_name: '', phone: 'x', email: 'y', branch_id: '', terms_accepted: false })).every((m) => /[֐-׿]/.test(m)));
+check('כל השגיאות בעברית', Object.values(e.validateEnroll({ ...good, first_name: '', phone: 'x', email: 'y', terms_accepted: false })).every((m) => /[֐-׿]/.test(m)));
 
 console.log('\nמבנה התשלום להורה:');
 const d = e.describePlan({ annual_total: 1200, registration_fee: 100, installments: 10, installment_amount: 110, first_charge: 210 });

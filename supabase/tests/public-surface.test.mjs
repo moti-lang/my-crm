@@ -38,9 +38,9 @@ console.log('\nמסלולים מחוץ לשער ההתחברות:');
 for (const r of publicRoutes) console.log(`    ${r}`);
 
 // שניים בלבד: מסך האחראית ודף התשלום של ההורה. שניהם עם טוקן, שניהם RPC בלבד.
-check('★ שלושה מסלולים ציבוריים בלבד', publicRoutes.length === 3,
+check('★ ארבעה מסלולים ציבוריים בלבד', publicRoutes.length === 4,
       `נמצאו: ${publicRoutes.join(', ')}`);
-check('★ והם /a/:token, /pay/:token ו-/enroll', publicRoutes.join(',') === '/a/:token,/pay/:token,/enroll',
+check('★ והם /a/:token, /pay/:token, /enroll ו-/enroll/:token (קישור הסניף)', publicRoutes.join(',') === '/a/:token,/pay/:token,/enroll,/enroll/:token',
       `נמצא: ${publicRoutes.join(',')}`);
 const enrollPage = codeOf('src/pages/Enroll.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 // החלק הציבורי של ה-hooks: עד ה-hook הראשון של הבעלים.

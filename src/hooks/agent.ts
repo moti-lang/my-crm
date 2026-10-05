@@ -28,8 +28,9 @@ export function useFaq() {
 export function useSaveFaq() {
   const invalidate = useInvalidate([['faq'], ['unanswered']]);
   return useMutation({
-    mutationFn: async (input: { id?: string; question: string; answer: string; keywords: string[]; is_active: boolean; resolveUnansweredId?: string }) => {
-      const row = { question: input.question.trim(), answer: input.answer.trim(), keywords: input.keywords, is_active: input.is_active };
+    mutationFn: async (input: { id?: string; question: string; answer: string; keywords: string[]; is_active: boolean; branch_id?: string | null; resolveUnansweredId?: string }) => {
+      // branch_id ריק = כללי; עם סניף = שכבה שגוברת על הכללי בסניף הזה.
+      const row = { question: input.question.trim(), answer: input.answer.trim(), keywords: input.keywords, is_active: input.is_active, branch_id: input.branch_id ?? null };
       let id = input.id;
       if (id) {
         const { error } = await supabase.from('faq_entries').update(row).eq('id', id);
@@ -64,8 +65,8 @@ export function useKnowledge() {
 export function useSaveKnowledge() {
   const invalidate = useInvalidate([['knowledge']]);
   return useMutation({
-    mutationFn: async (input: { id?: string; title: string; body: string; is_active: boolean; position?: number }) => {
-      const row = { title: input.title.trim(), body: input.body.trim(), is_active: input.is_active, ...(input.position !== undefined ? { position: input.position } : {}) };
+    mutationFn: async (input: { id?: string; title: string; body: string; is_active: boolean; branch_id?: string | null; position?: number }) => {
+      const row = { title: input.title.trim(), body: input.body.trim(), is_active: input.is_active, branch_id: input.branch_id ?? null, ...(input.position !== undefined ? { position: input.position } : {}) };
       if (input.id) {
         const { error } = await supabase.from('knowledge_sections').update(row).eq('id', input.id);
         if (error) throw new Error(error.message);
@@ -204,8 +205,9 @@ export type AnswerOutcome =
 
 export async function simulateAnswer(input: {
   text: string; history: { role: 'user' | 'assistant'; text: string }[];
-  faq: { question: string; answer: string }[]; knowledge: { title: string; body: string }[];
-  branches: string[]; mayQuotePrices: boolean; lead: Record<string, string | null> | null;
+  faq: { question: string; answer: string; branch_id: string | null }[]; knowledge: { title: string; body: string; branch_id: string | null }[];
+  branches: string[]; branchRows: { id: string; name: string }[]; branchId: string | null;
+  mayQuotePrices: boolean; lead: Record<string, string | null> | null;
 }): Promise<AnswerOutcome> {
   const { data, error } = await supabase.functions.invoke('ai-answer', { body: input });
   if (error) throw new Error(error.message);

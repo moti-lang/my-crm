@@ -26,10 +26,10 @@ console.log(`  ${fns.length} פונקציות פרוסות`);
 const PUBLIC_BY_DESIGN = { enroll: async () => {
   const bad = await probe('enroll', {});
   const res = await fetch(`${base}/enroll`, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ first_name: 'בדיקה', last_name: 'אוטומטית', grade: 'ד', school: 'x', phone: '0500000000', email: 'x@y.co', branch_id: '00000000-0000-0000-0000-000000000000', terms_accepted: true }) }).catch(() => null);
+    body: JSON.stringify({ first_name: 'בדיקה', last_name: 'אוטומטית', grade: 'ד', school: 'x', phone: '0500000000', email: 'x@y.co', enroll_token: '00000000000000000000000000000000', terms_accepted: true }) }).catch(() => null);
   const body = res ? await res.json().catch(() => null) : null;
-  const ok = bad === 400 && res?.status === 200 && body?.ok === false && /סניף/.test(String(body?.error ?? ''));
-  return { ok, detail: `גוף זבל → ${bad} · הרשמה לסניף לא קיים → ${res?.status ?? 0} ${JSON.stringify(body)}` };
+  const ok = bad === 400 && res?.status === 200 && body?.ok === false && /קישור/.test(String(body?.error ?? ''));
+  return { ok, detail: `גוף זבל → ${bad} · הרשמה בקישור לא קיים → ${res?.status ?? 0} ${JSON.stringify(body)}` };
 } };
 for (const f of fns) {
   if (PUBLIC_BY_DESIGN[f.slug]) {

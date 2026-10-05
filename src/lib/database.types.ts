@@ -264,6 +264,12 @@ export type Database = {
           is_active: boolean;
           deleted_at: string | null;
           created_at: string;
+          enroll_token: string;
+          enrollment_open: boolean;
+          capacity: number | null;
+          terms: string | null;
+          plan: Json | null;
+          age_groups: string | null;
         };
         Insert: {
           id?: string;
@@ -280,6 +286,12 @@ export type Database = {
           is_active?: boolean;
           deleted_at?: string | null;
           created_at?: string;
+          enroll_token?: string;
+          enrollment_open?: boolean;
+          capacity?: number | null;
+          terms?: string | null;
+          plan?: Json | null;
+          age_groups?: string | null;
         };
         Update: {
           id?: string;
@@ -296,6 +308,12 @@ export type Database = {
           is_active?: boolean;
           deleted_at?: string | null;
           created_at?: string;
+          enroll_token?: string;
+          enrollment_open?: boolean;
+          capacity?: number | null;
+          terms?: string | null;
+          plan?: Json | null;
+          age_groups?: string | null;
         };
         Relationships: [];
       };
@@ -448,6 +466,7 @@ export type Database = {
           is_active: boolean;
           hits: number;
           created_at: string;
+          branch_id: string | null;
         };
         Insert: {
           id?: string;
@@ -457,6 +476,7 @@ export type Database = {
           is_active?: boolean;
           hits?: number;
           created_at?: string;
+          branch_id?: string | null;
         };
         Update: {
           id?: string;
@@ -466,8 +486,17 @@ export type Database = {
           is_active?: boolean;
           hits?: number;
           created_at?: string;
+          branch_id?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "faq_entries_branch_id_fkey";
+            columns: ["branch_id"];
+            isOneToOne: false;
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       holidays: {
         Row: {
@@ -493,6 +522,7 @@ export type Database = {
           is_active: boolean;
           created_at: string;
           updated_at: string;
+          branch_id: string | null;
         };
         Insert: {
           id?: string;
@@ -502,6 +532,7 @@ export type Database = {
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
+          branch_id?: string | null;
         };
         Update: {
           id?: string;
@@ -511,8 +542,17 @@ export type Database = {
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
+          branch_id?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_sections_branch_id_fkey";
+            columns: ["branch_id"];
+            isOneToOne: false;
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       ledger_entries: {
         Row: {
@@ -1140,6 +1180,8 @@ export type Database = {
           enrolled_at: string | null;
           cancelled_at: string | null;
           refund_amount: number | null;
+          terms_text: string | null;
+          plan_snapshot: Json | null;
         };
         Insert: {
           id?: string;
@@ -1179,6 +1221,8 @@ export type Database = {
           enrolled_at?: string | null;
           cancelled_at?: string | null;
           refund_amount?: number | null;
+          terms_text?: string | null;
+          plan_snapshot?: Json | null;
         };
         Update: {
           id?: string;
@@ -1218,6 +1262,8 @@ export type Database = {
           enrolled_at?: string | null;
           cancelled_at?: string | null;
           refund_amount?: number | null;
+          terms_text?: string | null;
+          plan_snapshot?: Json | null;
         };
         Relationships: [
           {
@@ -1675,6 +1721,12 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: Json;
       };
+      rpc_branch_enrollment_state: {
+        Args: {
+          p_branch: string;
+        };
+        Returns: Json;
+      };
       rpc_cancel_command: {
         Args: {
           p_command_id: string;
@@ -1721,6 +1773,12 @@ export type Database = {
         };
         Returns: string;
       };
+      rpc_create_student: {
+        Args: {
+          p: Json;
+        };
+        Returns: Json;
+      };
       rpc_enroll: {
         Args: {
           p: Json;
@@ -1739,7 +1797,9 @@ export type Database = {
         Returns: Json;
       };
       rpc_enrollment_public: {
-        Args: Record<PropertyKey, never>;
+        Args: {
+          p_token: string;
+        };
         Returns: Json;
       };
       rpc_execute_command: {

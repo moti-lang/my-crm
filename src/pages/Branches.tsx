@@ -1,11 +1,18 @@
-import { Link } from 'react-router-dom';
+import { useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/auth/AuthProvider';
 import { useBranches, useBranchPnl } from '@/hooks/queries';
+import { useCreateBranch, type BranchInput } from '@/hooks/branches';
+import { BranchForm, normalizeBranchPhone } from '@/components/BranchForm';
+import { humanError } from '@/lib/errors';
 import { formatILS, formatPhone, formatWeekdays } from '@/lib/format';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
 
 export function Branches() {
   const branches = useBranches();
   const pnl = useBranchPnl();
+  const { profile } = useAuth();
+  const [adding, setAdding] = useState(false);
 
   if (branches.isError) return <ErrorState error={branches.error} onRetry={() => void branches.refetch()} />;
   if (branches.isLoading) {
@@ -17,7 +24,8 @@ export function Branches() {
   }
 
   const rows = branches.data ?? [];
-  if (rows.length === 0) {
+  const isOwner = profile?.role === 'owner';
+  if (rows.length === 0 && !isOwner) {
     return <EmptyState title="אין סניפים להצגה" hint="ייתכן שאינך משויכת לאף סניף. פני לניהול." />;
   }
 
@@ -27,8 +35,13 @@ export function Branches() {
     <div className="space-y-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-2xl">סניפים</h1>
-        <p className="text-sm text-soft">{rows.length} סניפים</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-soft">{rows.length} סניפים</p>
+          {isOwner && !adding && <button type="button" className="btn-primary px-3 py-1 text-xs" onClick={() => setAdding(true)}>הוספת סניף</button>}
+        </div>
       </header>
+
+      {adding && <AddBranch onDone={() => setAdding(false)} />}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {rows.map((b) => {
@@ -59,5 +72,41 @@ export function Branches() {
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * סניף חדש: פרטים בסיסיים. התקנון ומבנה התשלום מועתקים מברירת המחדל
+ * (מסך ההגדרות), ואחרי השמירה עוברים לסניף כדי לשנות מה שצריך.
+ */
+function AddBranch({ onDone }: { onDone: () => void }) {
+  const create = useCreateBranch();
+  const navigate = useNavigate();
+  const [value, setValue] = useState<BranchInput>({ name: '', weekdays: [] });
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const name = (value.name ?? '').trim();
+    if (!name) { setError('יש למלא שם סניף'); return; }
+    try {
+      const id = await create.mutateAsync({ ...value, name, supervisor_phone: normalizeBranchPhone(value.supervisor_phone) });
+      onDone();
+      navigate(`/branches/${id}?tab=settings`);
+    } catch (err) { setError(humanError(err)); }
+  }
+
+  return (
+    <form onSubmit={submit} className="card space-y-3 p-4">
+      <h2 className="text-lg">סניף חדש</h2>
+      <p className="text-sm text-soft">התקנון ומבנה התשלום יועתקו מברירת המחדל שבהגדרות. אחרי השמירה אפשר לשנות אותם לסניף הזה בלבד, וגם לקבל את קישור ההרשמה שלו.</p>
+      <BranchForm value={value} onChange={setValue} />
+      {error && <p className="text-sm text-bad" role="alert">{error}</p>}
+      <div className="flex gap-2">
+        <button type="submit" className="btn-primary" disabled={create.isPending}>{create.isPending ? 'יוצרת…' : 'יצירת הסניף'}</button>
+        <button type="button" className="btn-ghost" onClick={onDone}>ביטול</button>
+      </div>
+    </form>
   );
 }

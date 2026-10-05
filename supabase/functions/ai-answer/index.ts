@@ -9,6 +9,7 @@
 import { answerProvider, type AnswerContext } from '../_shared/answer.ts';
 import { requireUserJwt } from '../_shared/guard.ts';
 import { resolveAnswer } from '../_shared/answer-resolve.ts';
+import { layerForBranch, type LayerFaq, type LayerKnowledge, type LayerBranch } from '../_shared/knowledge-layer.ts';
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
@@ -30,11 +31,20 @@ Deno.serve(async (req) => {
   const text = (input.text ?? '').trim();
   if (!text) return json({ ok: false, reason: 'bad_request', detail: 'טקסט ריק' }, 400);
 
+  // הסימולטור שולח את השורות הגולמיות (עם branch_id) ואת הסניף שנבחר בו;
+  // ההרכבה — אותה פונקציה כמו בוואטסאפ.
+  const raw = input as Partial<AnswerContext> & { branchRows?: LayerBranch[]; branchId?: string | null };
+  const layered = layerForBranch(
+    (Array.isArray(input.faq) ? input.faq : []) as LayerFaq[],
+    (Array.isArray(input.knowledge) ? input.knowledge : []) as LayerKnowledge[],
+    Array.isArray(raw.branchRows) ? raw.branchRows : [],
+    typeof raw.branchId === 'string' ? raw.branchId : null,
+  );
   const ctx: AnswerContext = {
     text,
     history: Array.isArray(input.history) ? input.history.slice(-10) : [],
-    faq: Array.isArray(input.faq) ? input.faq : [],
-    knowledge: Array.isArray(input.knowledge) ? input.knowledge : [],
+    faq: layered.faq,
+    knowledge: layered.knowledge,
     branches: Array.isArray(input.branches) ? input.branches : [],
     mayQuotePrices: input.mayQuotePrices === true,
     lead: input.lead ?? null,

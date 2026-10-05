@@ -1,26 +1,27 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useEnrollmentPublic, enroll, type EnrollResult } from '@/hooks/enrollment';
-import { validateEnroll, describePlan, autoBranch, withAutoBranch, type EnrollForm } from '@/lib/enrollment';
+import { validateEnroll, describePlan, enrollTokenFromPath, type EnrollForm } from '@/lib/enrollment';
 import { formatILS } from '@/lib/format';
 
 /**
- * /enroll — דף ההרשמה הציבורי. מחוץ ל-AuthProvider, כמו דף התשלום.
- * הכל מהמסד: שם החוג, התקנון, מבנה התשלום, הסניפים. השליחה היא RPC אחד
+ * /enroll/<טוקן> — דף ההרשמה הציבורי של סניף אחד. מחוץ ל-AuthProvider.
+ * הקישור קובע את הסניף: ההורה רואה רק את התקנון והמחיר שלו, ולא בוחרת סניף.
+ * הכל מהמסד: שם החוג, התקנון, מבנה התשלום. השליחה היא RPC אחד
  * (rpc_enroll) שמאמת שדות ומגביל קצב במסד; הדף לא נוגע בטבלאות.
  * בסיום: קישור התשלום על החיוב הראשון מוצג מיד, ונשלח גם בוואטסאפ.
  */
-const EMPTY: EnrollForm = { first_name: '', last_name: '', grade: '', school: '', phone: '', email: '', branch_id: '', mailing_consent: false, terms_accepted: false };
+const EMPTY: EnrollForm = { first_name: '', last_name: '', grade: '', school: '', phone: '', email: '', mailing_consent: false, terms_accepted: false };
 
 export function Enroll() {
-  const info = useEnrollmentPublic();
+  const token = enrollTokenFromPath(useLocation().pathname);
+  const info = useEnrollmentPublic(token);
   const [form, setForm] = useState<EnrollForm>(EMPTY);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<EnrollResult | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
-  // סניף פעיל יחיד נבחר אוטומטית; הטופס שנשלח ונבדק הוא תמיד effective.
-  const effective = useMemo(() => withAutoBranch(form, info.data?.branches), [form, info.data?.branches]);
-  const errors = useMemo(() => validateEnroll(effective), [effective]);
+  const errors = useMemo(() => validateEnroll(form), [form]);
   const set = <K extends keyof EnrollForm>(k: K, v: EnrollForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   async function submit(e: FormEvent) {
@@ -28,14 +29,15 @@ export function Enroll() {
     setTouched(true);
     if (Object.keys(errors).length) return;
     setBusy(true);
-    try { setResult(await enroll(effective)); }
+    try { setResult(await enroll({ ...form, enroll_token: token })); }
     catch { setResult({ ok: false, error: 'לא הצלחנו לשלוח את ההרשמה. בדקי את החיבור ונסי שוב.' }); }
     finally { setBusy(false); }
   }
 
   if (info.isLoading) return <main className="p-6 text-center text-sm text-soft">טוען…</main>;
   if (info.isError || !info.data) return <main className="p-6 text-center text-sm text-bad">ההרשמה אינה זמינה כרגע. נסי שוב מאוחר יותר.</main>;
-  const { program_name, terms, plan, branches } = info.data;
+  if (!info.data.ok) return <main className="p-6 text-center text-sm text-bad">{info.data.error}</main>;
+  const { program_name, terms, plan, branch, open, closed_reason } = info.data;
 
   if (result?.ok) {
     return (
@@ -54,7 +56,20 @@ export function Enroll() {
 
   return (
     <main className="mx-auto max-w-md space-y-4 p-5 text-ink">
-      <header className="text-center"><p className="text-xs text-soft">{program_name}</p><h1 className="text-2xl">הרשמה לחוג</h1></header>
+      <header className="text-center">
+        <p className="text-xs text-soft">{program_name}</p>
+        <h1 className="text-2xl">הרשמה לחוג · {branch.name}</h1>
+        {(branch.schedule || branch.age_groups) && (
+          <p className="mt-1 text-sm text-soft">{[branch.schedule, branch.age_groups].filter(Boolean).join(' · ')}</p>
+        )}
+      </header>
+      {!open ? (
+        <section className="card p-5 text-center text-sm">
+          {closed_reason === 'full'
+            ? 'ההרשמה לסניף מלאה. אפשר לפנות לחוג לרשימת המתנה.'
+            : 'ההרשמה לסניף סגורה כרגע.'}
+        </section>
+      ) : (
       <form onSubmit={submit} className="card space-y-3 p-5" noValidate>
         <div className="grid grid-cols-2 gap-2">
           <Field k="first_name" label="שם פרטי" form={form} set={set} error={touched ? errors.first_name : undefined} />
@@ -64,17 +79,6 @@ export function Enroll() {
         </div>
         <Field k="phone" label="טלפון (נייד)" type="tel" dir="ltr" form={form} set={set} error={touched ? errors.phone : undefined} />
         <Field k="email" label="מייל" type="email" dir="ltr" form={form} set={set} error={touched ? errors.email : undefined} />
-        {autoBranch(branches) ? (
-          <p className="text-sm">סניף: <span className="font-medium">{autoBranch(branches)!.name}</span></p>
-        ) : (
-          <label className="block text-sm">סניף
-            <select className="field mt-1" value={form.branch_id} onChange={(e) => set('branch_id', e.target.value)}>
-              <option value="">בחרי סניף</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.city ? ` · ${b.city}` : ''}</option>)}
-            </select>
-            {touched && errors.branch_id && <span className="mt-0.5 block text-xs text-bad">{errors.branch_id}</span>}
-          </label>
-        )}
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" checked={form.mailing_consent} onChange={(e) => set('mailing_consent', e.target.checked)} />
           <span>אני מאשרת הצטרפות לרשימת התפוצה במייל ולקו החוג (עדכונים על שיעורים, מופעים וצילומים)</span>
@@ -102,6 +106,7 @@ export function Enroll() {
           {busy ? 'שולחת…' : 'הרשמה ומעבר לתשלום'}
         </button>
       </form>
+      )}
     </main>
   );
 }
