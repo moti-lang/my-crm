@@ -85,7 +85,7 @@ if (!process.env.SUPABASE_ACCESS_TOKEN && !process.env.PGURL) {
     const rows = await ex.run(`
       begin;
       insert into public.allowed_users (email, full_name, role, branch_id)
-      values ('${email}', '', 'branch_manager', (select id from public.branches where name = 'ביתר עילית'));
+      values ('${email}', '', 'branch_manager', (select id from public.branches where deleted_at is null and is_active order by created_at limit 1));
       insert into auth.users (id, email, raw_app_meta_data, raw_user_meta_data)
       values ('dddddddd-0000-0000-0000-00000000cafe', '${email}',
               '{"provider":"google","providers":["google"]}', '{"full_name":"בדיקת הזמנה"}');
