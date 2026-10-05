@@ -127,6 +127,18 @@ export function matchPayment(link: LinkRef, payments: SumitPayment[]): { payment
 //   אחרת        → לא נמצא (עדיין לא שולם / הדף לא נפתח)
 export const DRY_RUN_PAGE_URL = 'https://pay.sumit.co.il/dry-run/';
 
+/**
+ * שער ההשקה: כל עוד SUMIT_CHECKOUT_ALLOW_TOKEN מוגדר, רק הקישור הזה מקבל
+ * דף תשלום אמיתי. כל הורה אחרת מקבלת "ייפתח בקרוב". הסוד נמחק אחרי
+ * שתשלום הבדיקה מול הארגון האמיתי עבר ← הדף נפתח לכולן.
+ */
+export const CHECKOUT_CLOSED_MESSAGE = 'התשלום המקוון ייפתח בקרוב. נעדכן אותך בוואטסאפ ברגע שאפשר לשלם.';
+export function checkoutOpenFor(token: string, allowToken: string | null | undefined): boolean {
+  const allow = (allowToken ?? '').trim();
+  if (allow === '') return true;
+  return token === allow;
+}
+
 class DryRunSumitProvider implements SumitProvider {
   /** סכומים שנוצרו בדף — כדי ש"שולם" יחזיר את הסכום הנכון. */
   static amounts = new Map<string, number>();

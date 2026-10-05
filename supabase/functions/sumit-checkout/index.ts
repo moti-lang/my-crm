@@ -6,7 +6,7 @@
 import { adminClient } from '../_shared/supabase.ts';
 import { preflight, withCors } from '../_shared/cors.ts';
 import { requirePayToken } from '../_shared/guard.ts';
-import { sumitProvider } from '../_shared/sumit.ts';
+import { sumitProvider, checkoutOpenFor, CHECKOUT_CLOSED_MESSAGE } from '../_shared/sumit.ts';
 import { env } from '../_shared/env.ts';
 
 const json = (payload: unknown, status = 200) =>
@@ -30,6 +30,8 @@ async function handle(req: Request): Promise<Response> {
     if (error) throw new Error(error.message);
     if (!link?.ok) return json({ ok: false, error: link?.error ?? 'הקישור לא תקף' }, 410);
     if (link.sumit_page_url) return json({ ok: true, url: link.sumit_page_url });
+    // שער ההשקה — לפני כל פנייה ל-SUMIT (ראה checkoutOpenFor).
+    if (!checkoutOpenFor(token, env('SUMIT_CHECKOUT_ALLOW_TOKEN'))) return json({ ok: false, error: CHECKOUT_CLOSED_MESSAGE }, 503);
 
     const base = env('APP_BASE_URL') ?? 'https://teichtal-crm.netlify.app';
     const page = await sumitProvider().createPaymentPage({

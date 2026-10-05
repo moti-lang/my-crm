@@ -151,6 +151,17 @@ console.log('\nה-webhook — רמז בלבד:');
   check('כתובת החזרה מ-SUMIT היא "בודקים", עם returned=1', /\?returned=1/.test(checkout));
 }
 
+console.log('\nשער ההשקה (SUMIT_CHECKOUT_ALLOW_TOKEN):');
+{
+  const t = 'a'.repeat(64), other = 'b'.repeat(64);
+  check('בלי סוד → פתוח לכולן', sumit.checkoutOpenFor(t, undefined) && sumit.checkoutOpenFor(t, '') && sumit.checkoutOpenFor(t, '  '));
+  check('★ עם סוד — רק הקישור המותר מקבל דף', sumit.checkoutOpenFor(t, t) && !sumit.checkoutOpenFor(other, t));
+  check('★ קישור ריק אינו עובר גם כשיש סוד', !sumit.checkoutOpenFor('', t));
+  const checkout = codeOf('supabase/functions/sumit-checkout/index.ts');
+  const gateAt = checkout.indexOf('checkoutOpenFor(token'), callAt = checkout.indexOf('createPaymentPage(');
+  check('★ השער נבדק לפני הפנייה ל-SUMIT', gateAt > 0 && callAt > gateAt && /SUMIT_CHECKOUT_ALLOW_TOKEN/.test(checkout));
+}
+
 console.log('\nהסוד המשותף:');
 {
   const mk = (h) => new Request('https://x/sumit-webhook', { method: 'POST', headers: h });

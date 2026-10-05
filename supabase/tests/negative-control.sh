@@ -384,6 +384,16 @@ expect_fail_code "SUMIT: ה-webhook רושם ישירות מהגוף" \
   'sed -i "s|const outcome = await syncPaymentLink(db, sumitProvider(), link);|const body = JSON.parse(raw); await db.rpc(\x27rpc_record_sumit_payment\x27, { p_external_identifier: ext, p_sumit_payment_id: String(body.ID), p_amount: Number(body.Amount), p_paid_at: null, p_document_id: null }); const outcome = { result: \x27recorded\x27 };|" "$F"' \
   "node supabase/tests/sumit.test.mjs"
 
+expect_fail_code "הסרת שער ההשקה — כל הורה מקבלת דף SUMIT אמיתי לפני תשלום הבדיקה" \
+  "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
+  'sed -i "/checkoutOpenFor(token/d" "$F"' \
+  "node supabase/tests/sumit.test.mjs"
+
+expect_fail_code "שער שפתוח לכולן כשיש סוד" \
+  "$DIR/../../supabase/functions/_shared/sumit.ts" \
+  'sed -i "s|  return token === allow;|  return true;|" "$F"' \
+  "node supabase/tests/sumit.test.mjs"
+
 expect_fail_code "SUMIT: הסוד המשותף מושווה בלי זמן קבוע ומקבל ריק" \
   "$DIR/../../supabase/functions/_shared/guard.ts" \
   'sed -i "s/  if (!(await constantTimeEqual(given, expected))) return deny(401, .unauthorized.);/  if (given !== expected \&\& given !== \x27\x27) return deny(401, \x27unauthorized\x27);/" "$F"' \
