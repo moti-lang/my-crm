@@ -1,88 +1,96 @@
 # החוזה מול SUMIT — מה אומת, מה הונח
 
-מתועד כמו `whatsapp-hub`: נקודות קצה, שדות, פורמטים, ומה אנחנו מניחים. כל שורה
-מסומנת **אומת** (תשובה אמיתית מארגון הבדיקה, ראיה ב-`docs/sumit-contract.raw.json`)
-או **הנחה** (מהספריות הפתוחות `sumit-api`/`sumit-react` ומתיעוד שנקרא בתוצאות
-חיפוש; הדומיינים של SUMIT חסומים בסנדבוקס). הגילוי רץ ב-`scripts/sumit-discover.mjs`
-דרך ה-Edge Function הזמנית `sumit-probe` (CRON_SECRET).
+מתועד כמו `whatsapp-hub`. **אומת** = תשובה אמיתית מארגון הבדיקה "חוגי טייכטל -
+בדיקות" (CompanyID 2410781753, מסוף בדיקות), ראיות ב-`docs/sumit-contract.raw.json`
+ובסבב 2026-10-05. **הנחה** = טרם נצפה. הגילוי רץ ב-`scripts/sumit-discover.mjs`
+דרך `supabase/functions/sumit-probe` (CRON_SECRET; נשמר בריפו, **לא פרוס** —
+`node scripts/functions-deploy-api.mjs sumit-probe` כשצריך סבב נוסף).
 
-## ארגון הבדיקה
+## בסיס (אומת)
 
 | | |
 |---|---|
-| CompanyID | 2410781753 (ארגון בדיקות, מסוף בדיקות, כרטיסי דמה בלבד) |
-| מפתח | `SUMIT_API_KEY` — סוד של הפונקציות, לא בריפו |
-| בסיס | `https://api.sumit.co.il` · POST · JSON · `Credentials: { CompanyID, APIKey }` בגוף |
+| מארח | `https://api.sumit.co.il` בלבד (`api.dev`/`dev`/`api-dev` לא קיימים) |
+| פרוטוקול | POST · JSON · `Credentials: { CompanyID: <מספר>, APIKey: <מחרוזת> }` בגוף כל קריאה |
+| מעטפה | תמיד HTTP 200: `{ Data, Status, UserErrorMessage, TechnicalErrorDetails }` · `Status 0` הצלחה · `1` שגיאה עסקית (טקסט ב-`UserErrorMessage`, לעיתים בעברית) · `2` גוף לא תואם (`TechnicalErrorDetails` נוקב בשדה) |
+| נתיב שלא קיים | הפניה 302 (לא 404). האדפטר שולח `redirect: 'manual'` ומתרגם לשגיאה |
+| מפתח | "מפתח API" מהגדרות ← API של **אותו ארגון**. מפתח שלא התקבל אף פעם מראה "שימוש אחרון: ריק" |
+| פרטי ארגון | `beginredirect` ו-`charge` מסרבים עד שלארגון יש ח.פ. וטלפון ("Missing organization details"). ניתן לקבוע ב-`/website/companies/update/` `{ Company: { Name, CorporateNumber, Phone, … } }` (ח.פ. "000000000" נחשב ריק) |
 
-## 1. יצירת דף תשלום — `/billing/payments/beginredirect/`
+## 1. דף תשלום — `/billing/payments/beginredirect/` (אומת)
 
-**נקודת הקצה אומתה על ידי החברה** (ודורשת מודול "דפי תשלום"). השדות — **הנחה**
-עד שהגילוי ירוץ:
+חובה: `Customer`, `Items`. הגוף שעובד:
 
 ```json
 {
-  "Credentials": { "CompanyID": 0, "APIKey": "…" },
-  "Customer": { "Name": "", "Phone": "", "EmailAddress": "", "ExternalIdentifier": "tl-<uuid>", "SearchMode": 0 },
+  "Customer": { "Name": "…", "Phone": "05…", "EmailAddress": "…", "ExternalIdentifier": "tl-<uuid>", "SearchMode": 0 },
   "Items": [{ "Item": { "Name": "שכר לימוד — <שם> (<סניף>)" }, "Quantity": 1, "UnitPrice": 210, "TotalPrice": 210, "Currency": "ILS" }],
   "ExternalIdentifier": "tl-<uuid>",
   "RedirectURL": "https://teichtal-crm.netlify.app/pay/<token>?returned=1",
   "IPNURL": "https://<ref>.supabase.co/functions/v1/sumit-webhook",
-  "VATIncluded": true, "Language": 0, "MaximumPayments": 1
+  "Language": 0, "VATIncluded": true, "MaximumPayments": 1
 }
 ```
 
-תשובה (הנחה): `{ "Status": 0, "Data": { "RedirectURL": "https://pay.sumit.co.il/…" } }`.
-מה שנקרא מהתשובה ב-`_shared/sumit.ts`: `Data.RedirectURL ?? Data.URL ?? Data.PaymentPageURL`.
+תשובה: `{ "Data": { "RedirectURL": "https://pay.sumit.co.il/<org>/a/redirectpayment/?redirectid=<uuid>" } }`.
+ה-`redirectid` נשמר על הקישור (`payment_links.sumit_redirect_id`). הדף עצמו מוגן
+ב-reCAPTCHA — אי אפשר להשלים אותו ממכונה, ולכן זרימת הדף המלאה (כולל ה-IPN) **טרם
+נצפתה מקצה לקצה**; מה שאומת הוא יצירת הדף.
 
-## 2. ה-IPN (הטריגר אחרי תשלום) — `sumit-webhook`
+## 2. חיוב ישיר — `/billing/payments/charge/` (אומת; לבדיקות)
 
-**הנחה**: SUMIT שולחת POST ל-`IPNURL` (או לטריגר שהוגדר בממשק) באחד משלושה
-פורמטים: JSON, `application/x-www-form-urlencoded`, או מעטפת `json=<מחרוזת>`.
-אין חתימה. אנחנו: סוד משותף בכותרת `x-webhook-secret`, ומהגוף נלקח רק
-`ExternalIdentifier` (`extractExternalIdentifier`). **הגוף הוא רמז**; האמת נשאלת
-מ-SUMIT (סעיף 3). לכן גם פורמט לא צפוי לא מסכן: במקרה הגרוע ה-cron השעתי קולט.
+אותו גוף + `PaymentMethod: { Type: 1, CreditCard_Number, CreditCard_ExpirationMonth, CreditCard_ExpirationYear (4 ספרות), CreditCard_CVV, CreditCard_CitizenID }`.
+תשובה: `Data.Payment { ID, CustomerID, Date, ValidPayment, Status, StatusDescription, Amount, PaymentMethod{…Token, CardMask}, ExternalIdentifier (null!), DocumentID (0 בתשובה המיידית) }`, `Data.CustomerID`.
+קודים שנצפו: `000` מאושר · `004` החברה לא אישרה · `015` פג תוקף · `OG_25` מספר כרטיס שגוי · `OG_20` (כפילות/תדירות).
 
-## 3. שליפת עסקה לפי ExternalIdentifier / PaymentID
+**מסוף הבדיקות**: מאשר רק סכומים **עד 10 ₪** (1, 5, 10 אושרו; 11 ומעלה נדחה 004).
+כרטיסי דמה שאושרו: `5555555555554444`, `371449635398431`, `6011111111111117` (תוקף 12/2030, CVV 123, ת.ז. 000000018).
+`4580…` ו-`4111…` נדחים (004). לכן תשלום 210 ₪ לא ניתן לאישור במסוף הזה; הזרימה
+המלאה נבדקה עם תוכנית זמנית של 10 ₪ (והוחזרה ל-210).
 
-**לא ידוע.** המועמדים שהגילוי בודק: `/billing/payments/list/`, `/billing/payments/get/`,
-`/billing/payments/getbyexternalidentifier/`, `/billing/payments/search/`, וגם
-`/accounting/customers/getbyexternalidentifier/` (הלקוח נושא את המזהה שלנו, ומהלקוח
-אולי לתשלומים). הקוד הנוכחי (`getPaymentStatus`) מניח `list` עם סינון בצד שלנו
-לפי `ExternalIdentifier`, ושדות `ValidPayment`/`Status`, `Amount`, `ID`, `DocumentID`, `Date`.
+## 3. ★ איתור תשלום של קישור (אומת — וזו התגלית העיקרית)
 
-## 4. חיוב ישיר (לבדיקות, במקום ההורה בדף) — `/billing/payments/charge/`
+- **SUMIT לא שומרת את `ExternalIdentifier` שלנו על התשלום** (null ב-`charge`, ב-`list` וב-`get`, בכל מיקום של השדה בגוף). שורת תשלום גם **לא נושאת שם לקוחה**.
+- `/billing/payments/list/` דורשת `Date_From`, `Date_To` (YYYY-MM-DD); מחזירה `Data.Payments[]` (אותם שדות כמו Payment למעלה, בלי Items) ו-`HasNextPage`. סינון לפי `CustomerID`/`ExternalIdentifier` בגוף **מתעלם**.
+- `/billing/payments/get/` דורשת `PaymentID` מספרי (null → Status 2). מחזירה `Data.Payment`; כאן `DocumentID` כבר מעודכן (הקבלה נוצרת כמה שניות אחרי התשלום).
+- **הקבלה היא המפתח**: `/accounting/documents/getdetails/` `{ DocumentID }` → `Data.Document.Customer { ID, Name, Phone, ExternalIdentifier }` — **כן** נושא את המזהה שלנו — ו-`Data.DocumentDownloadURL` (ברמת Data, לא בתוך Document), `Data.Items[]`.
+- `/accounting/documents/list/` `{ Date_From, Date_To }` → `Data.Documents[] { DocumentID, DocumentNumber, CustomerID, CustomerName, DocumentDownloadURL, DocumentValue }`.
+- לא קיימים: `payments/getbyexternalidentifier`, `payments/search`, כל `*/customers/*` (get/list/create/search/getdetails), `documents/get`, `payments/getredirect*`.
 
-**הנחה** (מ-`sumit-api`): אותו גוף כמו דף תשלום + `PaymentMethod` עם פרטי כרטיס
-דמה, או `SingleUseToken` מ-`payments.js`. תשובה: `Payment.ValidPayment`, `Payment.Status`
-("000"), `CustomerID`, `DocumentID`. משמש רק מול מסוף הבדיקות.
+לכן `getPaymentStatus` (ב-`_shared/sumit.ts`): `list` בחלון של הקישור → תשלומים תקפים
+אחרי יצירתו → לכל אחד (עד 25, הסכום התואם קודם) `get` אם חסר DocumentID → `documents/getdetails`
+→ `Customer.ExternalIdentifier === external_identifier` ⇒ התאמה `external_identifier`.
+גיבוי: `payment_id` מה-IPN; ואחרון, `heuristic` (שם + סכום + אחרי הקישור, מועמד יחיד) שמסומן
+בהתראה ובמסך ההתאמה. בדיקות: `sumit.test.mjs` (`enrichWithDocuments`, `matchPayment`).
 
-## 5. מה שאנחנו מניחים בכל מקרה (ולא תלוי ב-SUMIT)
+**נבדק מקצה לקצה (2026-10-05)**: הרשמה ב-`/enroll` (הפונקציה החיה) → תלמידה ממתינה +
+קישור → `sumit-checkout` יצר דף אמיתי (redirectid נשמר) → תשלום 10 ₪ בכרטיס דמה דרך
+`charge` עם `Customer.ExternalIdentifier` של הקישור → `cron-sumit-sync`: `list` → `get` →
+`documents/getdetails` → התאמה לפי המזהה → `rpc_record_sumit_payment` → התלמידה **פעילה**,
+הקישור `paid`, התשלום ב-`payments` (source `sumit`, קבלה 2411653147), בלי התראות.
+נתוני הבדיקה נמחקו אחר כך.
 
-- `ExternalIdentifier` שלנו (`tl-<uuid>`) על כל דף/תשלום. רישום אידמפוטנטי לפי
-  הקישור ולפי מזהה התשלום של SUMIT (`rpc_record_sumit_payment`).
+## 4. ה-IPN — `sumit-webhook` (הנחה, עם רשת ביטחון)
+
+הפורמט של ה-POST ל-`IPNURL` **לא נצפה** (דורש השלמת הדף בדפדפן). ההתנהגות שלנו לא תלויה
+בו: הגוף נרשם גולמי ב-`sumit_ipn_log` (הבעלים רואה), מחולצים מועמדים (`ExternalIdentifier`,
+`redirectid`, `/pay/<token>`, `PaymentID`) — `rpc_sumit_ipn_received` מאתר קישור לפיהם —
+ואז אותו `syncPaymentLink` ששואל את SUMIT. בלי IPN בכלל, ה-cron השעתי קולט. הפעם הראשונה
+שתגיע IPN אמיתית תתעד את הפורמט בטבלה; אז מעדכנים כאן ל"אומת".
+הגדרה ב-SUMIT: טריגר על תיקיית התשלומים → HTTP POST ל-`…/functions/v1/sumit-webhook`
+עם כותרת `x-webhook-secret` (`npm run sumit:schedule` מנפיק).
+
+## 5. מה שאנחנו מניחים בכל מקרה
+
+- `ExternalIdentifier` שלנו (`tl-<uuid>`) על הלקוחה ועל הדף; רישום אידמפוטנטי לפי הקישור ולפי
+  מזהה התשלום של SUMIT.
 - תפוגה 7 ימים אצלנו; דף SUMIT נוצר רק בלחיצה, עם הסכום מהרשומה.
 - "שולם" אצלנו רק אחרי תשובת SUMIT, לעולם לא מהדפדפן ולא מגוף ה-IPN.
 
-## מה אומת בסבב הגילוי הראשון (2026-10-05)
+## פתוח
 
-**המעטפה** (אומת, בכל נקודת קצה): `{ "Data": …|null, "Status": 0|1|2, "UserErrorMessage": …, "TechnicalErrorDetails": … }`
-עם HTTP 200 גם בשגיאה. `Status: 1` = פרטי גישה שגויים; `Status: 2` = הגוף לא תואם
-לסכמה, ו-`TechnicalErrorDetails` אומר איזה שדה (למשל `PaymentID: Error converting value {null}`).
-
-**נקודות קצה קיימות** (אומת: עונות במעטפה, לא בהפניה אינסופית):
-`/billing/payments/beginredirect/`, `/billing/payments/list/`, `/billing/payments/get/`
-(דורשת `PaymentID` מספרי, לא null), `/billing/payments/charge/`, `/website/companies/getdetails/`.
-**לא קיימות** (אומת: שרשרת הפניות עד 20): `/billing/payments/getbyexternalidentifier/`,
-`/billing/payments/search/`, `/accounting/customers/getbyexternalidentifier/`,
-`/accounting/customers/list/`. **מארח**: רק `api.sumit.co.il` חי; `api.dev`/`dev`/`api-dev` לא.
-
-**חסום**: כל הקריאות מחזירות `Invalid Credentials (CompanyID/APIKey are incorrect)` עם
-הזוג 2410781753 / המפתח שנמסר, בכל ניסוח (מספר/מחרוזת, עם/בלי רווח). שדות
-beginredirect והשליפה לפי ExternalIdentifier נשארים **הנחה** עד שיתקבל זוג תקף.
-
-## סטטוס הגילוי
-
-רץ, ונעצר בפרטי הגישה. להמשך: זוג CompanyID/APIKey תקף של ארגון הבדיקה
-(ב-SUMIT: הגדרות ← API ← "מפתח API", לא "מפתח ציבורי"; מודול API מותקן בארגון
-הבדיקה עצמו; ה-CompanyID של אותו ארגון). ואז: `node scripts/sumit-discover.mjs`
-← לעדכן כאן מ-"הנחה" ל-"אומת" ← לחבר ב-`_shared/sumit.ts`.
+1. הזרימה דרך **הדף** (לא `charge`): רק בדפדפן אמיתי עם כרטיס דמה ≤10 ₪. אז נראה גם את
+   ה-IPN ואת הפרמטרים שעל ה-RedirectURL בחזרה.
+2. הוראת קבע (שלב ב'): `/billing/recurring/charge/` — הנחה מהספריות, טרם נבדק.
+3. לייצור: מפתח וארגון אמיתיים של הלקוחה (`SUMIT_COMPANY_ID`, `SUMIT_API_KEY`), ח.פ. וטלפון
+   מוגדרים בארגון, מודולים: API, סליקה, הכנסות, דפי תשלום, טריגרים.

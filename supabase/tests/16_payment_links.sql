@@ -118,6 +118,31 @@ select assert_true((rpc_record_sumit_payment('tl-does-not-exist', 'SUMIT-3', 100
 select assert_eq((select count(*) from system_alerts where kind = 'sumit_orphan_payment'), 1, '★ תשלום יתום — התראה קריטית');
 rollback;
 
+\echo 'IPN: נרשם גולמי, ומאתר קישור לפי מועמדים:'
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
+select rpc_create_payment_link(t_debtor(:BEITAR));
+reset role;
+create temp table t_ipn as select token, external_identifier, id from payment_links where student_id = t_debtor(:BEITAR) and status in ('pending','opened');
+update payment_links set sumit_redirect_id = 'f40d0ec0-16eb-4b22-9b78-3aab9ab1ec50' where id = (select id from t_ipn);
+select assert_true((rpc_sumit_ipn_received('application/json', '{"anything":1}', jsonb_build_object('redirect_id', 'f40d0ec0-16eb-4b22-9b78-3aab9ab1ec50')) -> 'link' ->> 'external_identifier') = (select external_identifier from t_ipn), '★ IPN עם redirectid בלבד — הקישור מאותר');
+select assert_true((rpc_sumit_ipn_received('text/plain', 'x', jsonb_build_object('token', (select token from t_ipn))) -> 'link') is not null, 'IPN עם הטוקן בכתובת החזרה — מאותר');
+select assert_true(jsonb_typeof(rpc_sumit_ipn_received('text/plain', 'x', jsonb_build_object('external_identifier', 'tl-nope')) -> 'link') = 'null', 'IPN שלא מצביע על קישור שלנו — לא מאותר, אבל נרשם');
+select assert_eq((select count(*) from sumit_ipn_log where outcome like 'matched:%'), 2, '★ כל IPN נרשם גולמי, עם תוצאה');
+select assert_eq((select count(*) from sumit_ipn_log where outcome = 'no_link'), 1, 'גם מה שלא זוהה');
+-- הרישום עם שיטת התאמה וקישור לקבלה (הליבה f_record_sumit_payment_core נקראת מבפנים)
+select assert_true((select (rpc_record_sumit_payment(external_identifier, 'S-ipn', 2000, now(), 'DOC-9', 'heuristic', '2411653131', 'https://pay.sumit.co.il/x') ->> 'ok')::boolean from t_ipn), 'רישום עם שיטת התאמה');
+select assert_true((select match_method = 'heuristic' and sumit_customer_id = '2411653131' and sumit_document_url = 'https://pay.sumit.co.il/x' from payment_links where id = (select id from t_ipn)), '★ שיטת ההתאמה, מזהה הלקוחה וקישור הקבלה נשמרים');
+select assert_eq((select count(*) from system_alerts where kind = 'sumit_heuristic_match'), 1, '★ התאמה לפי שם וסכום — התראה לבעלים לאימות');
+select assert_true((select (f_record_sumit_payment_core(external_identifier, 'S-ipn', 2000, now(), 'DOC-9') ->> 'duplicate')::boolean from t_ipn), 'הליבה אידמפוטנטית גם בקריאה ישירה');
+set local role authenticated;
+select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
+select assert_eq((select count(*) from sumit_ipn_log), 0, 'מנהלת סניף לא רואה את לוג ה-IPN');
+select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
+select assert_eq((select count(*) from sumit_ipn_log), 3, 'הבעלים רואה');
+rollback;
+
 \echo 'הרשאות:'
 begin;
 set local role authenticated;

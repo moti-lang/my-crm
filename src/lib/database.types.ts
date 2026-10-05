@@ -709,6 +709,10 @@ export type Database = {
           created_at: string;
           updated_at: string;
           purpose: string;
+          sumit_redirect_id: string | null;
+          sumit_customer_id: string | null;
+          sumit_document_url: string | null;
+          match_method: string | null;
         };
         Insert: {
           id?: string;
@@ -732,6 +736,10 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           purpose?: string;
+          sumit_redirect_id?: string | null;
+          sumit_customer_id?: string | null;
+          sumit_document_url?: string | null;
+          match_method?: string | null;
         };
         Update: {
           id?: string;
@@ -755,6 +763,10 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           purpose?: string;
+          sumit_redirect_id?: string | null;
+          sumit_customer_id?: string | null;
+          sumit_document_url?: string | null;
+          match_method?: string | null;
         };
         Relationships: [
           {
@@ -1224,6 +1236,33 @@ export type Database = {
           },
         ];
       };
+      sumit_ipn_log: {
+        Row: {
+          id: string;
+          received_at: string;
+          content_type: string | null;
+          body: string;
+          candidates: Json | null;
+          outcome: string | null;
+        };
+        Insert: {
+          id?: string;
+          received_at?: string;
+          content_type?: string | null;
+          body: string;
+          candidates?: Json | null;
+          outcome?: string | null;
+        };
+        Update: {
+          id?: string;
+          received_at?: string;
+          content_type?: string | null;
+          body?: string;
+          candidates?: Json | null;
+          outcome?: string | null;
+        };
+        Relationships: [];
+      };
       system_alerts: {
         Row: {
           id: string;
@@ -1472,6 +1511,8 @@ export type Database = {
           sumit_amount: number | null;
           sumit_payment_id: string | null;
           sumit_document_id: string | null;
+          sumit_document_url: string | null;
+          match_method: string | null;
           paid_at: string | null;
           last_checked_at: string | null;
           recorded_amount: number | null;
@@ -1749,6 +1790,9 @@ export type Database = {
           p_amount: number;
           p_paid_at: string;
           p_document_id: string;
+          p_match_method: string;
+          p_sumit_customer_id: string;
+          p_document_url: string;
         };
         Returns: Json;
       };
@@ -1757,6 +1801,14 @@ export type Database = {
           p_branch: string;
         };
         Returns: undefined;
+      };
+      rpc_sumit_ipn_received: {
+        Args: {
+          p_content_type: string;
+          p_body: string;
+          p_candidates: Json;
+        };
+        Returns: Json;
       };
     };
     CompositeTypes: { [_ in never]: never };

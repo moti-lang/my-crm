@@ -4,12 +4,12 @@
     "path": "/billing/payments/beginredirect/",
     "payload": {},
     "status": 200,
-    "ms": 431,
+    "ms": 284,
     "contentType": "application/json; charset=utf-8",
     "json": {
       "Data": null,
       "Status": 1,
-      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "UserErrorMessage": "Items: יש להזין ערך בשדה Items\r\nCustomer: יש להזין ערך בשדה Customer",
       "TechnicalErrorDetails": null
     }
   },
@@ -21,7 +21,7 @@
         "Name": "בדיקה אוטומטית",
         "Phone": "0500000000",
         "EmailAddress": "test@example.com",
-        "ExternalIdentifier": "tl-discover-1791205290817",
+        "ExternalIdentifier": "tl-discover-1791206203752",
         "SearchMode": 0
       },
       "Items": [
@@ -36,7 +36,7 @@
           "Currency": "ILS"
         }
       ],
-      "ExternalIdentifier": "tl-discover-1791205290817",
+      "ExternalIdentifier": "tl-discover-1791206203752",
       "RedirectURL": "https://teichtal-crm.netlify.app/pay/x?returned=1",
       "IPNURL": "https://kzoxlusbocxjinfxckhe.supabase.co/functions/v1/sumit-webhook",
       "Language": 0,
@@ -44,12 +44,12 @@
       "MaximumPayments": 1
     },
     "status": 200,
-    "ms": 348,
+    "ms": 291,
     "contentType": "application/json; charset=utf-8",
     "json": {
       "Data": null,
       "Status": 1,
-      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "UserErrorMessage": "Missing organization details (Corporate Number / Phone Number)",
       "TechnicalErrorDetails": null
     }
   },
@@ -57,17 +57,17 @@
     "label": "שליפה /billing/payments/list/",
     "path": "/billing/payments/list/",
     "payload": {
-      "ExternalIdentifier": "tl-discover-1791205290817",
+      "ExternalIdentifier": "tl-discover-1791206203752",
       "PaymentID": null,
       "StartDate": null
     },
     "status": 200,
-    "ms": 129,
+    "ms": 184,
     "contentType": "application/json; charset=utf-8",
     "json": {
       "Data": null,
       "Status": 1,
-      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "UserErrorMessage": "Date_To: יש להזין ערך בשדה Date_To\r\nDate_From: יש להזין ערך בשדה Date_From",
       "TechnicalErrorDetails": null
     }
   },
@@ -75,81 +75,81 @@
     "label": "שליפה /billing/payments/get/",
     "path": "/billing/payments/get/",
     "payload": {
-      "ExternalIdentifier": "tl-discover-1791205290817",
+      "ExternalIdentifier": "tl-discover-1791206203752",
       "PaymentID": null,
       "StartDate": null
     },
     "status": 200,
-    "ms": 278,
+    "ms": 119,
     "contentType": "application/json; charset=utf-8",
     "json": {
       "Data": null,
       "Status": 2,
       "UserErrorMessage": "Invalid Request JSON / Request doesn't match the API properties. Please contact support@sumit.co.il for assistance.",
-      "TechnicalErrorDetails": "Invalid Request JSON / Request doesn't match the API properties. Please contact support@sumit.co.il for assistance.\r\nPaymentID: Error converting value {null}. Path 'PaymentID', line 1, position 166."
+      "TechnicalErrorDetails": "Invalid Request JSON / Request doesn't match the API properties. Please contact support@sumit.co.il for assistance.\r\nPaymentID: Error converting value {null}. Path 'PaymentID', line 1, position 167."
     }
   },
   {
     "label": "שליפה /billing/payments/getbyexternalidentifier/",
     "path": "/billing/payments/getbyexternalidentifier/",
     "payload": {
-      "ExternalIdentifier": "tl-discover-1791205290817",
+      "ExternalIdentifier": "tl-discover-1791206203752",
       "PaymentID": null,
       "StartDate": null
     },
-    "status": 0,
-    "ms": 1886,
+    "status": 302,
+    "ms": 119,
     "contentType": null,
     "json": null,
-    "raw": "TypeError: Fetch failed: Maximum number of redirects (20) reached"
+    "raw": ""
   },
   {
     "label": "שליפה /billing/payments/search/",
     "path": "/billing/payments/search/",
     "payload": {
-      "ExternalIdentifier": "tl-discover-1791205290817",
+      "ExternalIdentifier": "tl-discover-1791206203752",
       "PaymentID": null,
       "StartDate": null
     },
-    "status": 0,
-    "ms": 1557,
+    "status": 302,
+    "ms": 117,
     "contentType": null,
     "json": null,
-    "raw": "TypeError: Fetch failed: Maximum number of redirects (20) reached"
+    "raw": ""
   },
   {
     "label": "לקוח לפי ExternalIdentifier",
     "path": "/accounting/customers/getbyexternalidentifier/",
     "payload": {
-      "ExternalIdentifier": "tl-discover-1791205290817"
+      "ExternalIdentifier": "tl-discover-1791206203752"
     },
-    "status": 0,
-    "ms": 1764,
+    "status": 302,
+    "ms": 99,
     "contentType": null,
     "json": null,
-    "raw": "TypeError: Fetch failed: Maximum number of redirects (20) reached"
+    "raw": ""
   },
   {
     "label": "לקוחות: רשימה",
     "path": "/accounting/customers/list/",
     "payload": {},
-    "status": 0,
-    "ms": 2035,
+    "status": 302,
+    "ms": 102,
     "contentType": null,
     "json": null,
-    "raw": "TypeError: Fetch failed: Maximum number of redirects (20) reached"
+    "raw": ""
   },
   {
     "label": "charge: גוף ריק",
     "path": "/billing/payments/charge/",
     "payload": {},
     "status": 200,
-    "ms": 113,
+    "ms": 124,
     "contentType": "application/json; charset=utf-8",
     "json": {
       "Data": null,
       "Status": 1,
-      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "UserErrorMessage": "Items: יש להזין ערך בשדה Items\r\nCustomer: יש להזין ערך בשדה Customer",
       "TechnicalErrorDetails": null
     }
   },
@@ -161,7 +161,7 @@
         "Name": "בדיקה אוטומטית",
         "Phone": "0500000000",
         "EmailAddress": "test@example.com",
-        "ExternalIdentifier": "tl-discover-1791205290817",
+        "ExternalIdentifier": "tl-discover-1791206203752",
         "SearchMode": 0
       },
       "Items": [
@@ -176,7 +176,7 @@
           "Currency": "ILS"
         }
       ],
-      "ExternalIdentifier": "tl-discover-1791205290817-charge",
+      "ExternalIdentifier": "tl-discover-1791206203752-charge",
       "VATIncluded": true,
       "Language": 0,
       "PaymentMethod": {
@@ -189,12 +189,12 @@
       }
     },
     "status": 200,
-    "ms": 268,
+    "ms": 127,
     "contentType": "application/json; charset=utf-8",
     "json": {
       "Data": null,
       "Status": 1,
-      "UserErrorMessage": "Invalid Credentials (CompanyID/APIKey are incorrect)",
+      "UserErrorMessage": "Missing organization details (Corporate Number / Phone Number)",
       "TechnicalErrorDetails": null
     }
   }

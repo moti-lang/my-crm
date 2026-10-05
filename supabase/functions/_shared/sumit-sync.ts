@@ -1,4 +1,4 @@
-import type { SumitProvider } from './sumit.ts';
+import type { SumitProvider, LinkRef } from './sumit.ts';
 
 /**
  * הלב של הקליטה: לוקח קישור, שואל את SUMIT, ורושם אצלנו רק מה ש-SUMIT
@@ -16,8 +16,8 @@ export type SyncOutcome =
   | { result: 'provider_error'; error: string }
   | { result: 'record_failed'; error: string };
 
-export async function syncPaymentLink(db: Db, sumit: SumitProvider, link: { external_identifier: string; amount: number }): Promise<SyncOutcome> {
-  const status = await sumit.getPaymentStatus(link.external_identifier);
+export async function syncPaymentLink(db: Db, sumit: SumitProvider, link: LinkRef): Promise<SyncOutcome> {
+  const status = await sumit.getPaymentStatus(link);
   if (!status.ok) return { result: 'provider_error', error: status.error };
   if (!status.found) return { result: 'not_found' };
   if (!status.paid) return { result: 'unpaid' };
@@ -28,6 +28,9 @@ export async function syncPaymentLink(db: Db, sumit: SumitProvider, link: { exte
     p_amount: status.amount,
     p_paid_at: status.paidAt,
     p_document_id: status.documentId,
+    p_match_method: status.match,
+    p_sumit_customer_id: status.customerId,
+    p_document_url: status.documentUrl ?? null,
   });
   if (error || !data?.ok) {
     const detail = error?.message ?? data?.reason ?? 'לא ידוע';

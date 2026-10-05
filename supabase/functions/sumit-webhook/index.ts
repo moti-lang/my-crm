@@ -6,7 +6,7 @@
 // לא רושם כלום — כי הרישום קורה רק אחרי תשובת SUMIT.
 import { adminClient } from '../_shared/supabase.ts';
 import { requireSharedSecret } from '../_shared/guard.ts';
-import { sumitProvider, extractExternalIdentifier } from '../_shared/sumit.ts';
+import { sumitProvider, extractIpnCandidates } from '../_shared/sumit.ts';
 import { syncPaymentLink } from '../_shared/sumit-sync.ts';
 
 const json = (payload: unknown, status = 200) =>
@@ -17,16 +17,15 @@ Deno.serve(async (req) => {
   if (denied) return denied;
 
   const raw = await req.text();
-  const ext = extractExternalIdentifier(req.headers.get('content-type') ?? '', raw);
-  if (!ext) return json({ ok: true, ignored: 'אין ExternalIdentifier שלנו בגוף' });
-
+  const candidates = extractIpnCandidates(req.headers.get('content-type') ?? '', raw);
   const db = adminClient();
-  const { data: links, error } = await db.rpc('rpc_payment_links_to_sync');
+  // ★ כל IPN נרשם גולמי (sumit_ipn_log): הפורמט של SUMIT נלמד מהשטח, לא מניחים.
+  const { data: found, error } = await db.rpc('rpc_sumit_ipn_received', { p_content_type: req.headers.get('content-type') ?? '', p_body: raw, p_candidates: candidates });
   if (error) return json({ ok: false, error: 'DB' }, 500);
-  const link = ((links ?? []) as { external_identifier: string; amount: number }[]).find((l) => l.external_identifier === ext)
-    ?? { external_identifier: ext, amount: 0 };
+  if (!found?.link) return json({ ok: true, ignored: 'לא זוהה קישור שלנו בגוף', candidates });
+  const link = { ...found.link, payment_id: candidates.payment_id };
   const outcome = await syncPaymentLink(db, sumitProvider(), link);
-  console.log(`[sumit-webhook] ${ext}: ${outcome.result}`);
+  console.log(`[sumit-webhook] ${link.external_identifier}: ${outcome.result}`);
   // 200 תמיד כשעובד — כדי ש-SUMIT לא תשלח שוב ושוב; המצב האמיתי נבדק גם ב-cron.
   return json({ ok: true, ...outcome });
 });
