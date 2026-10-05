@@ -113,6 +113,17 @@ select assert_true((select status = 'active' from standing_orders), '★ הבק�
 reset role;
 select rpc_standing_order_cancelled((select id from standing_orders), (select t_user('owner'::user_role)));
 select assert_true((select status = 'cancelled' and cancelled_at is not null and cancelled_by is not null and next_billing is null from standing_orders), 'אחרי SUMIT — נעצרה, עם מי ומתי');
+-- ★ אחרי העצירה: ממשיכים לבדוק מול SUMIT. אישור ביטול (1) — שקט; עדיין פעילה שם — התראה קריטית.
+select assert_eq(jsonb_array_length(rpc_standing_orders_to_check()), 1, 'הוראה שנעצרה ממשיכה להיבדק מול SUMIT');
+select assert_true((rpc_standing_order_status((select id from standing_orders), 1, null, null) ->> 'confirmed_in_sumit')::boolean, 'SUMIT מאשרת: בוטלה (1)');
+select assert_eq((select count(*) from system_alerts where kind = 'standing_order_cancel_mismatch'), 0, 'אישור — בלי התראה');
+select rpc_standing_order_status((select id from standing_orders), 12, (current_date + 30), null);
+select assert_true((select status = 'cancelled' from standing_orders), 'SUMIT עדיין פעילה — אצלנו נשארת "נעצרה"');
+select assert_eq((select count(*) from system_alerts where kind = 'standing_order_cancel_mismatch' and severity = 'critical'), 1, '★ נעצרה אצלנו ופעילה ב-SUMIT → התראה קריטית');
+select rpc_standing_order_status((select id from standing_orders), 12, (current_date + 30), null);
+select assert_eq((select count(*) from system_alerts where kind = 'standing_order_cancel_mismatch'), 1, 'אותה התראה לא חוזרת כל שעה');
+update standing_orders set cancelled_at = now() - interval '15 days';
+select assert_eq(jsonb_array_length(rpc_standing_orders_to_check()), 0, 'אחרי 14 יום — יוצאת מהבדיקה');
 set local role authenticated;
 select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
 do $$ begin

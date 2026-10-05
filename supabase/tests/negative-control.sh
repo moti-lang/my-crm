@@ -799,6 +799,11 @@ expect_fail_code "הוראת קבע: מנהלת סניף יכולה לעצור" 
   'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לעצור הוראת קבע./  if false then raise exception \x27x\x27/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
+expect_fail_code "הוראת קבע: לא מוודאים מול SUMIT שהעצירה תפסה" \
+  "$DIR/../migrations/0029_standing_cancel_verify.sql" \
+  'sed -i "s/         or (o.status = .cancelled. and o.cancelled_at > now() - interval .14 days.))/         or false)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

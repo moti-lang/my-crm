@@ -8,6 +8,7 @@
 // הוא מריץ את אותו ספק ואותו פרומפט מול המאגר האמיתי, בלי לכתוב דבר.
 import { answerProvider, type AnswerContext } from '../_shared/answer.ts';
 import { requireUserJwt } from '../_shared/guard.ts';
+import { preflight, withCors } from '../_shared/cors.ts';
 import { resolveAnswer } from '../_shared/answer-resolve.ts';
 import { layerForBranch, type LayerFaq, type LayerKnowledge, type LayerBranch } from '../_shared/knowledge-layer.ts';
 
@@ -15,6 +16,13 @@ const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
 
 Deno.serve(async (req) => {
+  // הסימולטור קורא מהדפדפן: ה-preflight (OPTIONS, בלי טוקן) נענה לפני השומר.
+  const pre = preflight(req);
+  if (pre) return pre;
+  return withCors(req, await handle(req));
+});
+
+async function handle(req: Request): Promise<Response> {
   // verify_jwt מקבל גם את מפתח ה-anon הציבורי. כאן: משתמשת מחוברת בלבד.
   const denied = requireUserJwt(req);
   if (denied) return denied;
@@ -54,4 +62,4 @@ Deno.serve(async (req) => {
   // מה שהיה נשלח בפועל — אותו resolver כמו בוואטסאפ, בלי מסד.
   const resolved = outcome.ok ? resolveAnswer(outcome.answer, { faq: ctx.faq, knowledge: ctx.knowledge, mayQuotePrices: ctx.mayQuotePrices }) : null;
   return json({ ...outcome, resolved });
-});
+}
