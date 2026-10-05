@@ -391,6 +391,18 @@ GoTrue כבוי, ואף קריאת `signInWithPassword` לא קיימת בקוד
 הפעלה, ביטול, סיכום), `enrollment.test.mjs` (אימות זהה בלקוח, אין סכומים
 בקוד, הסיכום), 8 בקרות שלילה.
 
+## סודות הסנדבוקס — ב-Vault, לא בקובץ
+
+`.env.verify` הוא קובץ מקומי ונמחק עם כל קונטיינר חדש. כל הסודות של סביבת
+הפיתוח (נטליפיי, SUMIT בדיקה, CRON_SECRET, גוגל) שמורים ב-Vault של הפרויקט
+בשמות `sandbox_<NAME>`. בקונטיינר חדש צריך להביא רק את טוקן Supabase, והוא פותח
+את השאר:
+
+```bash
+SUPABASE_ACCESS_TOKEN=sbp_… SUPABASE_PROJECT_REF=kzoxlusbocxjinfxckhe node scripts/env-from-vault.mjs
+node scripts/env-from-vault.mjs --save     # אחרי שינוי ב-.env.verify
+```
+
 ## גבייה בכרטיס — SUMIT (שלב א, שלד מול תשובות מוקלטות)
 
 **הזרימה.** "💳 קישור תשלום" ליד חייבת (גבייה, וכרטיס התלמידה) → `rpc_create_payment_link`
