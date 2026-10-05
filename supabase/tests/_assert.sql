@@ -23,6 +23,12 @@ language sql stable security definer set search_path = public, pg_temp as $$
   select id from profiles where role = p_role and is_active order by created_at limit 1
 $$;
 
+/** מספר כל התלמידות הפעילות במסד — לבדיקות שרצות כתפקיד שאינו רואה את students. */
+create or replace function t_student_count() returns bigint
+language sql stable security definer set search_path = public, pg_temp as $$
+  select count(*) from students where deleted_at is null
+$$;
+
 /** claims מוכנים ל-set_config, לפי תפקיד. */
 create or replace function t_claims(p_role user_role) returns text
 language sql stable security definer set search_path = public, pg_temp as $$
@@ -171,6 +177,7 @@ begin
   drop function if exists assert_no_execute(text, text);
   drop function if exists t_claims(user_role);
   drop function if exists t_user(user_role);
+  drop function if exists t_student_count();
   drop function if exists t_roles_agree(text, text, numeric);
   -- ומוחקת גם את עצמה: נמצאה בענן, אחרי סבב אימות, עם הרשאת הרצה ל-anon.
   drop function if exists drop_assert_helpers();

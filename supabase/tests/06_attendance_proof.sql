@@ -137,7 +137,7 @@ begin
   perform assert_true((sheet->>'ok')::boolean, 'טוקן תקין מחזיר גיליון');
   perform assert_true(sheet->>'branch_name' = 'ביתר עילית', 'הגיליון נושא את שם הסניף');
   perform assert_true((sheet->>'lesson_date')::date = current_date, 'הגיליון הוא של היום');
-  perform assert_eq(jsonb_array_length(sheet->'students'), 6, 'שש תלמידות בסניף');
+  perform assert_true(jsonb_array_length(sheet->'students') >= 6, 'לפחות שש תלמידות הזרע בסניף (נרשמות אמיתיות מצטרפות)');
 
   -- ★ מה שאסור שיהיה שם
   raw := sheet::text;
@@ -179,7 +179,8 @@ begin
 
   res := rpc_attendance_submit((select beitar from t), lesson, marks);
   perform assert_true((res->>'ok')::boolean, 'שמירה מצליחה');
-  perform assert_eq((res->>'saved')::bigint, 6, 'שש שורות נשמרו');
+  perform assert_eq((res->>'saved')::bigint, jsonb_array_length(sheet->'students'), 'כל שורות הגיליון נשמרו');
+  perform assert_true((res->>'saved')::bigint >= 6, 'לפחות שש שורות (הזרע) נשמרו');
 end $$;
 
 -- הבדיקות הבאות זקוקות לקריאה מהטבלאות — חוזרים ל-postgres
@@ -190,8 +191,12 @@ declare v_lesson uuid;
 begin
   select id into v_lesson from lessons
    where branch_id = (select beitar_id from t) and lesson_date = current_date;
-  perform assert_eq((select count(*) from attendance where lesson_id = v_lesson), 6,
-                    'שש רשומות נוכחות נכתבו');
+  perform assert_eq((select count(*) from attendance where lesson_id = v_lesson),
+                    (select count(*) from students where branch_id = (select beitar_id from t)
+                       and deleted_at is null and status in ('active','pending')),
+                    'רשומת נוכחות לכל תלמידה פעילה בסניף');
+  perform assert_true((select count(*) from attendance where lesson_id = v_lesson) >= 6,
+                      'לפחות שש רשומות נוכחות (הזרע) נכתבו');
   perform assert_true((select status = 'reported' from lessons where id = v_lesson),
                       'השיעור סומן כמדווח');
   perform assert_true((select reported_at is not null from lessons where id = v_lesson),

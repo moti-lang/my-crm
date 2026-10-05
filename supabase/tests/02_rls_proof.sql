@@ -50,19 +50,19 @@ select assert_eq((select count(*) from branches where id = :MODIIN), 0,
                  '★ שאילתה ישירה על סניף אחר מחזירה 0 שורות');
 select assert_eq((select count(*) from students where branch_id <> :BEITAR), 0,
                  '★ שאילתה ישירה על תלמידות מסניף אחר מחזירה 0 שורות');
-select assert_eq((select count(*) from students), 6, 'מנהלת רואה 6 תלמידות (ביתר בלבד)');
+select assert_eq((select count(*) from students where source is distinct from 'enrollment'), 6, 'מנהלת רואה 6 תלמידות (ביתר בלבד, ללא נרשמות מהטופס)');
 select assert_eq((select count(*) from v_student_balance where branch_id <> :BEITAR), 0,
                  '★ תצוגת היתרות אינה דולפת סניפים אחרים');
 select assert_eq((select count(*) from v_student_overview where branch_id <> :BEITAR), 0,
                  '★ תצוגת סקירת התלמידות אינה דולפת סניפים אחרים');
 select assert_eq((select count(*) from v_debtors where branch_id <> :BEITAR), 0,
                  '★ רשימת החייבות אינה דולפת סניפים אחרים');
-select assert_eq((select count(*) from v_debtors), 4, 'מנהלת רואה 4 חייבות בביתר');
+select assert_eq((select count(*) from v_debtors d where (select source from students s where s.id = d.student_id) is distinct from 'enrollment'), 4, 'מנהלת רואה 4 חייבות בביתר (ללא נרשמות מהטופס)');
 select assert_eq((select count(*) from v_general_allocation), 0,
                  '★ מנהלת סניף אינה רואה חלוקת הוצאות — עדיף כלום על מספר שגוי');
-select assert_eq((select count(*) from v_student_overview), 6,
+select assert_eq((select count(*) from v_student_overview where source is distinct from 'enrollment'), 6,
                  'מנהלת רואה 6 תלמידות בתצוגת הסקירה');
-select assert_eq((select count(*) from payments), 6, 'מנהלת רואה תשלומים של ביתר בלבד');
+select assert_eq((select count(*) from payments where source is distinct from 'sumit'), 6, 'מנהלת רואה תשלומים של ביתר בלבד (ללא סליקה מקוונת)');
 select assert_eq((select count(*) from ledger_entries where branch_id is distinct from :BEITAR), 0,
                  '★ הוצאות של סניפים אחרים אינן נראות');
 select assert_eq((select count(*) from lessons where branch_id <> :BEITAR), 0,
@@ -151,8 +151,8 @@ select assert_eq((select count(*) from students), 0,
                  '★ רואת חשבון אינה קוראת מטבלת students ישירות');
 select assert_eq((select count(*) from v_student_overview), 0,
                  '★ רואת חשבון אינה רואה את תצוגת הסקירה (יש בה טלפונים)');
-select assert_eq((select count(*) from v_students_accounting where enrolled_at is null), 21,
-                 'רואת חשבון רואה 21 תלמידות דרך התצוגה המסוננת');
+select assert_eq((select count(*) from v_students_accounting), t_student_count(),
+                 'רואת חשבון רואה את כל התלמידות (21 בזרע) דרך התצוגה המסוננת');
 select assert_eq((select count(*) from information_schema.columns
                   where table_name='v_students_accounting'
                     and column_name in ('parent_phone','alt_phone','address','email')), 0,
