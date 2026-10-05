@@ -41,3 +41,15 @@ export function describePlan(p: { annual_total: number; registration_fee: number
   const rest = p.installments - 1;
   return `העלות השנתית ${p.annual_total} ₪. החיוב הראשון ${p.first_charge} ₪ (${p.registration_fee} ₪ דמי רישום + ${p.installment_amount} ₪ תשלום ראשון), ואחריו ${rest} תשלומים חודשיים של ${p.installment_amount} ₪.`;
 }
+
+/**
+ * סניף פעיל אחד בלבד → נבחר אוטומטית והבורר לא מוצג. שניים ומעלה → הבורר
+ * חוזר, בלי הגדרה ידנית. הרשימה מגיעה מהמסד (רק סניפים פעילים שלא נמחקו).
+ */
+export function autoBranch<B extends { id: string }>(branches: B[] | null | undefined): B | null {
+  return branches && branches.length === 1 ? (branches[0] ?? null) : null;
+}
+export function withAutoBranch(f: EnrollForm, branches: { id: string }[] | null | undefined): EnrollForm {
+  const only = autoBranch(branches);
+  return only ? { ...f, branch_id: only.id } : f;
+}

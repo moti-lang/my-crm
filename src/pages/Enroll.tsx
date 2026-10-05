@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useEnrollmentPublic, enroll, type EnrollResult } from '@/hooks/enrollment';
-import { validateEnroll, describePlan, type EnrollForm } from '@/lib/enrollment';
+import { validateEnroll, describePlan, autoBranch, withAutoBranch, type EnrollForm } from '@/lib/enrollment';
 import { formatILS } from '@/lib/format';
 
 /**
@@ -18,7 +18,9 @@ export function Enroll() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<EnrollResult | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
-  const errors = useMemo(() => validateEnroll(form), [form]);
+  // סניף פעיל יחיד נבחר אוטומטית; הטופס שנשלח ונבדק הוא תמיד effective.
+  const effective = useMemo(() => withAutoBranch(form, info.data?.branches), [form, info.data?.branches]);
+  const errors = useMemo(() => validateEnroll(effective), [effective]);
   const set = <K extends keyof EnrollForm>(k: K, v: EnrollForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   async function submit(e: FormEvent) {
@@ -26,7 +28,7 @@ export function Enroll() {
     setTouched(true);
     if (Object.keys(errors).length) return;
     setBusy(true);
-    try { setResult(await enroll(form)); }
+    try { setResult(await enroll(effective)); }
     catch { setResult({ ok: false, error: 'לא הצלחנו לשלוח את ההרשמה. בדקי את החיבור ונסי שוב.' }); }
     finally { setBusy(false); }
   }
@@ -62,13 +64,17 @@ export function Enroll() {
         </div>
         <Field k="phone" label="טלפון (נייד)" type="tel" dir="ltr" form={form} set={set} error={touched ? errors.phone : undefined} />
         <Field k="email" label="מייל" type="email" dir="ltr" form={form} set={set} error={touched ? errors.email : undefined} />
-        <label className="block text-sm">סניף
-          <select className="field mt-1" value={form.branch_id} onChange={(e) => set('branch_id', e.target.value)}>
-            <option value="">בחרי סניף</option>
-            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.city ? ` · ${b.city}` : ''}</option>)}
-          </select>
-          {touched && errors.branch_id && <span className="mt-0.5 block text-xs text-bad">{errors.branch_id}</span>}
-        </label>
+        {autoBranch(branches) ? (
+          <p className="text-sm">סניף: <span className="font-medium">{autoBranch(branches)!.name}</span></p>
+        ) : (
+          <label className="block text-sm">סניף
+            <select className="field mt-1" value={form.branch_id} onChange={(e) => set('branch_id', e.target.value)}>
+              <option value="">בחרי סניף</option>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.city ? ` · ${b.city}` : ''}</option>)}
+            </select>
+            {touched && errors.branch_id && <span className="mt-0.5 block text-xs text-bad">{errors.branch_id}</span>}
+          </label>
+        )}
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" checked={form.mailing_consent} onChange={(e) => set('mailing_consent', e.target.checked)} />
           <span>אני מאשרת הצטרפות לרשימת התפוצה במייל ולקו החוג (עדכונים על שיעורים, מופעים וצילומים)</span>

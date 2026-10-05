@@ -28,6 +28,17 @@ step() {
   local n="$1" title="$2"
   [ -n "$ONLY" ] && [ "$ONLY" != "$n" ] && return 1
   STEP="$n"
+  # מסד ייצור: לא טוענים דמו/זהויות בדיקה ולא מריצים חבילות שכותבות.
+  if [ "$n" = "2" ] || [ "$n" = "4" ]; then
+    node scripts/is-production.mjs; local lock=$?
+    if [ "$lock" -eq 0 ]; then
+      echo ""; echo " שלב $n — $title"
+      echo "  · מסד ייצור (settings.production_lock) — השלב מדולג בכוונה"
+      return 1
+    elif [ "$lock" -eq 2 ]; then
+      echo "  ✗ לא ידוע אם זה מסד ייצור — עוצרים"; FAILED=1; abort "$n"
+    fi
+  fi
   echo ""
   echo "═══════════════════════════════════════════════"
   echo " שלב $n — $title"

@@ -471,7 +471,7 @@ expect_fail_code "הרשמה: הדף קורא ל-RPC ישירות (בלי IP)" \
 
 expect_fail_code "טופס ההרשמה: רכיב מוגדר בתוך הרכיב (הפוקוס נופל אחרי כל אות)" \
   "$DIR/../../src/pages/Enroll.tsx" \
-  'sed -i "s/  const errors = useMemo(() => validateEnroll(form), \[form\]);/  const errors = useMemo(() => validateEnroll(form), [form]);\n  const Inner = () => null;/" "$F"' \
+  'sed -i "s/  const errors = useMemo(() => validateEnroll(effective), \[effective\]);/  const errors = useMemo(() => validateEnroll(effective), [effective]);\n  const Inner = () => null;/" "$F"' \
   "node supabase/tests/enrollment.test.mjs"
 
 expect_fail_code "enroll בלי תשובת preflight (הדפדפן לא שולח את ה-POST)" \
@@ -694,6 +694,11 @@ expect_fail_code "אזכור לא-מוסמך לאובייקט מסכמת extensi
   "./supabase/tests/reset.sh"
 
 "$DIR/reset.sh" >/dev/null
+expect_fail_code "בחירה אוטומטית גם כשיש שני סניפים (הבורר נעלם)" \
+  "$DIR/../../src/lib/enrollment.ts" \
+  'sed -i "s|branches.length === 1 ?|branches.length >= 1 ?|" "$F"' \
+  "node supabase/tests/enrollment.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

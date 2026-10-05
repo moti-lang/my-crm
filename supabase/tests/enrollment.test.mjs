@@ -22,6 +22,15 @@ const good = { first_name: 'רבקה', last_name: 'כהן', grade: 'ד', school:
 
 console.log('\nאימות בדף:');
 check('טופס תקין — בלי שגיאות', Object.keys(e.validateEnroll(good)).length === 0, JSON.stringify(e.validateEnroll(good)));
+{
+  const one = [{ id: 'b1', name: 'דרך אמונה' }], two = [...one, { id: 'b2', name: 'אחר' }];
+  check('★ סניף פעיל יחיד — נבחר אוטומטית', e.autoBranch(one)?.id === 'b1' && e.withAutoBranch({ ...good, branch_id: '' }, one).branch_id === 'b1');
+  check('★ סניף יחיד — טופס בלי בחירה עובר בדיקה', Object.keys(e.validateEnroll(e.withAutoBranch({ ...good, branch_id: '' }, one))).length === 0);
+  check('★ שני סניפים — אין בחירה אוטומטית, הבורר חוזר', e.autoBranch(two) === null && e.withAutoBranch({ ...good, branch_id: '' }, two).branch_id === '');
+  check('אין סניפים — אין בחירה', e.autoBranch([]) === null && e.autoBranch(undefined) === null);
+  const page = codeOf('src/pages/Enroll.tsx');
+  check('★ הדף שולח ובודק את הטופס עם הסניף האוטומטי', /enroll\(effective\)/.test(page) && /validateEnroll\(effective\)/.test(page));
+}
 check('★ בלי אישור תקנון — נחסם', e.validateEnroll({ ...good, terms_accepted: false }).terms_accepted !== undefined);
 check('★ שם עם תווים זרים — נחסם', e.validateEnroll({ ...good, first_name: '<b>x</b>' }).first_name !== undefined && e.validateEnroll({ ...good, first_name: 'רבקה1' }).first_name !== undefined);
 check("שם עם גרש ומקף — תקין", Object.keys(e.validateEnroll({ ...good, last_name: "כ״ץ-או'ברייאן" })).length === 0);
