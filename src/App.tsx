@@ -1,3 +1,4 @@
+import { StandingOrders } from '@/pages/StandingOrders';
 import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
@@ -71,6 +72,7 @@ function Gate() {
         <Route path="/branches/:id" element={<BranchDetail />} />
         <Route path="/students" element={<Students />} />
         <Route path="/collection" element={<Collection />} />
+        <Route path="/standing-orders" element={<StandingOrders />} />
         <Route path="/expenses" element={<Expenses />} />
         <Route path="/general" element={<General />} />
         <Route path="/productions" element={<Productions />} />

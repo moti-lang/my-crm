@@ -759,6 +759,8 @@ export type Database = {
           sumit_customer_id: string | null;
           sumit_document_url: string | null;
           match_method: string | null;
+          standing_consent_text: string | null;
+          standing_consented_at: string | null;
         };
         Insert: {
           id?: string;
@@ -786,6 +788,8 @@ export type Database = {
           sumit_customer_id?: string | null;
           sumit_document_url?: string | null;
           match_method?: string | null;
+          standing_consent_text?: string | null;
+          standing_consented_at?: string | null;
         };
         Update: {
           id?: string;
@@ -813,6 +817,8 @@ export type Database = {
           sumit_customer_id?: string | null;
           sumit_document_url?: string | null;
           match_method?: string | null;
+          standing_consent_text?: string | null;
+          standing_consented_at?: string | null;
         };
         Relationships: [
           {
@@ -1146,6 +1152,164 @@ export type Database = {
           value?: Json;
         };
         Relationships: [];
+      };
+      standing_order_charges: {
+        Row: {
+          id: string;
+          standing_order_id: string;
+          sumit_payment_id: number;
+          amount: number;
+          charged_at: string | null;
+          valid: boolean;
+          payment_id: string | null;
+          document_url: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          standing_order_id: string;
+          sumit_payment_id: number;
+          amount: number;
+          charged_at?: string | null;
+          valid: boolean;
+          payment_id?: string | null;
+          document_url?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          standing_order_id?: string;
+          sumit_payment_id?: number;
+          amount?: number;
+          charged_at?: string | null;
+          valid?: boolean;
+          payment_id?: string | null;
+          document_url?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "standing_order_charges_payment_id_fkey";
+            columns: ["payment_id"];
+            isOneToOne: false;
+            referencedRelation: "payments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "standing_order_charges_standing_order_id_fkey";
+            columns: ["standing_order_id"];
+            isOneToOne: false;
+            referencedRelation: "standing_orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      standing_orders: {
+        Row: {
+          id: string;
+          student_id: string;
+          branch_id: string;
+          payment_link_id: string;
+          sumit_customer_id: number;
+          sumit_recurring_id: number | null;
+          amount: number;
+          installments: number;
+          installments_total: number;
+          date_start: string;
+          status: string;
+          sumit_status: number | null;
+          next_billing: string | null;
+          last_billing: string | null;
+          charged_count: number;
+          failed_count: number;
+          consent_text: string;
+          consented_at: string;
+          last_error: string | null;
+          last_checked_at: string | null;
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          branch_id: string;
+          payment_link_id: string;
+          sumit_customer_id: number;
+          sumit_recurring_id?: number | null;
+          amount: number;
+          installments: number;
+          installments_total: number;
+          date_start: string;
+          status?: string;
+          sumit_status?: number | null;
+          next_billing?: string | null;
+          last_billing?: string | null;
+          charged_count?: number;
+          failed_count?: number;
+          consent_text: string;
+          consented_at: string;
+          last_error?: string | null;
+          last_checked_at?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          student_id?: string;
+          branch_id?: string;
+          payment_link_id?: string;
+          sumit_customer_id?: number;
+          sumit_recurring_id?: number | null;
+          amount?: number;
+          installments?: number;
+          installments_total?: number;
+          date_start?: string;
+          status?: string;
+          sumit_status?: number | null;
+          next_billing?: string | null;
+          last_billing?: string | null;
+          charged_count?: number;
+          failed_count?: number;
+          consent_text?: string;
+          consented_at?: string;
+          last_error?: string | null;
+          last_checked_at?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "standing_orders_branch_id_fkey";
+            columns: ["branch_id"];
+            isOneToOne: false;
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "standing_orders_cancelled_by_fkey";
+            columns: ["cancelled_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "standing_orders_payment_link_id_fkey";
+            columns: ["payment_link_id"];
+            isOneToOne: true;
+            referencedRelation: "payment_links";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "standing_orders_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: false;
+            referencedRelation: "students";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       students: {
         Row: {
@@ -1622,6 +1786,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_standing_orders: {
+        Row: {
+          id: string | null;
+          student_id: string | null;
+          full_name: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          status: string | null;
+          sumit_status: number | null;
+          amount: number | null;
+          installments_total: number | null;
+          charged_total: number | null;
+          failed_count: number | null;
+          date_start: string | null;
+          next_billing: string | null;
+          last_billing: string | null;
+          last_error: string | null;
+          last_checked_at: string | null;
+          cancelled_at: string | null;
+          created_at: string | null;
+          needs_attention: boolean | null;
+        };
+        Relationships: [];
+      };
       v_student_balance: {
         Row: {
           student_id: string | null;
@@ -1867,6 +2055,17 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: Json;
       };
+      rpc_record_standing_charge: {
+        Args: {
+          p_order: string;
+          p_sumit_payment_id: number;
+          p_amount: number;
+          p_charged_at: string;
+          p_valid: boolean;
+          p_document_url: string;
+        };
+        Returns: Json;
+      };
       rpc_record_sumit_payment: {
         Args: {
           p_external_identifier: string;
@@ -1885,6 +2084,58 @@ export type Database = {
           p_branch: string;
         };
         Returns: undefined;
+      };
+      rpc_standing_consent: {
+        Args: {
+          p_token: string;
+        };
+        Returns: Json;
+      };
+      rpc_standing_consent_required: {
+        Args: {
+          p_token: string;
+        };
+        Returns: boolean;
+      };
+      rpc_standing_order_cancel_request: {
+        Args: {
+          p_id: string;
+        };
+        Returns: Json;
+      };
+      rpc_standing_order_cancelled: {
+        Args: {
+          p_id: string;
+          p_by: string;
+        };
+        Returns: undefined;
+      };
+      rpc_standing_order_created: {
+        Args: {
+          p_link: string;
+          p_ok: boolean;
+          p_customer_id: number;
+          p_recurring_id: number;
+          p_error: string;
+        };
+        Returns: string;
+      };
+      rpc_standing_order_status: {
+        Args: {
+          p_id: string;
+          p_sumit_status: number;
+          p_next: string;
+          p_last: string;
+        };
+        Returns: Json;
+      };
+      rpc_standing_orders_to_check: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      rpc_standing_orders_to_setup: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
       };
       rpc_sumit_ipn_received: {
         Args: {

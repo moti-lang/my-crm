@@ -228,14 +228,26 @@ rollback;
 \echo 'הפונקציות של הסניף, ישירות:'
 begin;
 select assert_eq((f_plan_check('{"annual_total":1500,"registration_fee":150,"installments":10,"installment_amount":135}') ->> 'first_charge')::bigint, 285, 'f_plan_check: מחשב חיוב ראשון ושכר לימוד');
-select assert_no_effect('f_plan_check: מבנה שלא מסתכם — זורק', $a$select f_plan_check('{"annual_total":1500,"registration_fee":150,"installments":10,"installment_amount":100}')$a$, 'select 1::text');
+do $$ begin
+  perform f_plan_check('{"annual_total":1500,"registration_fee":150,"installments":10,"installment_amount":100}');
+  perform assert_true(false, 'f_plan_check: מבנה שלא מסתכם — זורק');
+exception when others then
+  if sqlerrm like 'ASSERT%' or sqlerrm like '%✗%' then raise; end if;
+  perform assert_true(true, 'f_plan_check: מבנה שלא מסתכם — זורק');
+end $$;
 select assert_true(f_enroll_branch(t_tok()) = 'bbbbbbbb-0000-0000-0000-000000000001'::uuid and f_enroll_branch('nope') is null, 'f_enroll_branch: טוקן → סניף; טוקן זר → כלום');
 select assert_true((f_branch_enrollment_state('bbbbbbbb-0000-0000-0000-000000000001') ->> 'open')::boolean, 'f_branch_enrollment_state: סניף פעיל ופתוח');
 set local role authenticated;
 select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
 select assert_true((rpc_branch_enrollment_state('bbbbbbbb-0000-0000-0000-000000000001') ->> 'taken')::int >= 0, 'rpc_branch_enrollment_state: הבעלים רואה כמה נרשמו');
 select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
-select assert_no_effect('★ מנהלת לא רואה מצב הרשמה של סניף אחר', $a$select rpc_branch_enrollment_state('bbbbbbbb-0000-0000-0000-000000000002')$a$, 'select 1::text');
+do $$ begin
+  perform rpc_branch_enrollment_state('bbbbbbbb-0000-0000-0000-000000000002');
+  perform assert_true(false, '★ מנהלת לא רואה מצב הרשמה של סניף אחר');
+exception when others then
+  if sqlerrm like 'ASSERT%' or sqlerrm like '%✗%' then raise; end if;
+  perform assert_true(true, '★ מנהלת לא רואה מצב הרשמה של סניף אחר');
+end $$;
 select assert_no_execute('anon', 'rpc_branch_enrollment_state(uuid)');
 select assert_no_execute('authenticated', 'f_branch_enrollment_state(uuid)');
 rollback;
@@ -295,7 +307,13 @@ set local role authenticated;
 select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
 select assert_eq(jsonb_array_length(rpc_branch_tracks('bbbbbbbb-0000-0000-0000-000000000001')), 5, 'rpc_branch_tracks: הבעלים רואה את כל המסלולים, כולל הוראות קבע');
 select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), true);
-select assert_no_effect('מנהלת לא רואה מסלולים של סניף אחר', $a$select rpc_branch_tracks('bbbbbbbb-0000-0000-0000-000000000002')$a$, 'select 1::text');
+do $$ begin
+  perform rpc_branch_tracks('bbbbbbbb-0000-0000-0000-000000000002');
+  perform assert_true(false, 'מנהלת לא רואה מסלולים של סניף אחר');
+exception when others then
+  if sqlerrm like 'ASSERT%' or sqlerrm like '%✗%' then raise; end if;
+  perform assert_true(true, 'מנהלת לא רואה מסלולים של סניף אחר');
+end $$;
 rollback;
 
 \echo 'הוספת תלמידה ידנית:'

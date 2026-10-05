@@ -9,6 +9,7 @@ const NAV: NavItem[] = [
   { to: '/branches', label: 'סניפים', icon: '⌂' },
   { to: '/students', label: 'תלמידות', icon: '☺' },
   { to: '/collection', label: 'גבייה', icon: '₪' },
+  { to: '/standing-orders', label: 'הוראות קבע', icon: '↻' },
   { to: '/expenses', label: 'הוצאות', icon: '−' },
   { to: '/general', label: 'כללי', icon: '≡', roles: ['owner', 'accountant'] },
   { to: '/productions', label: 'הפקות', icon: '★' },

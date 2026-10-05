@@ -30,6 +30,18 @@ async function handle(req: Request): Promise<Response> {
     if (error) throw new Error(error.message);
     if (!link?.ok) return json({ ok: false, error: link?.error ?? 'הקישור לא תקף' }, 410);
     if (link.sumit_page_url) return json({ ok: true, url: link.sumit_page_url });
+    // ★ הוראת קבע: בלי אישור מפורש של ההורה (התיבה בדף) — אין דף תשלום.
+    //   האישור נשמר במסד בנוסח המדויק שהוצג, לפני כל פנייה ל-SUMIT.
+    const { data: needsConsent, error: cErr } = await db.rpc('rpc_standing_consent_required', { p_token: token });
+    if (cErr) throw new Error(cErr.message);
+    if (needsConsent) {
+      if (new URL(req.url).searchParams.get('consent') !== '1') {
+        return json({ ok: false, consent_required: true, error: 'יש לאשר את הוראת הקבע לפני התשלום' }, 409);
+      }
+      const { data: c, error: sErr } = await db.rpc('rpc_standing_consent', { p_token: token });
+      if (sErr || !c?.ok) throw new Error(sErr?.message ?? 'שמירת האישור נכשלה');
+    }
+
     // שער ההשקה — לפני כל פנייה ל-SUMIT (ראה checkoutOpenFor).
     if (!checkoutOpenFor(token, env('SUMIT_CHECKOUT_ALLOW_TOKEN'))) return json({ ok: false, error: CHECKOUT_CLOSED_MESSAGE }, 503);
 

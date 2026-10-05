@@ -12,7 +12,9 @@ import { formatILS } from '@/lib/format';
  *   מופיע רק אחרי שהשרת שמע את זה מ-SUMIT ורשם את התשלום.
  */
 type Info =
-  | { ok: true; state: 'open'; student: string; branch: string; amount: number; expires_at: string; sumit_page_url: string | null }
+  | { ok: true; state: 'open'; student: string; branch: string; amount: number; expires_at: string; sumit_page_url: string | null;
+      /** הוראת קבע: הנוסח המלא עם התאריכים. consented = כבר אושר (נשמר). */
+      standing: { text: string; consented?: boolean; count?: number; each?: number; dates?: string[] } | null }
   | { ok: true; state: 'paid'; student: string; branch: string; amount: number; paid_at: string | null }
   | { ok: false; state?: 'expired'; error: string };
 
@@ -23,6 +25,8 @@ export function Pay() {
   const [info, setInfo] = useState<Info | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // ★ אישור הוראת הקבע: לא מסומן מראש. ההורה מסמנת בעצמה.
+  const [agree, setAgree] = useState(false);
 
   async function load() {
     const { data, error } = await supabase.rpc('rpc_payment_link_public', { p_token: token });
@@ -41,7 +45,8 @@ export function Pay() {
   async function pay() {
     setBusy(true); setError(null);
     try {
-      const { data, error } = await supabase.functions.invoke(`sumit-checkout?token=${encodeURIComponent(token)}`, { method: 'POST' });
+      const consent = info?.ok && info.state === 'open' && info.standing && !info.standing.consented ? '&consent=1' : '';
+      const { data, error } = await supabase.functions.invoke(`sumit-checkout?token=${encodeURIComponent(token)}${consent}`, { method: 'POST' });
       if (error) throw new Error(error.message);
       const r = data as { ok: boolean; url?: string; error?: string };
       if (!r.ok || !r.url) throw new Error(r.error ?? 'לא הצלחנו לפתוח את דף התשלום');
@@ -84,7 +89,21 @@ export function Pay() {
             </div>
           ) : (
             <>
-              <button type="button" className="btn-primary w-full text-base" disabled={busy} onClick={() => void pay()}>
+              {info.standing && (
+                <div className="rounded-field border border-rule p-3 text-sm">
+                  <p className="font-medium">הוראת קבע</p>
+                  {info.standing.consented ? (
+                    <p className="mt-1 text-soft">אישרת: {info.standing.text}</p>
+                  ) : (
+                    <label className="mt-2 flex items-start gap-2">
+                      <input type="checkbox" className="mt-1" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+                      <span>{info.standing.text}</span>
+                    </label>
+                  )}
+                </div>
+              )}
+              <button type="button" className="btn-primary w-full text-base"
+                disabled={busy || Boolean(info.standing && !info.standing.consented && !agree)} onClick={() => void pay()}>
                 {busy ? 'פותח את דף התשלום…' : 'לתשלום בכרטיס אשראי'}
               </button>
               <p className="text-center text-xs text-soft">התשלום מתבצע בדף מאובטח של חברת הסליקה SUMIT. הקבלה תישלח אלייך אוטומטית.</p>

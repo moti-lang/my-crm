@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useStudentPayments, useStudentProductions, useStudentFlags, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
+import { StandingOrderPanel } from '@/components/StandingOrderPanel';
+import { useStandingOrders } from '@/hooks/standing';
 import { formatILS, formatDate, formatPhone } from '@/lib/format';
 import { PaymentForm } from '@/components/PaymentForm';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
@@ -17,6 +19,7 @@ const METHOD_LABEL: Record<string, string> = {
 
 export function StudentDrawer({ student, onClose }: { student: Student | null; onClose: () => void }) {
   const flags = useStudentFlags();
+  const standing = useStandingOrders();
   const payments = useStudentPayments(student?.id ?? null);
   const productions = useStudentProductions(student?.id ?? null);
   const [adding, setAdding] = useState(false);
@@ -176,6 +179,16 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
               <p className="text-sm text-soft">אין עדיין נתוני נוכחות.</p>
             )}
           </Section>
+
+          {(() => {
+            const orders = (standing.data ?? []).filter((o) => o.student_id === student.id);
+            if (orders.length === 0) return null;
+            return (
+              <Section title="הוראת קבע">
+                <div className="space-y-3">{orders.map((o) => <StandingOrderPanel key={o.id} order={o} />)}</div>
+              </Section>
+            );
+          })()}
 
           <Section title="פרטי קשר">
             <dl className="space-y-1 text-sm">

@@ -10,3 +10,14 @@ export function adminClient() {
     auth: { persistSession: false },
   });
 }
+
+/**
+ * לקוח בהרשאות המשתמשת שקראה (ה-JWT שלה) — RLS ו-auth_role() חלים.
+ * לבדיקת הרשאה במסד לפני פעולה חיצונית (למשל ביטול ב-SUMIT).
+ */
+export function userClient(authorization: string) {
+  return createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_ANON_KEY'), {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: authorization } },
+  });
+}

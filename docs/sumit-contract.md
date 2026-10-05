@@ -96,6 +96,31 @@
 (`DELETE /v1/projects/<ref>/secrets` עם `["SUMIT_CHECKOUT_ALLOW_TOKEN"]`)
 ופורסים מחדש את `sumit-checkout`. בדיקות: `sumit.test.mjs` + שתי בקרות שלילה.
 
+## 7. הוראת קבע (סבב 3) — מהמפרט הרשמי, טרם אומת בחיוב אמיתי
+
+המקור: `docs/sumit-swagger.json` (נשלף מ-`api.sumit.co.il/swagger/v1/swagger.json`).
+ארגון הבדיקה חסום כעת ("API is restricted as the company is restricted"), ולכן
+לא בוצעו ניסויים מולו.
+
+- **יצירה:** `POST /billing/recurring/charge/` עם `Customer.ID` של הלקוחה מהתשלום
+  הראשון, בלי `PaymentMethod` ("use the customer payment method"). דף התשלום
+  (beginredirect) שומר את הכרטיס אצל הלקוחה כברירת מחדל (`PreventSavingPaymentMethod`).
+  `Items[0]`: `UnitPrice`, `Date_Start` (החודש הבא), `Duration_Months: 1`,
+  `Recurrence` = מספר החיובים. תשובה: `Data.RecurringCustomerItemIDs`, ו-`Data.Payment` אם חויב.
+- **מצב:** `POST /billing/recurring/listforcustomer/` → `RecurringItems[]` עם `Status`
+  (0 פעילה · 1 בוטלה · 3 הושבתה אחרי כישלון · 9 הסתיימה · 11 תקופת חסד ·
+  12 ממתינה לחיוב ראשון · 13 בוטלה ע"י הלקוחה · 14 ממתינה לניסיון חוזר),
+  `Date_NextBilling`, `Date_PreviousBilling`.
+- **ביטול:** `POST /billing/recurring/cancel/` עם `Customer` + `RecurringCustomerItemID`.
+- **חיובים:** `payments/list` לפי תאריכים, מסוננים אצלנו לפי `CustomerID` וסכום.
+- **אין ב-API:** התרעה מראש על כרטיס שפג תוקפו; קביעת מדיניות ניסיונות חוזרים
+  (`updatesettings` לא כולל זאת); אירוע/webhook לחיוב שנכשל.
+
+**מה צריך לאמת בחיוב אמיתי לפני הפעלה להורים** (`settings.standing_orders_enabled`):
+1. יצירה עם `Date_Start` עתידי לא מחייבת מיד (אם כן — הקוד רושם ומתריע).
+2. `listforcustomer` מחזיר את ההוראה כפעילה עם תאריך החיוב הבא.
+3. ביטול ב-SUMIT מצליח והמצב משתנה ל-1.
+
 ## פתוח
 
 1. הזרימה דרך **הדף** (לא `charge`): רק בדפדפן אמיתי עם כרטיס דמה ≤10 ₪. אז נראה גם את

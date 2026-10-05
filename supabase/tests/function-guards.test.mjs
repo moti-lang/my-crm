@@ -25,6 +25,8 @@ export const EXPECTED = {
   // SUMIT: סוד משותף בכותרת (webhook), והטוקן של הקישור עצמו (checkout).
   'sumit-webhook': 'requireSharedSecret', 'sumit-checkout': 'requirePayToken',
   'enroll': 'requireEnrollBody',
+  // עצירת הוראת קבע: הבעלים מהמסך; ההרשאה עצמה נבדקת במסד בהרשאות המשתמשת.
+  'standing-order-cancel': 'requireUserJwt',
 };
 const dirs = readdirSync(ROOT).filter((d) => !d.startsWith('_') && statSync(join(ROOT, d)).isDirectory() && readdirSync(join(ROOT, d)).includes('index.ts'));
 check(`יש ${dirs.length} פונקציות`, dirs.length >= 12);
@@ -49,7 +51,7 @@ for (const d of dirs) {
 const rem = codeOf(join(ROOT, 'cron-reminders/index.ts'));
 check('★ cron-reminders קורא ל-wa-send עם CRON_SECRET', /requireEnv\('CRON_SECRET'\)/.test(rem) && !/SUPABASE_SERVICE_ROLE_KEY/.test(rem));
 // CORS: כל פונקציה שהדפדפן קורא (verify_jwt=false + נקראת מ-src) עונה ל-OPTIONS.
-for (const d of ['enroll', 'sumit-checkout']) {
+for (const d of ['enroll', 'sumit-checkout', 'standing-order-cancel']) {
   const src = codeOf(join(ROOT, d, 'index.ts'));
   check(`★ ${d}: עונה ל-preflight (OPTIONS) ומחזירה כותרות CORS — אחרת הדפדפן לא שולח את ה-POST`, /const pre = preflight\(req\);\s*if \(pre\) return pre;/.test(src) && /withCors\(req, await handle\(req\)\)/.test(src));
 }
@@ -59,5 +61,12 @@ check('requireCronSecret משווה ל-CRON_SECRET', /Bearer \$\{requireEnv\('CR
 const deploy = codeOf('scripts/functions-deploy-api.mjs');
 check('★ הפריסה מסרבת לפונקציה בלי שומר', /slugs\.filter\(\(s\) => !guardOf\(s\)\)/.test(deploy) && /if \(unguarded\.length\) \{[\s\S]*?process\.exit\(1\)/.test(deploy));
 check('★ פריסה כללית לא מעלה את sumit-probe (פרוקסי עם מפתח הארגון)', /DEV_ONLY = \['sumit-probe'\]/.test(deploy) && /wanted\.length \? wanted : all\.filter\(\(s\) => !DEV_ONLY\.includes\(s\)\)/.test(deploy));
+{
+  // ★ רשימת השומרים בסקריפט הפריסה = הרשימה כאן. אחרת פונקציה חדשה נבדקת ולא נפרסת (קרה עם standing-order-cancel).
+  const m = /const GUARD = (\{[^}]*\});/.exec(deploy);
+  const guardMap = m ? Function(`return ${m[1]}`)() : {};
+  const same = JSON.stringify(Object.entries(guardMap).sort()) === JSON.stringify(Object.entries(EXPECTED).sort());
+  check('★ סקריפט הפריסה מכיר את אותם שומרים כמו הבדיקה', same, `deploy: ${JSON.stringify(guardMap)}`);
+}
 console.log(fails === 0 ? '\nכל הפונקציות מוגנות' : `\n${fails} בדיקות נכשלו`);
 process.exit(fails ? 1 : 0);

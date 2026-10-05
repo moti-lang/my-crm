@@ -6,6 +6,8 @@ import { adminClient } from '../_shared/supabase.ts';
 import { requireCronSecret } from '../_shared/guard.ts';
 import { sumitProvider } from '../_shared/sumit.ts';
 import { syncPaymentLink } from '../_shared/sumit-sync.ts';
+import { standingProvider } from '../_shared/standing.ts';
+import { syncStandingOrders } from '../_shared/standing-sync.ts';
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
@@ -27,8 +29,10 @@ Deno.serve(async (req) => {
       tokens.push(l.token);
     }
     const { data: expired } = await db.rpc('rpc_payment_links_mark_checked', { p_tokens: tokens });
-    console.log(`[cron-sumit-sync] ${tokens.length} נבדקו, ${JSON.stringify(counts)}, ${expired ?? 0} פגו`);
-    return json({ checked: tokens.length, ...counts, expired: expired ?? 0 });
+    // הוראות קבע: אחרי הקישורים, כדי שחיוב ראשון שנקלט עכשיו ייצור את ההוראה באותה ריצה.
+    const standing = await syncStandingOrders(db, standingProvider());
+    console.log(`[cron-sumit-sync] ${tokens.length} נבדקו, ${JSON.stringify(counts)}, ${expired ?? 0} פגו, הוראות קבע: ${JSON.stringify(standing)}`);
+    return json({ checked: tokens.length, ...counts, expired: expired ?? 0, standing });
   } catch (e) {
     console.error('[cron-sumit-sync] נכשל', e);
     return json({ error: 'סנכרון SUMIT נכשל' }, 500);

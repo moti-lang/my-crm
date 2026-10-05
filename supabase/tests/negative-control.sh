@@ -405,7 +405,7 @@ expect_fail_code "SUMIT: הסכום לדף מגיע מהבקשה" \
   "node supabase/tests/sumit.test.mjs"
 
 expect_fail_code "SUMIT: הדף הציבורי חושף את הטלפון" \
-  "$DIR/../migrations/0022_payment_links.sql" \
+  "$DIR/../migrations/0028_standing_orders.sql" \
   'sed -i "s/  return jsonb_build_object(.ok., true, .state., .open., .student., v_name, .branch., v_branch, .amount., l.amount,/  return jsonb_build_object(\x27ok\x27, true, \x27state\x27, \x27open\x27, \x27student\x27, v_name, \x27branch\x27, v_branch, \x27amount\x27, l.amount, \x27parent_phone\x27, (select parent_phone from students where id = l.student_id),/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/16_payment_links.sql"
 
@@ -758,6 +758,46 @@ expect_fail_code "שאלה מוסתרת: התשובה נלקחת מהבקשה ב
   "$DIR/../migrations/0027_enrollment_questions.sql" \
   'sed -i "s/  if (v_opts ->> .ask_whatsapp.)::boolean then/  v_wa := (p ->> \x27whatsapp\x27) = \x27yes\x27;\n  if (v_opts ->> \x27ask_whatsapp\x27)::boolean then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
+  "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
+  'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "הוראת קבע: התיבה מסומנת מראש" \
+  "$DIR/../../src/pages/Pay.tsx" \
+  'sed -i "s/  const \[agree, setAgree\] = useState(false);/  const [agree, setAgree] = useState(true);/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "הוראת קבע: עצירה מסומנת אצלנו גם כש-SUMIT סירבה" \
+  "$DIR/../../supabase/functions/standing-order-cancel/index.ts" \
+  'sed -i "s/  if (!r.ok) {/  if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "הוראת קבע: חיוב שנדחה נרשם כתשלום" \
+  "$DIR/../migrations/0028_standing_orders.sql" \
+  'sed -i "s/^  if p_valid then$/  if true then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
+
+expect_fail_code "הוראת קבע: חיוב שנדחה מוריד את התלמידה ללא-פעילה" \
+  "$DIR/../migrations/0028_standing_orders.sql" \
+  'sed -i "s/    update standing_orders set failed_count = failed_count + 1 where id = o.id;/    update standing_orders set failed_count = failed_count + 1 where id = o.id; update students set status = \x27stopped\x27 where id = o.student_id;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
+
+expect_fail_code "הוראת קבע: חיוב שנדחה בלי התראה" \
+  "$DIR/../migrations/0028_standing_orders.sql" \
+  'sed -i "s/    values (.standing_charge_declined./    select (\x27standing_charge_declined\x27/; s/            jsonb_build_object(.standing_order_id., o.id, .student_id., o.student_id, .sumit_payment_id., p_sumit_payment_id));/            jsonb_build_object(\x27standing_order_id\x27, o.id, \x27student_id\x27, o.student_id, \x27sumit_payment_id\x27, p_sumit_payment_id)) where false;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
+
+expect_fail_code "הוראת קבע: הנוסח שאושר לא נשמר" \
+  "$DIR/../migrations/0028_standing_orders.sql" \
+  'sed -i "s/  update payment_links set standing_consent_text = c ->> .text., standing_consented_at = now() where id = l.id;/  update payment_links set standing_consented_at = now() where id = l.id;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
+
+expect_fail_code "הוראת קבע: מנהלת סניף יכולה לעצור" \
+  "$DIR/../migrations/0028_standing_orders.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לעצור הוראת קבע./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash

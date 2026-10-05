@@ -84,3 +84,6 @@ verify_jwt = false          # ציבורי: דף ההרשמה. ההגבלה במ
 
 [functions.sumit-probe]
 verify_jwt = false          # זמני: גילוי החוזה של SUMIT, CRON_SECRET בלבד
+
+[functions.standing-order-cancel]
+verify_jwt = true           # הבעלים מהמסך; ההרשאה נבדקת במסד (rpc_standing_order_cancel_request)
