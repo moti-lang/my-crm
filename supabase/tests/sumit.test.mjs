@@ -162,6 +162,17 @@ console.log('\nשער ההשקה (SUMIT_CHECKOUT_ALLOW_TOKEN):');
   check('★ השער נבדק לפני הפנייה ל-SUMIT', gateAt > 0 && callAt > gateAt && /SUMIT_CHECKOUT_ALLOW_TOKEN/.test(checkout));
 }
 
+console.log('\nנתוני כרטיס ות"ז (SECURITY.md):');
+{
+  const probe = codeOf('supabase/functions/sumit-probe/index.ts');
+  check('★ כלי הגילוי מסיר token, מספר כרטיס ות"ז לפני שהתשובה יוצאת', /CreditCard_Token\|CreditCard_CitizenID\|CreditCard_Number/.test(probe) && /<redacted>/.test(probe));
+  const { readdirSync, statSync } = await import('node:fs');
+  const walk = (d) => readdirSync(d).flatMap((f) => { const p = `${d}/${f}`; return statSync(p).isDirectory() ? walk(p) : [p]; });
+  const files = [...walk('supabase/functions'), ...walk('scripts')].filter((f) => /\.(ts|mjs|js|sh)$/.test(f));
+  const callers = files.filter((f) => /paymentmethods\//.test(codeOf(f)));
+  check('★ שום קוד לא קורא ל-billing/paymentmethods (פרטי כרטיס שמור)', callers.length === 0, callers.join(', '));
+}
+
 console.log('\nהסוד המשותף:');
 {
   const mk = (h) => new Request('https://x/sumit-webhook', { method: 'POST', headers: h });

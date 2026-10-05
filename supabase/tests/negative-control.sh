@@ -804,6 +804,11 @@ expect_fail_code "הוראת קבע: לא מוודאים מול SUMIT שהעצי
   'sed -i "s/         or (o.status = .cancelled. and o.cancelled_at > now() - interval .14 days.))/         or false)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
+expect_fail_code "כלי הגילוי מדפיס פרטי כרטיס" \
+  "$DIR/../../supabase/functions/sumit-probe/index.ts" \
+  'sed -i "s/<redacted>/\$2/" "$F"' \
+  "node supabase/tests/sumit.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה
