@@ -774,6 +774,26 @@ expect_fail_code "שם החוג של בית שמש דולף לסניפים אח�
   'sed -i "/then regexp_replace(coalesce(p_text/c\\              then replace(coalesce(p_text, \x27\x27), \x27{שם החוג}\x27, \x27חוגי דרמחול - החוגים של הניה\x27)" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
+expect_fail_code "מחיקת שאלה מהמאגר נחסמת כשקושרה לשאלה ללא מענה" \
+  "$DIR/../migrations/0031_question_delete.sql" \
+  'sed -i "s/references faq_entries(id) on delete set null;/references faq_entries(id);/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/19_question_delete.sql"
+
+expect_fail_code "מנהלת סניף יכולה למחוק שאלות" \
+  "$DIR/../migrations/0031_question_delete.sql" \
+  'echo "create policy faq_any on faq_entries for all to authenticated using (true);" >> "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/19_question_delete.sql"
+
+expect_fail_code "מחיקת שאלה מהמאגר בלי אישור" \
+  "$DIR/../../src/pages/Agent.tsx" \
+  'sed -i "/if (!window.confirm(.למחוק את השאלה/d" "$F"' \
+  "node supabase/tests/question-delete.test.mjs"
+
+expect_fail_code "מחיקת שאלה ללא מענה בלי אישור" \
+  "$DIR/../../src/pages/Agent.tsx" \
+  'sed -i "s/if (window.confirm(\`למחוק את השאלה \"\${q.question}\"?\`)) void remove.mutateAsync(q.id)/void remove.mutateAsync(q.id)/" "$F"' \
+  "node supabase/tests/question-delete.test.mjs"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
-  useFaq, useSaveFaq, useUnanswered, useResolveUnanswered, useConversations, useConversationMessages,
+  useFaq, useSaveFaq, useDeleteFaq, useUnanswered, useResolveUnanswered, useDeleteUnanswered, useConversations, useConversationMessages,
   useSetTakeover, useMayQuotePrices, useSetMayQuotePrices, simulateAnswer,
   useKnowledge, useSaveKnowledge, useDeleteKnowledge, useSwapKnowledge,
   type Faq, type Unanswered, type SimTurn, type KnowledgeSection,
@@ -250,6 +250,7 @@ function Conversations() {
 function FaqTab({ draft, onDraftDone }: { draft: Unanswered | null; onDraftDone: () => void }) {
   const faq = useFaq();
   const save = useSaveFaq();
+  const remove = useDeleteFaq();
   const [editing, setEditing] = useState<Partial<Faq> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -325,6 +326,12 @@ function FaqTab({ draft, onDraftDone }: { draft: Unanswered | null; onDraftDone:
                   <p>{f.hits} שימושים</p>
                   {!f.is_active && <p className="text-warn">לא פעילה</p>}
                   <button type="button" className="mt-1 text-plum hover:underline" onClick={() => setEditing(f)}>עריכה</button>
+                  <button type="button" className="mt-1 block text-bad hover:underline" disabled={remove.isPending}
+                    onClick={() => {
+                      if (!window.confirm(`למחוק את השאלה "${f.question}"${f.branch_id ? ' (שכבת סניף)' : ''}?`)) return;
+                      if (editing?.id === f.id) setEditing(null);
+                      void remove.mutateAsync(f.id);
+                    }}>מחיקה</button>
                 </div>
               </div>
             </li>
@@ -451,6 +458,7 @@ function KnowledgeTab() {
 function UnansweredTab({ onMakeFaq }: { onMakeFaq: (q: Unanswered) => void }) {
   const list = useUnanswered();
   const resolve = useResolveUnanswered();
+  const remove = useDeleteUnanswered();
   const rows = useMemo(() => list.data ?? [], [list.data]);
   if (list.isError) return <ErrorState error={list.error} onRetry={() => void list.refetch()} />;
   if (list.isLoading) return <CardSkeleton rows={4} />;
@@ -468,6 +476,10 @@ function UnansweredTab({ onMakeFaq }: { onMakeFaq: (q: Unanswered) => void }) {
             <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={resolve.isPending}
               onClick={() => void resolve.mutateAsync({ id: q.id, resolved: !q.resolved })}>
               {q.resolved ? 'פתיחה מחדש' : 'סימון כטופלה'}
+            </button>
+            <button type="button" className="btn-ghost px-3 py-1 text-xs text-bad" disabled={remove.isPending}
+              onClick={() => { if (window.confirm(`למחוק את השאלה "${q.question}"?`)) void remove.mutateAsync(q.id); }}>
+              מחיקה
             </button>
           </div>
         </li>

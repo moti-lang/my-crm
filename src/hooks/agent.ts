@@ -50,6 +50,18 @@ export function useSaveFaq() {
   });
 }
 
+/** מחיקת שאלה מהמאגר — כללית או שכבת סניף. שאלה ללא מענה שקושרה אליה נשארת (faq_id מתאפס). */
+export function useDeleteFaq() {
+  const invalidate = useInvalidate([['faq'], ['unanswered']]);
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('faq_entries').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidate,
+  });
+}
+
 // ─────────── מידע על החוג ───────────
 export function useKnowledge() {
   return useQuery({
@@ -122,6 +134,17 @@ export function useResolveUnanswered() {
   return useMutation({
     mutationFn: async (input: { id: string; resolved: boolean }) => {
       const { error } = await supabase.from('unanswered_questions').update({ resolved: input.resolved }).eq('id', input.id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteUnanswered() {
+  const invalidate = useInvalidate([['unanswered']]);
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('unanswered_questions').delete().eq('id', id);
       if (error) throw new Error(error.message);
     },
     onSuccess: invalidate,
