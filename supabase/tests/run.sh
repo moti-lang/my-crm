@@ -40,8 +40,11 @@ node_test "student-delete-ui.test.mjs" "✓|✗|נכשלו|עברו"
 echo "═══ מסך הקריסה ═══"
 node_test "error-screen.test.mjs" "✓|✗|נכשלו|עברו"
 
-echo "═══ כרטיס תלמידה — דפדפן אמיתי ═══"
-node_test "ui-student-card.test.mjs" "✓|✗|נכשלו|עברו|Error"
+echo "═══ כל המסכים — דפדפן אמיתי, לכל תפקיד ═══"
+node_test "ui-screens.test.mjs" "✓|✗|──|נכשלו|נטענו"
+
+echo "═══ דפי הורים ומורות — דפדפן אמיתי ═══"
+node_test "ui-public.test.mjs" "✓|✗|──|נכשלו|נטענו"
 
 echo "═══ שומרי הפונקציות ═══"
 node_test "function-guards.test.mjs" "✗|מוגנות|נכשלו"

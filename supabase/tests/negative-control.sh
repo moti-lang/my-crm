@@ -852,7 +852,7 @@ expect_fail_code "מחיקת תלמידה בלי אישור" \
 expect_fail_code "★ כרטיס תלמידה: hook אחרי return מוקדם (הקריסה מ-production) — בדיקת הדפדפן" \
   "$DIR/../../src/components/StudentDrawer.tsx" \
   'sed -i "/^  const deleteStudent = useDeleteStudent();$/d; s/^  if (!student) return null;$/  if (!student) return null;\n  const deleteStudent = useDeleteStudent();/" "$F"' \
-  "node supabase/tests/ui-student-card.test.mjs"
+  "node supabase/tests/ui-screens.test.mjs"
 
 expect_fail_code "★ כרטיס תלמידה: hook אחרי return מוקדם — כלל ה-lint" \
   "$DIR/../../src/components/StudentDrawer.tsx" \
@@ -863,6 +863,31 @@ expect_fail_code "מסך הקריסה חוזר לטקסט גנרי (humanError)"
   "$DIR/../../src/components/ErrorBoundary.tsx" \
   'sed -i "s/const details = errorDetails(this.state.error, this.state.stack);/const details = humanError(this.state.error);/" "$F"' \
   "node supabase/tests/error-screen.test.mjs"
+
+expect_fail_code "מסכים: דוחות — שאילתה לעמודה שלא קיימת (גרף ריק בשקט)" \
+  "$DIR/../../src/hooks/reports.ts" \
+  'sed -i "s/supabase.from(.v_pnl_monthly.).select(.\*.)/supabase.from(\x27v_pnl_monthly\x27).select(\x27*, no_such_column\x27)/" "$F"' \
+  "node supabase/tests/ui-screens.test.mjs"
+
+expect_fail_code "מסכים: דשבורד קורס ברינדור" \
+  "$DIR/../../src/pages/Dashboard.tsx" \
+  'sed -i "s|<h1 className=\"text-2xl\">דשבורד</h1>|<h1 className=\"text-2xl\">{(null as unknown as {x: string}).x}</h1>|" "$F"' \
+  "node supabase/tests/ui-screens.test.mjs"
+
+expect_fail_code "מסכים: הוראות קבע — view שלא קיים" \
+  "$DIR/../../src/hooks/standing.ts" \
+  'sed -i "s/from(.v_standing_orders.)/from(\x27v_standing_orders_x\x27 as never)/" "$F"' \
+  "node supabase/tests/ui-screens.test.mjs"
+
+expect_fail_code "★ דף ההרשמה קורס להורים" \
+  "$DIR/../../src/pages/Enroll.tsx" \
+  'sed -i "s/<h1 className=\"text-2xl\">הרשמה · {branch.name}<\/h1>/<h1 className=\"text-2xl\">הרשמה · {(branch as unknown as {x: {y: string}}).x.y}<\/h1>/" "$F"' \
+  "node supabase/tests/ui-public.test.mjs"
+
+expect_fail_code "★ דף התשלום — RPC שגוי (ההורה לא רואה סכום)" \
+  "$DIR/../../src/pages/Pay.tsx" \
+  'sed -i "s/rpc(.rpc_payment_link_public.,/rpc(\x27rpc_payment_link_publicx\x27 as never,/" "$F"' \
+  "node supabase/tests/ui-public.test.mjs"
 
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
