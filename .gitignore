@@ -9,3 +9,6 @@ supabase/.temp
 .env.verify
 .netlify
 backups/
+
+# גיבויים זמניים של בקרות השלילה — לא לריפו
+*.bak
