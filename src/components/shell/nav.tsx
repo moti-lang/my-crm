@@ -5,10 +5,11 @@ import { usePathname } from "next/navigation";
 import { BarChart3, CalendarDays, Footprints, Settings, Sun, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// סדר הטאבים (ב-RTL הראשון הוא הימני ביותר): לידים · היום · סבב · יומן · דוחות
 const ITEMS = [
+  { href: "/leads", label: "לידים", icon: Users },
   { href: "/", label: "היום", icon: Sun },
   { href: "/route", label: "סבב", icon: Footprints },
-  { href: "/leads", label: "לידים", icon: Users },
   { href: "/calendar", label: "יומן", icon: CalendarDays },
   { href: "/reports", label: "דוחות", icon: BarChart3 },
 ];
