@@ -16,6 +16,16 @@ Deno.serve(async (req) => {
   let body: { server_url?: string; api_key?: string; webhook_secret?: string; report?: string } = {};
   try { body = await req.json(); } catch { /* ריק */ }
 
+  // הורדת סקריפט ההתקנה עצמו, עם הטוקן הקצר בלבד (בלי קישור חתום ארוך להדבקה —
+  // קישור כזה נשבר בהעתקה ידנית). הטוקן נבדק (ונרשם בלוג), לא מנוצל.
+  if ((body as { script?: boolean }).script === true) {
+    const { data, error } = await adminClient().rpc('rpc_wa_setup_report', { p_token: req.headers.get('x-provision-token'), p_log: 'script requested' });
+    if (error || !(data as { ok: boolean }).ok) return json({ ok: false, error: 'טוקן הקמה לא תקף' }, 401);
+    const { data: file, error: fErr } = await adminClient().storage.from('deploy').download('wa-setup.sh');
+    if (fErr || !file) return json({ ok: false, error: 'הסקריפט לא נמצא' }, 500);
+    return new Response(await file.text(), { headers: { 'content-type': 'text/x-shellscript; charset=utf-8' } });
+  }
+
   // דיווח התקדמות/שגיאה מההתקנה: סוף הלוג. לא מנצל את הטוקן.
   if (typeof body.report === 'string') {
     const { data, error } = await adminClient().rpc('rpc_wa_setup_report', { p_token: req.headers.get('x-provision-token'), p_log: body.report });
