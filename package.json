@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "lint": "eslint src",
     "build": "node scripts/check-secrets.mjs && tsc --noEmit && vite build && node scripts/check-secrets.mjs --dist",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
@@ -66,11 +67,15 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "pg": "^8.23.0",
+    "playwright-core": "^1.56.1",
     "postcss": "^8.4.47",
     "supabase": "^1.200.3",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.2",
+    "typescript-eslint": "^8.71.1",
     "vite": "^5.4.8"
   }
 }

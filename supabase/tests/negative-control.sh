@@ -849,6 +849,21 @@ expect_fail_code "מחיקת תלמידה בלי אישור" \
   'sed -i "/if (!window.confirm(.למחוק את \${student.full_name}/d" "$F"' \
   "node supabase/tests/student-delete-ui.test.mjs"
 
+expect_fail_code "★ כרטיס תלמידה: hook אחרי return מוקדם (הקריסה מ-production) — בדיקת הדפדפן" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "/^  const deleteStudent = useDeleteStudent();$/d; s/^  if (!student) return null;$/  if (!student) return null;\n  const deleteStudent = useDeleteStudent();/" "$F"' \
+  "node supabase/tests/ui-student-card.test.mjs"
+
+expect_fail_code "★ כרטיס תלמידה: hook אחרי return מוקדם — כלל ה-lint" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "/^  const deleteStudent = useDeleteStudent();$/d; s/^  if (!student) return null;$/  if (!student) return null;\n  const deleteStudent = useDeleteStudent();/" "$F"' \
+  "npx eslint src"
+
+expect_fail_code "מסך הקריסה חוזר לטקסט גנרי (humanError)" \
+  "$DIR/../../src/components/ErrorBoundary.tsx" \
+  'sed -i "s/const details = errorDetails(this.state.error, this.state.stack);/const details = humanError(this.state.error);/" "$F"' \
+  "node supabase/tests/error-screen.test.mjs"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \

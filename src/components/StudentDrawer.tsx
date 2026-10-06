@@ -33,14 +33,17 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
     return () => document.removeEventListener('keydown', onKey);
   }, [student, onClose]);
 
-  if (!student) return null;
-
-  const due = Number(student.due ?? 0);
-  const progressQ = useInstallmentProgress(student.id ?? null);
-  const inst = progressQ.data ?? null;
+  // ★ כל ה-hooks לפני ה-return המוקדם. hook אחרי `if (!student) return null` משנה את
+  //   מספר ה-hooks בין רינדורים → React קורס ("Rendered more hooks…") והכרטיס לא נפתח.
+  const progressQ = useInstallmentProgress(student?.id ?? null);
   const { profile } = useAuth();
   const deleteStudent = useDeleteStudent();
   const cancelEnrollment = useCancelEnrollment();
+
+  if (!student) return null;
+
+  const due = Number(student.due ?? 0);
+  const inst = progressQ.data ?? null;
   const trialEnd = student.trial_started_on ? new Date(new Date(student.trial_started_on).getTime() + 30 * 86400_000) : null;
   const inTrial = Boolean(trialEnd && trialEnd >= new Date(new Date().toDateString()) && !student.cancelled_at);
   const paid = Number(student.paid ?? 0);

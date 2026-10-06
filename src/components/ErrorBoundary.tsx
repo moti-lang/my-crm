@@ -1,4 +1,3 @@
-import { humanError } from '@/lib/errors';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 /**
@@ -7,9 +6,9 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
  */
 export class ErrorBoundary extends Component<
   { children: ReactNode },
-  { error: Error | null }
+  { error: Error | null; stack: string; copied: boolean }
 > {
-  state: { error: Error | null } = { error: null };
+  state: { error: Error | null; stack: string; copied: boolean } = { error: null, stack: '', copied: false };
 
   static getDerivedStateFromError(error: Error) {
     return { error };
@@ -17,10 +16,12 @@ export class ErrorBoundary extends Component<
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary]', error, info.componentStack);
+    this.setState({ stack: info.componentStack ?? '' });
   }
 
   render() {
     if (!this.state.error) return this.props.children;
+    const details = errorDetails(this.state.error, this.state.stack);
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-paper px-4">
@@ -41,14 +42,34 @@ export class ErrorBoundary extends Component<
           </div>
           <details className="mt-4 text-right">
             <summary className="cursor-pointer text-xs text-soft">פרטים טכניים</summary>
-            <pre className="mt-2 overflow-x-auto rounded-field bg-shade p-2 text-left text-xs" dir="ltr">
-              {humanError(this.state.error)}
+            {/* ★ השגיאה האמיתית — לא טקסט גנרי. זה מה שמעתיקים בדיווח על תקלה. */}
+            <pre data-testid="error-details" className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-field bg-shade p-2 text-left text-xs" dir="ltr">
+              {details}
             </pre>
+            <button type="button" className="btn-ghost mt-2 w-full text-xs"
+              onClick={() => { void navigator.clipboard?.writeText(details).then(() => this.setState({ copied: true }), () => undefined); }}>
+              {this.state.copied ? 'הועתק ✓' : 'העתקת הפרטים'}
+            </button>
           </details>
         </div>
       </div>
     );
   }
+}
+
+/** הפרטים הטכניים של שגיאת render: הודעה, מיקום בקוד, הרכיב, הכתובת והזמן. */
+export function errorDetails(error: Error, componentStack = ''): string {
+  const where = (error.stack ?? '').split('\n').filter((l) => l.trim() && !l.includes(error.message)).slice(0, 4).map((l) => l.trim());
+  const comp = componentStack.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 6);
+  return [
+    `${error.name}: ${error.message}`,
+    ...(where.length ? ['', 'קוד:', ...where] : []),
+    ...(comp.length ? ['', 'רכיבים:', ...comp] : []),
+    '',
+    `דף: ${typeof location !== 'undefined' ? location.pathname : '?'}`,
+    `זמן: ${new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`,
+    `דפדפן: ${typeof navigator !== 'undefined' ? navigator.userAgent : '?'}`,
+  ].join('\n');
 }
 
 /** מסך הגדרה חסרה — נפרד, כי הפתרון שלו אחר לגמרי. */

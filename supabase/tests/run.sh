@@ -37,6 +37,12 @@ node_test "program-word.test.mjs" "✓|✗|נכשלו|עברו"
 echo "═══ מחיקת תלמידה — מסך ═══"
 node_test "student-delete-ui.test.mjs" "✓|✗|נכשלו|עברו"
 
+echo "═══ מסך הקריסה ═══"
+node_test "error-screen.test.mjs" "✓|✗|נכשלו|עברו"
+
+echo "═══ כרטיס תלמידה — דפדפן אמיתי ═══"
+node_test "ui-student-card.test.mjs" "✓|✗|נכשלו|עברו|Error"
+
 echo "═══ שומרי הפונקציות ═══"
 node_test "function-guards.test.mjs" "✗|מוגנות|נכשלו"
 

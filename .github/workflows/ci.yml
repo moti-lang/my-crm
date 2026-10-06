@@ -49,6 +49,10 @@ jobs:
       - name: טיפוסים
         run: npx tsc --noEmit
 
+      # ★ hook אחרי return מוקדם הפיל את כרטיס התלמידה ב-production (React #310).
+      - name: כללי hooks
+        run: npx eslint src
+
       - name: כל החבילות
         run: ./supabase/tests/run.sh
         env:
