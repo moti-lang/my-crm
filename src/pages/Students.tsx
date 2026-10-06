@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { useStudents, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
+import { useStudents, useDeletedStudents, useRestoreStudent, usePurgeStudent, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
+import { useAuth } from '@/auth/AuthProvider';
+import { humanError } from '@/lib/errors';
 import { useBranches } from '@/hooks/queries';
 import { StudentDrawer } from '@/components/StudentDrawer';
 import { ImportStudents } from '@/components/ImportStudents';
 import { AddStudent } from '@/components/AddStudent';
 import { exportXlsx } from '@/lib/export';
 import type { Column } from '@/lib/export-core';
-import { formatILS, formatPhone } from '@/lib/format';
+import { formatDate, formatILS, formatPhone } from '@/lib/format';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
 import type { Views } from '@/lib/database.types';
 
@@ -50,6 +52,9 @@ export function Students() {
   const [selected, setSelected] = useState<Student | null>(null);
   const [importing, setImporting] = useState(false);
   const [adding, setAdding] = useState(false);
+  const { profile } = useAuth();
+  const isOwner = profile?.role === 'owner';
+  const [withDeleted, setWithDeleted] = useState(false);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -124,6 +129,12 @@ export function Students() {
           ))}
         </select>
       </div>
+      {isOwner && (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={withDeleted} onChange={(e) => setWithDeleted(e.target.checked)} />
+          כולל מחוקות
+        </label>
+      )}
 
       {students.isLoading ? (
         <CardSkeleton rows={8} />
@@ -195,7 +206,51 @@ export function Students() {
         </div>
       )}
 
+      {isOwner && withDeleted && <DeletedStudents search={search} />}
+
       <StudentDrawer student={selected} onClose={() => setSelected(null)} />
     </div>
+  );
+}
+
+/** תלמידות מחוקות (בעלים בלבד): שחזור, ומחיקה סופית רק למי שאין לה שום היסטוריה. */
+function DeletedStudents({ search }: { search: string }) {
+  const list = useDeletedStudents(true);
+  const restore = useRestoreStudent();
+  const purge = usePurgeStudent();
+  const term = search.trim().toLowerCase();
+  const rows = (list.data ?? []).filter((d) => !term || [d.full_name, d.branch_name, d.parent_phone].some((v) => v?.toLowerCase().includes(term)));
+  const err = restore.error ?? purge.error;
+
+  if (list.isError) return <ErrorState error={list.error} onRetry={() => void list.refetch()} />;
+  return (
+    <section className="space-y-2">
+      <h2 className="text-lg">מחוקות {list.data ? `(${rows.length})` : ''}</h2>
+      <p className="text-xs text-soft">התשלומים של תלמידה מחוקה נשארים בדוחות הכספיים. מחיקה סופית אפשרית רק כשאין לה תשלומים, נוכחות, הפקות או הוראת קבע.</p>
+      {err != null && <p className="text-sm text-bad" role="alert">{humanError(err)}</p>}
+      {list.isLoading ? <CardSkeleton rows={3} /> : rows.length === 0 ? (
+        <EmptyState title="אין תלמידות מחוקות" hint="" />
+      ) : (
+        <ul className="card divide-y divide-rule">
+          {rows.map((d) => (
+            <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+              <div>
+                <p className="font-medium">{d.full_name} <span className="text-soft">· {d.branch_name}</span></p>
+                <p className="text-xs text-soft">נמחקה {formatDate(d.deleted_at.slice(0, 10))} · שילמה {formatILS(d.paid)}
+                  {d.purge_blockers.length > 0 && ` · ${d.purge_blockers.join(', ')}`}</p>
+              </div>
+              <div className="flex gap-1">
+                <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={restore.isPending}
+                  onClick={() => { if (window.confirm(`לשחזר את ${d.full_name}?`)) void restore.mutateAsync(d.id); }}>שחזור</button>
+                {d.purge_blockers.length === 0 && (
+                  <button type="button" className="btn-ghost px-3 py-1 text-xs text-bad" disabled={purge.isPending}
+                    onClick={() => { if (window.confirm(`מחיקה סופית של ${d.full_name}?\n\nאין לה שום היסטוריה. הפעולה לא הפיכה.`)) void purge.mutateAsync(d.id); }}>מחיקה סופית</button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

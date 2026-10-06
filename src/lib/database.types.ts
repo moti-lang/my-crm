@@ -2003,6 +2003,16 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_delete_student: {
+        Args: {
+          p_student: string;
+        };
+        Returns: Json;
+      };
+      rpc_deleted_students: {
+        Args: Record<PropertyKey, never>;
+        Returns: unknown[];
+      };
       rpc_enroll: {
         Args: {
           p: Json;
@@ -2073,6 +2083,12 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: Json;
       };
+      rpc_purge_student: {
+        Args: {
+          p_student: string;
+        };
+        Returns: Json;
+      };
       rpc_record_standing_charge: {
         Args: {
           p_order: string;
@@ -2094,6 +2110,12 @@ export type Database = {
           p_match_method: string;
           p_sumit_customer_id: string;
           p_document_url: string;
+        };
+        Returns: Json;
+      };
+      rpc_restore_student: {
+        Args: {
+          p_student: string;
         };
         Returns: Json;
       };

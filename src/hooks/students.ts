@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { Enums } from '@/lib/database.types';
 
@@ -97,3 +97,35 @@ export function useStudentFlags() {
     },
   });
 }
+
+// ─────────── מחיקה (רכה), שחזור ומחיקה סופית — בעלים בלבד ───────────
+// ★ התשלומים לא נמחקים ולא יוצאים מהדוחות. רק הכרטיס מוסתר.
+export type DeletedStudent = { id: string; full_name: string; branch_name: string; parent_phone: string | null; deleted_at: string; paid: number; purge_blockers: string[] };
+
+export function useDeletedStudents(enabled: boolean) {
+  return useQuery({
+    queryKey: ['students', 'deleted'],
+    enabled,
+    queryFn: async (): Promise<DeletedStudent[]> => {
+      const { data, error } = await supabase.rpc('rpc_deleted_students');
+      if (error) throw new Error(error.message);
+      return (data ?? []) as DeletedStudent[];
+    },
+  });
+}
+
+function useStudentRpc(fn: 'rpc_delete_student' | 'rpc_restore_student' | 'rpc_purge_student') {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (studentId: string) => {
+      const { data, error } = await supabase.rpc(fn, { p_student: studentId });
+      if (error) throw new Error(error.message);
+      return data as { ok: boolean; links_cancelled?: number; reminders_cancelled?: number };
+    },
+    // כרטיס, רשימות, יתרות וחוב פתוח — הכל נטען מחדש.
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+export const useDeleteStudent = () => useStudentRpc('rpc_delete_student');
+export const useRestoreStudent = () => useStudentRpc('rpc_restore_student');
+export const usePurgeStudent = () => useStudentRpc('rpc_purge_student');

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useStudentPayments, useStudentProductions, useStudentFlags, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
+import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
 import { StandingOrderPanel } from '@/components/StandingOrderPanel';
 import { useStandingOrders } from '@/hooks/standing';
@@ -39,6 +39,7 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const progressQ = useInstallmentProgress(student.id ?? null);
   const inst = progressQ.data ?? null;
   const { profile } = useAuth();
+  const deleteStudent = useDeleteStudent();
   const cancelEnrollment = useCancelEnrollment();
   const trialEnd = student.trial_started_on ? new Date(new Date(student.trial_started_on).getTime() + 30 * 86400_000) : null;
   const inTrial = Boolean(trialEnd && trialEnd >= new Date(new Date().toDateString()) && !student.cancelled_at);
@@ -120,6 +121,18 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
                 {!inTrial && <p className="mt-1 text-xs text-soft">חודש הניסיון הסתיים ב-{trialEnd ? formatDate(trialEnd.toISOString().slice(0, 10)) : ''}. לפי התקנון, אחרי חודש הניסיון לא ניתן לבטל.</p>}
                 {cancelEnrollment.error != null && <p className="mt-1 text-xs text-bad" role="alert">{humanError(cancelEnrollment.error)}</p>}
                 {cancelEnrollment.data && <p className="mt-1 text-xs text-ok">ההרשמה בוטלה. זיכוי {formatILS(cancelEnrollment.data.refund)}.</p>}
+              </div>
+            )}
+            {profile?.role === 'owner' && student.id && (
+              <div className="mt-2">
+                <button type="button" className="btn-ghost w-full text-bad" disabled={deleteStudent.isPending}
+                  onClick={() => {
+                    if (!window.confirm(`למחוק את ${student.full_name}?\n\nהכרטיס יוסתר מהרשימות. התשלומים שנרשמו נשארים בדוחות, והנוכחות נשמרת. קישורי תשלום פתוחים ותזכורות מתוזמנות יבוטלו.\nאפשר לשחזר ממסך התלמידות ("כולל מחוקות").`)) return;
+                    void deleteStudent.mutateAsync(student.id as string).then(onClose, () => undefined);
+                  }}>
+                  {deleteStudent.isPending ? 'מוחקת…' : 'מחיקת תלמידה'}
+                </button>
+                {deleteStudent.error != null && <p className="mt-1 text-xs text-bad" role="alert">{humanError(deleteStudent.error)}</p>}
               </div>
             )}
             {Number(student.discount ?? 0) > 0 && (

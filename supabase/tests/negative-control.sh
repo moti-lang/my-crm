@@ -305,8 +305,8 @@ expect_fail_code "אימות השחזור סופר שורות בלבד (שם ת�
   "./scripts/restore-drill.sh >/dev/null && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal_drill -qc \"update students set full_name = full_name || \x27 X\x27 where id = (select id from students limit 1)\" && PGURL=postgresql://\${PGUSER:-postgres}@localhost:\${PGPORT:-5433}/teichtal_drill?host=\${PGHOST:-/tmp} node scripts/restore-verify.mjs \$(ls backups/teichtal-*.json | sort | tail -1)"
 
 expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (greatest מוסר מ-0023, ההגדרה האחרונה)" \
-  "$DIR/../migrations/0023_enrollment.sql" \
-  'sed -i "s/sum(greatest(vb.balance, 0))/sum(vb.balance)/" "$F"' \
+  "$DIR/../migrations/0033_student_delete.sql" \
+  'sed -i "s/sum(GREATEST(vb.balance, 0::numeric))/sum(vb.balance)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
 expect_fail_code "רשימת המורשים פתוחה לכתיבה לכל מחובר (מנהלת מזמינה את עצמה כבעלים)" \
@@ -345,8 +345,8 @@ expect_fail_code "0020: חלוקה לפי תלמידות בלי תלמידות �
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
 expect_fail_code "0020: הרווחיות חוזרת להישען על הסניף הנוכחי של התלמידה (ההגדרה האחרונה ב-0023)" \
-  "$DIR/../migrations/0023_enrollment.sql" \
-  'sed -i "s/where p.branch_id = b.id and p.deleted_at is null and s.deleted_at is null/where s.branch_id = b.id and p.deleted_at is null and s.deleted_at is null/" "$F"' \
+  "$DIR/../migrations/0033_student_delete.sql" \
+  'sed -i "s/WHERE p.branch_id = b.id AND p.deleted_at IS NULL) AS income_students/WHERE s.branch_id = b.id AND p.deleted_at IS NULL) AS income_students/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
 expect_fail_code "0020: סגירת סניף בלי לבדוק תלמידות פעילות" \
@@ -803,6 +803,51 @@ expect_fail_code "כותרת הטופס חוזרת ל\"הרשמה לחוג\"" \
   "$DIR/../../src/pages/Enroll.tsx" \
   'sed -i "s/>הרשמה · {branch.name}</>הרשמה לחוג · {branch.name}</" "$F"' \
   "node supabase/tests/program-word.test.mjs"
+
+expect_fail_code "★ מחיקת תלמידה משנה את דוח ההכנסות החודשי (תשלומים של מחוקה יוצאים מהדוח)" \
+  "$DIR/../migrations/0033_student_delete.sql" \
+  'sed -i "s/          WHERE p.deleted_at IS NULL$/          WHERE p.deleted_at IS NULL AND s.deleted_at IS NULL/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
+
+expect_fail_code "★ מחיקת תלמידה משנה את ההכנסות לפי סניף" \
+  "$DIR/../migrations/0033_student_delete.sql" \
+  'sed -i "s/WHERE p.branch_id = b.id AND p.deleted_at IS NULL) AS income_students/WHERE p.branch_id = b.id AND p.deleted_at IS NULL AND s.deleted_at IS NULL) AS income_students/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
+
+expect_fail_code "מחיקה עוברת למרות הוראת קבע פעילה" \
+  "$DIR/../migrations/0033_student_delete.sql" \
+  'sed -i "s/status in (.active., .retrying.)) then/status in (\x27none\x27)) then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
+
+expect_fail_code "מחיקה פיזית מוחקת גם את התשלומים (cascade)" \
+  "$DIR/../migrations/0033_student_delete.sql" \
+  'sed -i "s/references students(id) on delete restrict;/references students(id) on delete cascade;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
+
+expect_fail_code "מנהלת סניף יכולה למחוק תלמידה" \
+  "$DIR/../migrations/0033_student_delete.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה למחוק תלמידה./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
+
+expect_fail_code "מחיקה לא מבטלת קישורי תשלום פתוחים" \
+  "$DIR/../migrations/0033_student_delete.sql" \
+  'sed -i "/update payment_links set status = .cancelled. where student_id = s.id and status in/d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
+
+expect_fail_code "מחיקה סופית בלי מחיקה רכה קודם (ישר מהכרטיס הפעיל)" \
+  "$DIR/../migrations/0033_student_delete.sql" \
+  'sed -i "s/  select \* into s from students where id = p_student and deleted_at is not null for update;\n  if s.id is null then raise exception .מחיקה סופית/X/; s/where id = p_student and deleted_at is not null for update;$/where id = p_student for update;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
+
+expect_fail_code "כפתור מחיקת תלמידה מוצג לכל תפקיד" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/{profile?.role === .owner. \&\& student.id \&\& (/{student.id \&\& (/" "$F"' \
+  "node supabase/tests/student-delete-ui.test.mjs"
+
+expect_fail_code "מחיקת תלמידה בלי אישור" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "/if (!window.confirm(.למחוק את \${student.full_name}/d" "$F"' \
+  "node supabase/tests/student-delete-ui.test.mjs"
 
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \

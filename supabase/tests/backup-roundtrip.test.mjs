@@ -45,7 +45,7 @@ check('★ קובץ הגיבוי נוצר', Boolean(file), out.slice(-300));
 check('הגיבוי מדווח על כל הטבלאות', /[23]\d טבלאות/.test(out));
 
 console.log('\nשיבוש:');
-psql(`delete from attendance; delete from students where full_name like 'ר%'; delete from allowed_users where email='books@teichtal.local';
+psql(`delete from attendance; delete from payments where student_id in (select id from students where full_name like 'ר%'); delete from production_cast where student_id in (select id from students where full_name like 'ר%'); delete from students where full_name like 'ר%'; delete from allowed_users where email='books@teichtal.local';
       update settings set value='true' where key='agent_may_quote_prices'; delete from faq_entries;`);
 const broken = fingerprint();
 check('המסד באמת השתנה', JSON.stringify(broken) !== JSON.stringify(before));
@@ -73,7 +73,7 @@ import('node:fs').then(async ({ writeFileSync }) => {
   writeFileSync(dailyFile, dumped);
   const parsed = JSON.parse(dumped);
   check('★ הפורמט זהה לזה של backup.mjs', parsed.manifest?.format === 'teichtal-backup/1' && parsed.data && parsed.manifest.counts['auth.users'] !== undefined);
-  psql(`delete from attendance; delete from students where full_name like 'ש%'; update settings set value='true' where key='agent_may_quote_prices'`);
+  psql(`delete from attendance; delete from payments where student_id in (select id from students where full_name like 'ש%'); delete from production_cast where student_id in (select id from students where full_name like 'ש%'); delete from standing_orders where student_id in (select id from students where full_name like 'ש%'); delete from students where full_name like 'ש%'; update settings set value='true' where key='agent_may_quote_prices'`);
   const r2 = node(['scripts/restore.mjs', dailyFile, '--yes']);
   check('★ השחזור מהקובץ היומי מדווח התאמה מלאה', /כולן תואמות למניפסט/.test(r2), r2.slice(-300));
   const after2 = fingerprint();
