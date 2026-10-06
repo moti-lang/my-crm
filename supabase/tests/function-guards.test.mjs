@@ -27,6 +27,8 @@ export const EXPECTED = {
   'enroll': 'requireEnrollBody',
   // עצירת הוראת קבע: הבעלים מהמסך; ההרשאה עצמה נבדקת במסד בהרשאות המשתמשת.
   'standing-order-cancel': 'requireUserJwt',
+  // וואטסאפ: השרת החדש מוסר פרטים עם טוקן הקמה; מסך ההגדרות (בעלים) רואה מצב ו-QR.
+  'wa-provision': 'requireProvisionToken', 'wa-admin': 'requireUserJwt',
 };
 const dirs = readdirSync(ROOT).filter((d) => !d.startsWith('_') && statSync(join(ROOT, d)).isDirectory() && readdirSync(join(ROOT, d)).includes('index.ts'));
 check(`יש ${dirs.length} פונקציות`, dirs.length >= 12);

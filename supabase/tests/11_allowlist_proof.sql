@@ -231,7 +231,11 @@ do $$
 declare t record; n bigint; checked int := 0;
 begin
   for t in select tablename from pg_tables where schemaname = 'public' order by tablename loop
-    execute format('select count(*) from public.%I', t.tablename) into n;
+    -- טבלה סגורה לגמרי (אין grant, למשל wa_config) — חסימה חזקה עוד יותר מאפס שורות.
+    begin
+      execute format('select count(*) from public.%I', t.tablename) into n;
+    exception when insufficient_privilege then n := 0;
+    end;
     if n <> 0 then
       raise exception E'\n  ✗ ★ JWT בלי פרופיל קורא % שורות מ-%', n, t.tablename;
     end if;

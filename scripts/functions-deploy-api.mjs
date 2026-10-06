@@ -47,7 +47,7 @@ function walk(dir) {
 }
 
 /** אין פריסה בלי שומר. אותו כלל כמו function-guards.test.mjs. */
-const GUARD = { 'wa-webhook': 'verifyHubSignature', 'ai-answer': 'requireUserJwt', 'ai-command': 'requireUserJwt', 'sumit-webhook': 'requireSharedSecret', 'sumit-checkout': 'requirePayToken', 'enroll': 'requireEnrollBody', 'standing-order-cancel': 'requireUserJwt' };
+const GUARD = { 'wa-webhook': 'verifyHubSignature', 'wa-provision': 'requireProvisionToken', 'wa-admin': 'requireUserJwt', 'ai-answer': 'requireUserJwt', 'ai-command': 'requireUserJwt', 'sumit-webhook': 'requireSharedSecret', 'sumit-checkout': 'requirePayToken', 'enroll': 'requireEnrollBody', 'standing-order-cancel': 'requireUserJwt' };
 function guardOf(slug) {
   const src = readFileSync(join(ROOT, slug, 'index.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const want = GUARD[slug] ?? 'requireCronSecret';

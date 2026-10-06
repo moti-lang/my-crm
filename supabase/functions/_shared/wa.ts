@@ -1,4 +1,34 @@
-import { env, requireEnv, WA_DRY_RUN } from './env.ts';
+import { env, WA_DRY_RUN } from './env.ts';
+
+// ─────────── הגדרות השרת: env, ואם אין — wa_config (ממולא ע"י wa-provision) ───────────
+export type WaConfig = { url: string; apiKey: string; webhookSecret: string };
+let cached: { at: number; cfg: WaConfig | null } | null = null;
+
+/** כתובת, מפתח וסוד של שרת הוואטסאפ. משתני סביבה גוברים; אחרת הטבלה (מטמון 60 שניות). */
+export async function waConfig(): Promise<WaConfig | null> {
+  const url = env('WA_SERVER_URL'), apiKey = env('WA_API_KEY'), webhookSecret = env('WA_WEBHOOK_SECRET');
+  if (url && apiKey && webhookSecret) return { url: url.replace(/\/+$/, ''), apiKey, webhookSecret };
+  if (cached && Date.now() - cached.at < 60_000) return cached.cfg;
+  // REST ישיר עם service_role (בלי supabase-js — הקובץ נטען גם בבדיקות Node).
+  const base = env('SUPABASE_URL'), key = env('SUPABASE_SERVICE_ROLE_KEY');
+  let data: { server_url?: string; api_key?: string; webhook_secret?: string } | undefined;
+  if (base && key) {
+    const res = await fetch(`${base}/rest/v1/wa_config?id=eq.1&select=server_url,api_key,webhook_secret`,
+      { headers: { apikey: key, authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+    data = res?.ok ? ((await res.json()) as typeof data[])?.[0] : undefined;
+  }
+  const cfg = data?.server_url && data.api_key && data.webhook_secret
+    ? { url: String(data.server_url).replace(/\/+$/, ''), apiKey: String(data.api_key), webhookSecret: String(data.webhook_secret) }
+    : null;
+  cached = { at: Date.now(), cfg };
+  return cfg;
+}
+
+async function requireWaConfig(): Promise<WaConfig> {
+  const c = await waConfig();
+  if (!c) throw new Error('שרת הוואטסאפ עוד לא חובר (אין WA_SERVER_URL ואין wa_config)');
+  return c;
+}
 
 /**
  * מדבר מול whatsapp-hub — השרת העצמאי (moti-lang/whatsapp-hub).
@@ -52,23 +82,23 @@ class DryRunProvider implements WhatsAppProvider {
 // ─────────────────────────── whatsapp-hub ───────────────────────────
 
 class SelfHostedProvider implements WhatsAppProvider {
-  private base(): string {
-    return requireEnv('WA_SERVER_URL').replace(/\/+$/, '');
+  private async base(): Promise<string> {
+    return (await requireWaConfig()).url;
   }
 
-  private headers(extra: Record<string, string> = {}): HeadersInit {
+  private async headers(extra: Record<string, string> = {}): Promise<HeadersInit> {
     return {
       'content-type': 'application/json',
-      'x-api-key': requireEnv('WA_API_KEY'),
+      'x-api-key': (await requireWaConfig()).apiKey,
       ...extra,
     };
   }
 
   async sendText(to: string, body: string, idempotencyKey: string): Promise<SendResult> {
     try {
-      const res = await fetch(`${this.base()}/api/send`, {
+      const res = await fetch(`${await this.base()}/api/send`, {
         method: 'POST',
-        headers: this.headers({ 'Idempotency-Key': idempotencyKey }),
+        headers: await this.headers({ 'Idempotency-Key': idempotencyKey }),
         // השרת מצפה ל-phone/text, לא to/body.
         body: JSON.stringify({ phone: to, text: body, source: 'teichtal-crm' }),
         signal: AbortSignal.timeout(20_000),
@@ -102,9 +132,9 @@ class SelfHostedProvider implements WhatsAppProvider {
 
   async checkHealth(): Promise<HealthResult> {
     try {
-      const res = await fetch(`${this.base()}/api/health`, {
+      const res = await fetch(`${await this.base()}/api/health`, {
         method: 'GET',
-        headers: this.headers(),
+        headers: await this.headers(),
         signal: AbortSignal.timeout(10_000),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -171,7 +201,8 @@ export function parseHubEvent(payload: unknown): IncomingMessage | null {
  * JSON שעבר פרסור וסריאליזציה מחדש, כי אלה בתים אחרים.
  */
 export async function verifyHubSignature(rawBody: string, header: string | null): Promise<boolean> {
-  const secret = env('WA_WEBHOOK_SECRET');
+  // סוד מ-env גובר (גם כשהכתובת והמפתח בטבלה); אחרת מהטבלה.
+  const secret = env('WA_WEBHOOK_SECRET') ?? (await waConfig().catch(() => null))?.webhookSecret;
   if (!secret || !header) return false;
 
   const key = await crypto.subtle.importKey(

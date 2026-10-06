@@ -23,7 +23,7 @@ export function Dashboard() {
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-2xl">{(null as unknown as {x: string}).x}</h1>
+        <h1 className="text-2xl">דשבורד</h1>
         <p className="text-sm text-soft">{season.data?.name ?? 'טוען עונה…'}</p>
       </header>
 

@@ -83,3 +83,10 @@ export async function requireEnrollBody(req: Request): Promise<Response | null> 
   if (keys.length > 16 || !ENROLL_FIELDS.every((k) => k in (body as object))) return deny(400, 'חסרים שדות הרשמה');
   return null;
 }
+
+/** wa-provision: השרת החדש מוסר את פרטיו עם טוקן הקמה חד-פעמי (64 hex) בכותרת. */
+export function requireProvisionToken(req: Request): Response | null {
+  const token = req.headers.get('x-provision-token') ?? '';
+  if (req.method !== 'POST' || !/^[0-9a-f]{64}$/.test(token)) return deny(401, 'unauthorized');
+  return null;
+}

@@ -889,6 +889,31 @@ expect_fail_code "★ דף התשלום — RPC שגוי (ההורה לא רוא
   'sed -i "s/rpc(.rpc_payment_link_public.,/rpc(\x27rpc_payment_link_publicx\x27 as never,/" "$F"' \
   "node supabase/tests/ui-public.test.mjs"
 
+expect_fail_code "★ טוקן הקמה לא נמחק אחרי שימוש (אפשר לדרוס את כתובת השרת)" \
+  "$DIR/../migrations/0034_wa_provision.sql" \
+  'sed -i "s/provisioned_at = now(), provision_token_hash = null, provision_expires_at = null/provisioned_at = now()/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/21_wa_provision.sql"
+
+expect_fail_code "★ טוקן הקמה לא נבדק" \
+  "$DIR/../migrations/0034_wa_provision.sql" \
+  'sed -i "s/     or c.provision_token_hash <> encode(extensions.digest(coalesce(p_token, ..), .sha256.), .hex.) then/     then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/21_wa_provision.sql"
+
+expect_fail_code "★ הנפקת טוקן לפי current_user (כל משתמשת עוברת — הבאג שנתפס)" \
+  "$DIR/../migrations/0034_wa_provision.sql" \
+  'sed -i "s/  if nullif(current_setting(.request.jwt.claims., true), ..) is not null and auth_role() is distinct from .owner. then/  if coalesce(auth_role()::text, \x27\x27) <> \x27owner\x27 and current_user not in (\x27postgres\x27, \x27service_role\x27) then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/21_wa_provision.sql"
+
+expect_fail_code "★ wa-admin בלי בדיקת בעלים (QR לכל מחוברת)" \
+  "$DIR/../functions/wa-admin/index.ts" \
+  'sed -i "/  if (role !== .owner.) return json(/d" "$F"' \
+  "node supabase/tests/wa-provision.test.mjs"
+
+expect_fail_code "wa-provision שומר בלי לוודא שהשרת עונה" \
+  "$DIR/../functions/wa-provision/index.ts" \
+  'sed -i "/השרת לא אישר את המפתח/d" "$F"' \
+  "node supabase/tests/wa-provision.test.mjs"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \

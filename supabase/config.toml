@@ -87,3 +87,9 @@ verify_jwt = false          # זמני: גילוי החוזה של SUMIT, CRON_S
 
 [functions.standing-order-cancel]
 verify_jwt = true           # הבעלים מהמסך; ההרשאה נבדקת במסד (rpc_standing_order_cancel_request)
+
+[functions.wa-provision]
+verify_jwt = false          # שרת הוואטסאפ החדש, בלי JWT. טוקן הקמה חד-פעמי + אימות שהשרת עונה במפתח
+
+[functions.wa-admin]
+verify_jwt = true           # מסך ההגדרות; בעלים בלבד (auth_role במסד)

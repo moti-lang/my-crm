@@ -7,6 +7,8 @@ import type { PlanInput } from '@/lib/enrollment';
 import { humanError } from '@/lib/errors';
 import { useState, useEffect } from 'react';
 import { WaHealthBadge } from '@/components/WaHealthBadge';
+import { WaConnect } from '@/components/WaConnect';
+import { useAuth } from '@/auth/AuthProvider';
 import { supabase } from '@/lib/supabase';
 import { formatDate } from '@/lib/format';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
@@ -21,6 +23,7 @@ export function Settings() {
   const health = useWaHealth();
   const alerts = useOpenAlerts();
   const qc = useQueryClient();
+  const { profile } = useAuth();
 
   async function acknowledge(id: string) {
     await supabase.from('system_alerts').update({ acknowledged_at: new Date().toISOString() }).eq('id', id);
@@ -33,6 +36,7 @@ export function Settings() {
 
       <section className="card p-4">
         <h2 className="mb-3 text-lg">חיבור וואטסאפ</h2>
+        {profile?.role === 'owner' && <div className="mb-3 border-b border-rule pb-3"><WaConnect /></div>}
         {health.isLoading ? (
           <CardSkeleton rows={2} />
         ) : health.isError ? (
