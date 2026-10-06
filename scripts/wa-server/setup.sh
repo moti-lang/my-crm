@@ -12,8 +12,9 @@
 # לוג מלא: /var/log/wa-setup.log. פרטי גישה (למקרה חירום): /root/wa-credentials (600).
 #
 # ★ שרת ייעודי. לא קשור לשרת של לנגר ולא נוגע בו.
-set -euo pipefail
+set -eEuo pipefail
 exec > >(tee -a /var/log/wa-setup.log) 2>&1
+echo "▸ $(date '+%H:%M:%S') התחלה · $(. /etc/os-release; echo "$PRETTY_NAME") · $(uname -m) · $(free -m | awk '/Mem:/{print $2}')MB"
 
 HUB_TARBALL_URL="__HUB_TARBALL_URL__"
 PROVISION_URL="__PROVISION_URL__"
@@ -24,8 +25,16 @@ HUB_HOME="/opt/whatsapp-hub"
 HUB_USER="wahub"
 PORT=5400
 
-say() { echo -e "\n▸ $(date '+%H:%M:%S') $*"; }
-die() { echo "✗ $*"; exit 1; }
+# דיווח ל-CRM: סוף הלוג נשלח בכל שלב ובכל שגיאה, כך שאפשר לראות מה קורה בלי
+# להיכנס לשרת. אותו טוקן הקמה; הדיווח לא מנצל אותו.
+report() {
+  local body
+  body=$(tail -c 7000 /var/log/wa-setup.log | python3 -c 'import json,sys; print(json.dumps({"report": sys.stdin.read()}))' 2>/dev/null) || return 0
+  curl -s -m 10 -X POST "$PROVISION_URL" -H "x-provision-token: ${PROVISION_TOKEN}" -H "Content-Type: application/json" -d "$body" >/dev/null 2>&1 || true
+}
+say() { echo -e "\n▸ $(date '+%H:%M:%S') $*"; report; }
+die() { echo "✗ $*"; report; exit 1; }
+trap 'rc=$?; echo "✗ נכשל בשורה $LINENO (קוד $rc): $BASH_COMMAND"; report' ERR
 [[ $EUID -eq 0 ]] || die "יש להריץ כ-root"
 [[ ! -e "$HUB_HOME/.env" ]] || die "כבר מותקן ($HUB_HOME/.env קיים) — לא דורסים"
 
@@ -37,8 +46,11 @@ echo "  $IP → https://$DOMAIN"
 
 say "חבילות מערכת וחומת אש"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -q
-apt-get install -y -q curl ca-certificates xz-utils ufw unattended-upgrades >/dev/null
+# ★ באתחול הראשון עדכון אוטומטי של Ubuntu מחזיק את נעילת apt. בלי המתנה —
+#   apt-get נכשל מיד ("Could not get lock") וכל ההתקנה נעצרת. ממתינים עד 10 דקות.
+APT="apt-get -o DPkg::Lock::Timeout=600"
+$APT update -q
+$APT install -y -q curl ca-certificates xz-utils ufw unattended-upgrades python3 >/dev/null
 ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
 ufw allow 22/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null
@@ -63,7 +75,7 @@ NODE_BIN="$HUB_HOME/.node/bin"
 
 say "תלויות"
 cd "$HUB_HOME"
-sudo -u "$HUB_USER" env PATH="$NODE_BIN:$PATH" HOME="$HUB_HOME" npm ci --no-audit --no-fund >/dev/null
+sudo -u "$HUB_USER" env PATH="$NODE_BIN:$PATH" HOME="$HUB_HOME" npm ci --no-audit --no-fund 2>&1 | tail -15
 
 say ".env"
 API_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')

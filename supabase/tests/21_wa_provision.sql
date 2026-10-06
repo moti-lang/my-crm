@@ -9,6 +9,13 @@ select rpc_wa_issue_provision_token(24) as tok \gset
 select assert_true(length(:'tok') = 64, 'טוקן של 64 תווי hex');
 select assert_true((select provision_token_hash <> :'tok' and length(provision_token_hash) = 64 from wa_config), '★ נשמר רק ה-hash, לא הטוקן');
 
+-- דיווח התקדמות: עם הטוקן — נשמר ולא מנצל אותו; בלי — נדחה.
+select assert_true((rpc_wa_setup_report(:'tok', 'שלב 1') ->> 'ok')::boolean, '★ דיווח התקדמות עם טוקן — נשמר');
+select assert_true((select setup_log = 'שלב 1' and provision_token_hash is not null from wa_config), 'והטוקן לא נוצל');
+select assert_true((rpc_wa_setup_report(repeat('0', 64), 'זיוף') ->> 'ok')::boolean is false, '★ דיווח בטוקן שגוי — נדחה');
+select assert_true((select setup_log = 'שלב 1' from wa_config), 'והלוג לא נדרס');
+select assert_no_execute('anon', 'rpc_wa_setup_report(text, text)');
+
 select assert_true((rpc_wa_provision(repeat('0', 64), 'https://wa-1-2-3-4.sslip.io', repeat('k', 64), repeat('s', 64)) ->> 'ok')::boolean is false, '★ טוקן שגוי — נדחה');
 select assert_true((select server_url is null from wa_config), 'ולא נשמר כלום');
 select assert_true((rpc_wa_provision(:'tok', 'http://wa.example', repeat('k', 64), repeat('s', 64)) ->> 'ok')::boolean is false, 'כתובת שאינה https — נדחית');

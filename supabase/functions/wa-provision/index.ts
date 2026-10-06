@@ -13,8 +13,16 @@ const json = (payload: unknown, status = 200) =>
 Deno.serve(async (req) => {
   const denied = requireProvisionToken(req);
   if (denied) return denied;
-  let body: { server_url?: string; api_key?: string; webhook_secret?: string } = {};
+  let body: { server_url?: string; api_key?: string; webhook_secret?: string; report?: string } = {};
   try { body = await req.json(); } catch { /* ריק */ }
+
+  // דיווח התקדמות/שגיאה מההתקנה: סוף הלוג. לא מנצל את הטוקן.
+  if (typeof body.report === 'string') {
+    const { data, error } = await adminClient().rpc('rpc_wa_setup_report', { p_token: req.headers.get('x-provision-token'), p_log: body.report });
+    if (error) return json({ ok: false, error: error.message }, 500);
+    const r = data as { ok: boolean };
+    return json(r, r.ok ? 200 : 401);
+  }
   const url = String(body.server_url ?? '').replace(/\/+$/, '');
   const apiKey = String(body.api_key ?? '');
   const secret = String(body.webhook_secret ?? '');
