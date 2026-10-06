@@ -51,7 +51,7 @@ rollback;
 begin;
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
-select assert_true(rpc_enrollment_public(t_tok()) ->> 'program_name' = 'דרמחול - החוגים של הניה', 'שם החוג מההגדרות');
+select assert_true(rpc_enrollment_public(t_tok()) -> 'program_name' = 'null'::jsonb, '★ סניף בלי שם חוג — לא מוצג שם (לא נלקח מההגדרות הכלליות)');
 select assert_true(length(rpc_enrollment_public(t_tok()) ->> 'terms') > 500 and (rpc_enrollment_public(t_tok()) ->> 'terms') like '%מדיניות ביטולים%', 'התקנון המלא של הסניף מוצג');
 select assert_true(rpc_enrollment_public(t_tok()) #>> '{branch,name}' = 'ביתר עילית', '★ הקישור קובע את הסניף');
 select assert_true((rpc_enrollment_public() ->> 'ok')::boolean = false and (rpc_enrollment_public() ->> 'error') like '%קישור%', '★ בלי קישור, כשיש כמה סניפים — אין בחירת סניף, מפנה לקישור');
@@ -314,6 +314,45 @@ exception when others then
   if sqlerrm like 'ASSERT%' or sqlerrm like '%✗%' then raise; end if;
   perform assert_true(true, 'מנהלת לא רואה מסלולים של סניף אחר');
 end $$;
+rollback;
+
+\echo 'שם החוג לפי סניף, קבוצת וואטסאפ, סניף בלי גבייה:'
+begin;
+-- שם החוג: רק בסניף שהוגדר לו, ובתקנון במקום {שם החוג}.
+update branches set program_name = 'חוג הבדיקה', terms = E'{שם החוג}\nתקנון הסניף',
+                    whatsapp_group_url = 'https://chat.whatsapp.com/AbC123xyz'
+ where id = 'bbbbbbbb-0000-0000-0000-000000000001';
+select assert_true(rpc_enrollment_public(t_tok()) ->> 'program_name' = 'חוג הבדיקה' and rpc_enrollment_public(t_tok()) ->> 'terms' = E'חוג הבדיקה\nתקנון הסניף', '★ שם החוג של הסניף — בדף ובתקנון');
+select assert_true(f_render_program(E'{שם החוג}\nתקנון', null) = 'תקנון' and f_render_program(E'{שם החוג}\nתקנון', '  ') = 'תקנון', 'f_render_program: שם ריק — השורה יורדת');
+select assert_true(rpc_enrollment_public(t_tok()) ->> 'whatsapp_group_url' = 'https://chat.whatsapp.com/AbC123xyz', 'קישור הקבוצה בדף');
+select assert_true((t_enroll('אלה', '0526660001', '12.0.0.1', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'card1') ->> 'whatsapp_group_url') = 'https://chat.whatsapp.com/AbC123xyz', '★ קישור הקבוצה מוחזר לסיום ההרשמה');
+select assert_true((select body like '%https://chat.whatsapp.com/AbC123xyz%' and body like '%חוג הבדיקה%' from reminders r join students s on s.id = r.student_id where s.first_name = 'אלה'),
+                   '★ ההודעה להורה: שם החוג של הסניף וקישור הקבוצה');
+select assert_true((select terms_text = E'חוג הבדיקה\nתקנון הסניף' from students where first_name = 'אלה'), 'התקנון שאושר נשמר כמו שהוצג');
+select assert_true(rpc_payment_link_program((select l.token from payment_links l join students s on s.id = l.student_id where s.first_name = 'אלה')) = 'חוג הבדיקה', 'rpc_payment_link_program: דף התשלום מקבל את שם החוג של הסניף');
+select assert_no_effect('קישור קבוצה שאינו של וואטסאפ — נדחה', $a$update branches set whatsapp_group_url = 'https://evil.example/x' where id = 'bbbbbbbb-0000-0000-0000-000000000001'$a$, $q$select whatsapp_group_url from branches where id = 'bbbbbbbb-0000-0000-0000-000000000001'$q$);
+
+-- ★ סניף בלי גבייה: מבנה תשלום לא נבדק, אין שאלת תשלום, פעילה מיד, אין קישור ואין חוב.
+update branches set collect_payments = false, plan = jsonb_set(plan, '{tracks}', '[]') where id = 'bbbbbbbb-0000-0000-0000-000000000001';
+select assert_true((select not collect_payments from branches where id = 'bbbbbbbb-0000-0000-0000-000000000001'), '★ סניף בלי גבייה נשמר גם בלי מסלולי תשלום');
+select assert_true(rpc_enrollment_public(t_tok()) -> 'plan' = 'null'::jsonb and rpc_enrollment_public(t_tok()) -> 'tracks' = '[]'::jsonb
+                   and (rpc_enrollment_public(t_tok()) #>> '{questions,track}')::boolean = false, '★ הדף בלי שאלת תשלום ובלי סכומים');
+select assert_true((t_enroll('מור', '0526660002', '12.0.0.2', true, 'bbbbbbbb-0000-0000-0000-000000000001', '') ->> 'method') = 'external', 'הרשמה בלי מסלול');
+select assert_true((select status = 'active' and external_payment and tuition_total = 0 and registration_fee = 0 and payment_track is null from students where first_name = 'מור'),
+                   '★ פעילה מיד, תשלום חיצוני, בלי סכום לגבייה');
+select assert_eq((select count(*) from payment_links l join students s on s.id = l.student_id where s.first_name = 'מור'), 0, '★ לא נוצר קישור תשלום');
+select assert_true((select body like '%https://chat.whatsapp.com/AbC123xyz%' from reminders r join students s on s.id = r.student_id where s.first_name = 'מור' and r.kind = 'general'), 'הודעת ברוכה הבאה עם קישור הקבוצה');
+select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
+select assert_eq((select count(*) from v_debtors d join students s on s.id = d.student_id where s.first_name = 'מור'), 0, '★ לא מופיעה כחייבת');
+select assert_no_effect('★ קישור תשלום ידני לתלמידה בתשלום חיצוני — נדחה',
+  $a$insert into payment_links (token, external_identifier, student_id, branch_id, amount) select 'x' || id::text, 'tl-x', id, branch_id, 100 from students where first_name = 'מור'$a$,
+  'select count(*)::text from payment_links');
+insert into reminders (kind, student_id, branch_id, to_phone, body, scheduled_at) select 'debt', id, branch_id, parent_phone, 'חוב', now() from students where first_name = 'מור';
+select assert_true((select r.status = 'cancelled' from reminders r join students s on s.id = r.student_id where s.first_name = 'מור' and r.kind = 'debt'), '★ תזכורת חוב לתשלום חיצוני — לא יוצאת');
+set local role authenticated;
+select assert_true((rpc_create_student('{"branch_id":"bbbbbbbb-0000-0000-0000-000000000001","first_name":"ידנית","last_name":"חיצוני","status":"pending"}') ->> 'ok')::boolean, 'הוספה ידנית בסניף בלי גבייה');
+reset role;
+select assert_true((select status = 'active' and external_payment and tuition_total = 0 from students where full_name = 'ידנית חיצוני'), 'ידנית: גם היא פעילה ובתשלום חיצוני');
 rollback;
 
 \echo 'הוספת תלמידה ידנית:'

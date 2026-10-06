@@ -420,18 +420,18 @@ expect_fail_code "הרשמה: מבנה תשלום של סניף לא תקין ע
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: התקנון לא חובה" \
-  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
   'sed -i "s/  if v_terms is distinct from true then return/  if false then return/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת הקצב מוסרת" \
-  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הסכום נלקח מהבקשה (הזרקה)" \
-  "$DIR/../migrations/0027_enrollment_questions.sql" \
-  'sed -i "s/          .pending., .enrollment., (v_plan ->> .tuition.)::numeric,/          \x27pending\x27, \x27enrollment\x27, coalesce((p ->> \x27tuition_total\x27)::numeric, (v_plan ->> \x27tuition\x27)::numeric),/" "$F"' \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
+  'sed -i "s/          coalesce((v_plan ->> .tuition.)::numeric, 0), coalesce((v_plan ->> .registration_fee.)/          coalesce((p ->> \x27tuition_total\x27)::numeric, (v_plan ->> \x27tuition\x27)::numeric, 0), coalesce((v_plan ->> \x27registration_fee\x27)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: תשלום נקלט ולא מפעיל את התלמידה" \
@@ -455,12 +455,12 @@ expect_fail_code "הסיכום היומי בלי שורות ההרשמה" \
   "node supabase/tests/enrollment.test.mjs"
 
 expect_fail_code "הרשמה: rpc_enroll נפתחת שוב ל-anon (עוקפים את הגבלת ה-IP)" \
-  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
   'sed -i "s/grant execute on function rpc_enroll(jsonb, text) to service_role;/grant execute on function rpc_enroll(jsonb, text) to service_role, anon;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת ה-IP מוסרת" \
-  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if v_n_phone >= 3 then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -740,8 +740,8 @@ expect_fail_code "מסלולים: הוראות קבע מוצגות להורים 
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "מזומן: נוצר קישור תשלום" \
-  "$DIR/../migrations/0027_enrollment_questions.sql" \
-  'sed -i "s/  if v_track ->> .method. <> .cash. then/  if true then/" "$F"' \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
+  'sed -i "s/  if b.collect_payments and v_track ->> .method. <> .cash. then/  if b.collect_payments then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "וואטסאפ: תזכורות יוצאות גם למי שענתה לא" \
@@ -750,13 +750,28 @@ expect_fail_code "וואטסאפ: תזכורות יוצאות גם למי שענ
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "צילום: התשובה לא נכתבת לשדה שחוסם הפקות" \
-  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
   'sed -i "s/          coalesce(v_photo, false), case when v_photo is not null then b.photo_consent_text end,/          true, case when v_photo is not null then b.photo_consent_text end,/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "שאלה מוסתרת: התשובה נלקחת מהבקשה בכל זאת" \
-  "$DIR/../migrations/0027_enrollment_questions.sql" \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
   'sed -i "s/  if (v_opts ->> .ask_whatsapp.)::boolean then/  v_wa := (p ->> \x27whatsapp\x27) = \x27yes\x27;\n  if (v_opts ->> \x27ask_whatsapp\x27)::boolean then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "תשלום חיצוני: נוצר קישור תשלום" \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
+  'sed -i "s/  if exists (select 1 from students where id = new.student_id and external_payment) then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "תשלום חיצוני: יוצאת תזכורת חוב" \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
+  'sed -i "s/     and exists (select 1 from students where id = new.student_id and external_payment) then/     and false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+
+expect_fail_code "שם החוג של בית שמש דולף לסניפים אחרים" \
+  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
+  'sed -i "/then regexp_replace(coalesce(p_text/c\\              then replace(coalesce(p_text, \x27\x27), \x27{שם החוג}\x27, \x27חוגי דרמחול - החוגים של הניה\x27)" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \

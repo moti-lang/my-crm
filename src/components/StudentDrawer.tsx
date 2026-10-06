@@ -203,6 +203,7 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
                 if (!f) return null;
                 return (
                   <>
+                    {f.external_payment && <div><StudentTags external /> <span className="text-xs text-soft">התשלום נגבה מחוץ למערכת. אין קישור תשלום ואין תזכורות חוב.</span></div>}
                     {f.payment_track?.label && <Row label="מסלול תשלום" value={f.payment_track.label} />}
                     {f.whatsapp_opt_in === false && <div><StudentTags whatsapp={false} /> <span className="text-xs text-soft">ענתה שאינה מקבלת וואטסאפ — תזכורות אליה לא נשלחות.</span></div>}
                     {f.photo_consent_text && <details className="text-xs text-soft"><summary className="cursor-pointer">נוסח אישור הצילום שאושר</summary><p className="mt-1 whitespace-pre-wrap">{f.photo_consent_text}</p></details>}

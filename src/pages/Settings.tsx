@@ -115,7 +115,6 @@ function EnrollmentCard() {
         תקנון ומבנה תשלום שמועתקים לכל סניף חדש. שינוי כאן לא משנה סניפים קיימים: לכל סניף יש
         עותק משלו, עם קישור הרשמה משלו, במסך הסניף ← הגדרות.
       </p>
-      <label className="block text-sm">שם החוג<input className="field mt-1" value={name} onChange={(e) => setName(e.target.value)} /></label>
       <PlanEditor plan={plan} onChange={setPlan} />
       <label className="block text-sm">התקנון לסניף חדש<textarea className="field mt-1 min-h-[14rem]" value={terms} onChange={(e) => setTerms(e.target.value)} /></label>
       <label className="block text-sm">נוסח אישור הצילום לסניף חדש<textarea className="field mt-1 min-h-[7rem]" value={photo} onChange={(e) => setPhoto(e.target.value)} /></label>

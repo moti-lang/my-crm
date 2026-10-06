@@ -86,12 +86,12 @@ export function useBranch(branchId: string | undefined) {
  * אינה קוראת מ-students — מקבלת רשימה ריקה, והתגיות פשוט לא מוצגות.
  */
 export type StudentFlags = { id: string; payment_track: { key?: string; label?: string; method?: string; installments?: number } | null;
-  whatsapp_opt_in: boolean | null; photo_consent_text: string | null; terms_text: string | null };
+  whatsapp_opt_in: boolean | null; photo_consent_text: string | null; terms_text: string | null; external_payment: boolean };
 export function useStudentFlags() {
   return useQuery({
     queryKey: ['student-flags'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('students').select('id, payment_track, whatsapp_opt_in, photo_consent_text, terms_text').is('deleted_at', null);
+      const { data, error } = await supabase.from('students').select('id, payment_track, whatsapp_opt_in, photo_consent_text, terms_text, external_payment').is('deleted_at', null);
       if (error) return new Map<string, StudentFlags>();
       return new Map((data ?? []).map((r) => [r.id, r as unknown as StudentFlags]));
     },

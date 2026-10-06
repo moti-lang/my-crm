@@ -70,13 +70,13 @@ export async function answerCustomer(
     db.from('knowledge_sections').select('title, body, branch_id').eq('is_active', true).order('position'),
     db.from('settings').select('value').eq('key', 'agent_may_quote_prices').maybeSingle(),
     db.from('wa_messages').select('direction, body').eq('phone', phone).order('created_at', { ascending: false }).limit(HISTORY_LIMIT + 1),
-    db.from('branches').select('id, name, default_tuition, plan').is('deleted_at', null).eq('is_active', true),
+    db.from('branches').select('id, name, default_tuition, plan, program_name').is('deleted_at', null).eq('is_active', true),
     conversation?.student_id
       ? db.from('students').select('branch_id').eq('id', conversation.student_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
   const mayQuotePrices = settingRes.data?.value === true || settingRes.data?.value === 'true';
-  const branches = (branchesRes.data ?? []) as { id: string; name: string; default_tuition: number | string; plan: Record<string, unknown> | null }[];
+  const branches = (branchesRes.data ?? []) as { id: string; name: string; default_tuition: number | string; plan: Record<string, unknown> | null; program_name: string | null }[];
   // ★ שכבת הסניף: אם ידוע לאיזה סניף הפונה שייכת — המידע של הסניף גובר על הכללי.
   const leadBranch = (conversation?.lead_state as LeadFields | null)?.branch ?? null;
   const knownBranchId = (studentRes.data as { branch_id?: string } | null)?.branch_id
@@ -100,6 +100,8 @@ export async function answerCustomer(
     text, history, faq: faq.map((f) => ({ question: f.question, answer: f.answer })),
     knowledge,
     branches: branches.map((b) => b.name), mayQuotePrices, lead: knownLead,
+    // שם החוג: רק כשהסניף של הפונה ידוע (או סניף יחיד) ויש לו שם.
+    programName: branches.find((b) => b.id === layered.branchId)?.program_name?.trim() || null,
   };
 
   // ─── 3. המודל ───

@@ -22,6 +22,9 @@ export function BranchSettings({ branch }: { branch: Branch }) {
   const [capacity, setCapacity] = useState<string>('');
   const [opts, setOpts] = useState<FormOptions>(DEFAULT_FORM_OPTIONS);
   const [photoText, setPhotoText] = useState('');
+  const [collect, setCollect] = useState(true);
+  const [program, setProgram] = useState('');
+  const [group, setGroup] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -37,6 +40,9 @@ export function BranchSettings({ branch }: { branch: Branch }) {
     setCapacity(branch.capacity ? String(branch.capacity) : '');
     setOpts({ ...DEFAULT_FORM_OPTIONS, ...((branch.form_options ?? {}) as Partial<FormOptions>) });
     setPhotoText(branch.photo_consent_text ?? '');
+    setCollect(branch.collect_payments);
+    setProgram(branch.program_name ?? '');
+    setGroup(branch.whatsapp_group_url ?? '');
   }, [branch]);
 
   const base = settings.data?.base_url || window.location.origin;
@@ -44,6 +50,8 @@ export function BranchSettings({ branch }: { branch: Branch }) {
   const cap = capacity.trim() === '' ? null : Number(capacity);
   const capOk = cap === null || (Number.isInteger(cap) && cap > 0);
   const st = state.data;
+  // קישור לקבוצה: רק chat.whatsapp.com (המסד אוכף את אותו כלל).
+  const groupOk = group.trim() === '' || /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+\/?$/.test(group.trim());
 
   async function save() {
     setMsg(null);
@@ -52,6 +60,7 @@ export function BranchSettings({ branch }: { branch: Branch }) {
         id: branch.id, ...info, supervisor_phone: normalizeBranchPhone(info.supervisor_phone),
         plan: plan as BranchInput['plan'], terms, enrollment_open: open, capacity: cap,
         form_options: opts, photo_consent_text: photoText,
+        collect_payments: collect, program_name: program.trim() || null, whatsapp_group_url: group.trim() || null,
       });
       setMsg('נשמר. השינויים חלים על הרשמות חדשות לסניף הזה בלבד.');
     } catch (e) { setMsg(humanError(e)); }
@@ -107,14 +116,35 @@ export function BranchSettings({ branch }: { branch: Branch }) {
       </section>
 
       <section className="card space-y-3 p-4">
+        <h2 className="text-lg">שם החוג וקבוצת וואטסאפ</h2>
+        <label className="block text-sm">שם החוג בסניף הזה
+          <input className="field mt-1" value={program} onChange={(e) => setProgram(e.target.value)} placeholder="ריק = לא מוצג שם חוג" />
+          <span className="mt-0.5 block text-xs text-soft">מופיע בדף ההרשמה, בתקנון (במקום {'{שם החוג}'}), בדף התשלום, בהודעות להורה, בקבלה ובתשובות הסוכן.</span>
+        </label>
+        <label className="block text-sm">קישור לקבוצת וואטסאפ
+          <input className="field mt-1" dir="ltr" value={group} onChange={(e) => setGroup(e.target.value)} placeholder="https://chat.whatsapp.com/..." />
+          <span className="mt-0.5 block text-xs text-soft">מוצג ככפתור בסיום ההרשמה, ונשלח בהודעה להורה.</span>
+        </label>
+        {!groupOk && <p className="text-sm text-bad">הקישור צריך להתחיל ב-https://chat.whatsapp.com/</p>}
+        {groupOk && group.trim() && <a href={group.trim()} target="_blank" rel="noopener noreferrer" className="text-sm text-plum underline">בדיקת הקישור ↗</a>}
+      </section>
+
+      <section className="card space-y-3 p-4">
         <h2 className="text-lg">פרטי הסניף</h2>
         <BranchForm value={info} onChange={setInfo} />
       </section>
 
       <section className="card space-y-3 p-4">
         <h2 className="text-lg">מבנה התשלום של הסניף</h2>
-        <p className="text-sm text-soft">חל על הרשמות חדשות. תלמידות שכבר נרשמו נשארות על התנאים שאישרו.</p>
-        <PlanEditor plan={plan} onChange={setPlan} />
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={collect} onChange={(e) => setCollect(e.target.checked)} />
+          <span><span className="font-medium">גביית תשלום דרך המערכת</span>
+            <span className="block text-xs text-soft">כבוי = התשלום נגבה בחוץ (מתנ״ס וכד׳): בלי שאלת תשלום וסכומים בהרשמה, בלי קישורי תשלום ותזכורות חוב, והתלמידה פעילה מיד עם תג "תשלום חיצוני".</span></span>
+        </label>
+        {collect && (<>
+          <p className="text-sm text-soft">חל על הרשמות חדשות. תלמידות שכבר נרשמו נשארות על התנאים שאישרו.</p>
+          <PlanEditor plan={plan} onChange={setPlan} />
+        </>)}
       </section>
 
       <section className="card space-y-3 p-4">
@@ -124,7 +154,7 @@ export function BranchSettings({ branch }: { branch: Branch }) {
       </section>
 
       {msg && <p className={`text-sm ${msg.startsWith('נשמר') ? 'text-ok' : 'text-bad'}`} role="status">{msg}</p>}
-      <button type="button" className="btn-primary" disabled={update.isPending || !planOk(plan) || !capOk || !(info.name ?? '').trim() || !terms.trim() || (opts.ask_photo && !photoText.trim())} onClick={() => void save()}>
+      <button type="button" className="btn-primary" disabled={update.isPending || (collect && !planOk(plan)) || !groupOk || !capOk || !(info.name ?? '').trim() || !terms.trim() || (opts.ask_photo && !photoText.trim())} onClick={() => void save()}>
         {update.isPending ? 'שומרת…' : 'שמירת הגדרות הסניף'}
       </button>
     </div>

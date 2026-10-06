@@ -59,6 +59,8 @@ const TRIGGER_FUNCTIONS = {
   f_reminder_whatsapp_opt_out: /הודעת הקישור לא יוצאת בוואטסאפ/,
   // 17: תשלום מזומן נרשם — התלמידה פעילה
   f_activate_on_cash_payment: /הבעלים רשמה את המזומן — פעילה/,
+  f_no_link_for_external: /קישור תשלום ידני לתלמידה בתשלום חיצוני — נדחה/,
+  f_no_debt_reminder_external: /תזכורת חוב לתשלום חיצוני — לא יוצאת/,
 };
 
 let fails = 0;

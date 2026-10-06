@@ -16,6 +16,8 @@ export type AnswerContext = {
   /** "מידע על החוג" — קטעים חופשיים עם כותרת. */
   knowledge: { title: string; body: string }[];
   branches: string[];
+  /** שם החוג של הסניף של הפונה, אם ידוע ומוגדר. */
+  programName?: string | null;
   mayQuotePrices: boolean;
   /** מה שכבר נאסף בשיחת ההרשמה, אם יש. */
   lead: LeadFields | null;
@@ -27,7 +29,7 @@ export interface AnswerProvider {
 
 // ─────────────────── הפרומפט — סעיף 4.4 מילה במילה, ועטיפת JSON ───────────────────
 
-export const ANSWER_SYSTEM_PROMPT = `את העוזרת הוירטואלית של "החוג של הניה טייכטל" — חוג משחק, דרמה ומחול לבנות בישראל.
+export const ANSWER_SYSTEM_PROMPT = `את העוזרת הוירטואלית של החוג — חוג משחק, דרמה ומחול לבנות בישראל. שם החוג (אם יש) מופיע בהודעה; אל תמציאי שם אחר.
 את עונה בוואטסאפ להורים, בעברית, בחום ובקצרה (עד 3 משפטים), עם אימוג'י אחד לכל היותר.
 
 חוקים מוחלטים:
@@ -69,6 +71,7 @@ export function buildAnswerMessage(ctx: AnswerContext): string {
     `מאגר השאלות:\n${faq || '(ריק)'}`,
     `מידע על החוג:\n${knowledge || '(ריק)'}`,
     `סניפים קיימים: ${ctx.branches.join(' · ') || 'אין'}`,
+    ...(ctx.programName ? [`שם החוג: ${ctx.programName}`] : []),
     `מותר לנקוב במחירים: ${ctx.mayQuotePrices ? 'כן' : 'לא'}`,
     `פרטי הרשמה שכבר נאספו: ${lead}`,
     history ? `השיחה עד כה:\n${history}` : 'זו ההודעה הראשונה בשיחה.',

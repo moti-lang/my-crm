@@ -1,7 +1,8 @@
 /** המסלול שבחרה, "ממתינה למזומן" ו"דרוש קשר אחר" (לא מקבלת וואטסאפ). */
-export function StudentTags({ method, label, whatsapp }: { method?: string | null; label?: string | null; whatsapp?: boolean | null }) {
+export function StudentTags({ method, label, whatsapp, external }: { method?: string | null; label?: string | null; whatsapp?: boolean | null; external?: boolean | null }) {
   return (
     <span className="mr-1 inline-flex flex-wrap gap-1 align-middle">
+      {external && <span className="rounded-full bg-plum/10 px-2 py-0.5 text-[11px] text-plum" title="התשלום נגבה מחוץ למערכת (מתנ״ס וכד׳)">תשלום חיצוני</span>}
       {method === 'cash' && <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[11px] text-warn">ממתינה למזומן</span>}
       {label && method !== 'cash' && <span className="rounded-full bg-shade px-2 py-0.5 text-[11px] text-soft">{label}</span>}
       {whatsapp === false && <span className="rounded-full bg-bad/10 px-2 py-0.5 text-[11px] text-bad" title="ענתה שאינה מקבלת הודעות וואטסאפ">דרוש קשר אחר</span>}

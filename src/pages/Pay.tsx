@@ -27,6 +27,7 @@ export function Pay() {
   const [error, setError] = useState<string | null>(null);
   // ★ אישור הוראת הקבע: לא מסומן מראש. ההורה מסמנת בעצמה.
   const [agree, setAgree] = useState(false);
+  const [program, setProgram] = useState<string | null>(null);
 
   async function load() {
     const { data, error } = await supabase.rpc('rpc_payment_link_public', { p_token: token });
@@ -34,6 +35,8 @@ export function Pay() {
     setInfo(data as unknown as Info);
   }
   useEffect(() => { void load(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+  // שם החוג של הסניף. ריק — לא מוצג שם.
+  useEffect(() => { void supabase.rpc('rpc_payment_link_program', { p_token: token }).then(({ data }) => setProgram((data as string | null) ?? null)); }, [token]);
   // אחרי חזרה מ-SUMIT: בודקים כל 5 שניות במשך 3 דקות אם השרת כבר רשם.
   useEffect(() => {
     if (!returned || (info?.ok && info.state === 'paid')) return;
@@ -60,7 +63,7 @@ export function Pay() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 bg-paper p-5 text-ink">
       <header className="text-center">
-        <p className="text-xs text-soft">החוג של הניה טייכטל</p>
+        {program && <p className="text-xs text-soft">{program}</p>}
         <h1 className="text-2xl">תשלום שכר לימוד</h1>
       </header>
       {!info ? (

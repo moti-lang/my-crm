@@ -206,7 +206,7 @@ export type AnswerOutcome =
 export async function simulateAnswer(input: {
   text: string; history: { role: 'user' | 'assistant'; text: string }[];
   faq: { question: string; answer: string; branch_id: string | null }[]; knowledge: { title: string; body: string; branch_id: string | null }[];
-  branches: string[]; branchRows: { id: string; name: string }[]; branchId: string | null;
+  branches: string[]; branchRows: { id: string; name: string; program_name: string | null }[]; branchId: string | null;
   mayQuotePrices: boolean; lead: Record<string, string | null> | null;
 }): Promise<AnswerOutcome> {
   const { data, error } = await supabase.functions.invoke('ai-answer', { body: input });

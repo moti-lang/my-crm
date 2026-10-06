@@ -44,12 +44,14 @@ export function Enroll() {
   if (result?.ok) {
     return (
       <main className="mx-auto max-w-md space-y-4 p-5 text-ink">
-        <header className="text-center"><p className="text-xs text-soft">{program_name}</p><h1 className="text-2xl">ההרשמה נקלטה 🌸</h1></header>
+        <header className="text-center">{program_name && <p className="text-xs text-soft">{program_name}</p>}<h1 className="text-2xl">ההרשמה נקלטה 🌸</h1></header>
         <section className="card space-y-3 p-5">
-          {result.method === 'cash' || !result.pay_url ? (
+          {result.method === 'external' ? (
+            <p className="text-sm">{result.student} רשומה ל{result.branch}. ההרשמה אושרה, ונתראה בחוג!</p>
+          ) : result.method === 'cash' || !result.pay_url ? (
             <>
               <p className="text-sm">{result.student} רשומה ל{result.branch}, במסלול: {result.track}.</p>
-              <p className="text-center font-display text-3xl tabular-nums">{formatILS(result.amount)}</p>
+              {result.amount != null && <p className="text-center font-display text-3xl tabular-nums">{formatILS(result.amount)}</p>}
               <p className="text-sm text-soft">התשלום במזומן מתקבל בחוג. ההרשמה תאושר סופית כשהתשלום יירשם.</p>
             </>
           ) : (
@@ -62,6 +64,10 @@ export function Enroll() {
               </p>
             </>
           )}
+          {result.whatsapp_group_url && (
+            <a href={result.whatsapp_group_url} target="_blank" rel="noopener noreferrer"
+              className="btn-ghost block w-full text-center text-base">הצטרפות לקבוצת הוואטסאפ של הסניף</a>
+          )}
         </section>
       </main>
     );
@@ -70,7 +76,7 @@ export function Enroll() {
   return (
     <main className="mx-auto max-w-md space-y-4 p-5 text-ink">
       <header className="text-center">
-        <p className="text-xs text-soft">{program_name}</p>
+        {program_name && <p className="text-xs text-soft">{program_name}</p>}
         <h1 className="text-2xl">הרשמה לחוג · {branch.name}</h1>
         {(branch.schedule || branch.age_groups) && (
           <p className="mt-1 text-sm text-soft">{[branch.schedule, branch.age_groups].filter(Boolean).join(' · ')}</p>
@@ -128,7 +134,7 @@ export function Enroll() {
           <button type="button" className="flex w-full items-center justify-between font-medium" onClick={() => setTermsOpen((o) => !o)} aria-expanded={termsOpen}>
             <span>התקנון</span><span className="text-soft">{termsOpen ? 'סגירה' : 'לקריאה'}</span>
           </button>
-          <div className={`mt-2 whitespace-pre-wrap text-soft ${termsOpen ? '' : 'max-h-40 overflow-y-auto'}`}>{terms}</div>
+          <div className={`mt-2 whitespace-pre-wrap text-soft ${termsOpen ? '' : 'max-h-40 overflow-y-auto'}`}><Linkified text={terms} /></div>
           <label className="mt-3 flex items-start gap-2">
             <input type="checkbox" className="mt-1" checked={form.terms_accepted} onChange={(e) => set('terms_accepted', e.target.checked)} />
             <span>קראתי את התקנון ואני מאשרת אותו</span>
@@ -176,4 +182,12 @@ function YesNo({ label, value, onChange, error }: { label: string; value: '' | '
       {error && <span className="mt-0.5 block text-xs text-bad">{error}</span>}
     </fieldset>
   );
+}
+
+/** טקסט עם קישורי https לחיצים (למשל קישור לקבוצה שהוקלד בתוך התקנון). בלי HTML מהטקסט. */
+export function Linkified({ text }: { text: string }) {
+  const parts = text.split(/(https:\/\/[^\s]+)/g);
+  return <>{parts.map((p, i) => (/^https:\/\//.test(p)
+    ? <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="text-plum underline break-all">{p}</a>
+    : <span key={i}>{p}</span>))}</>;
 }

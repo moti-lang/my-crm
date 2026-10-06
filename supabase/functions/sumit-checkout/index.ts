@@ -46,10 +46,12 @@ async function handle(req: Request): Promise<Response> {
     if (!checkoutOpenFor(token, env('SUMIT_CHECKOUT_ALLOW_TOKEN'))) return json({ ok: false, error: CHECKOUT_CLOSED_MESSAGE }, 503);
 
     const base = env('APP_BASE_URL') ?? 'https://teichtal-crm.netlify.app';
+    const { data: program } = await db.rpc('rpc_payment_link_program', { p_token: token });
     const page = await sumitProvider().createPaymentPage({
       externalIdentifier: link.external_identifier,
       amount: Number(link.amount),
-      description: `שכר לימוד — ${link.student_name} (${link.branch})`,
+      // שם החוג של הסניף מופיע בדף התשלום ובקבלה. ריק → בלי שם.
+      description: `שכר לימוד${program ? ` ${program}` : ''} — ${link.student_name} (${link.branch})`,
       customerName: link.student_name,
       customerPhone: link.parent_phone ?? null,
       redirectUrl: `${base}/pay/${token}?returned=1`,

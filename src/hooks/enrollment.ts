@@ -9,7 +9,9 @@ export type EnrollmentPlan = {
   trial_days: number; cancel_refund: number;
 };
 export type EnrollmentPublic =
-  | { ok: true; program_name: string; terms: string; plan: EnrollmentPlan; open: boolean; closed_reason: 'closed' | 'full' | 'inactive' | null;
+  | { ok: true; program_name: string | null; terms: string; plan: EnrollmentPlan | null; open: boolean; closed_reason: 'closed' | 'full' | 'inactive' | null;
+      /** false = התשלום נגבה מחוץ למערכת (מתנ"ס וכד'): בלי שאלת תשלום ובלי סכומים. */
+      collect_payments: boolean; whatsapp_group_url: string | null;
       branch: { name: string; city: string | null; schedule: string | null; age_groups: string | null };
       /** המסלולים שההורה רואה (הוראות קבע מוסתרות עד שיופעלו). */
       tracks: Track[]; questions: EnrollQuestions; photo_consent_text: string | null }
@@ -33,7 +35,8 @@ export type EnrollInput = {
   whatsapp: '' | 'yes' | 'no'; photo: '' | 'yes' | 'no'; track: string;
 };
 export type EnrollResult =
-  | { ok: true; pay_url: string | null; amount: number; method: Track['method']; track: string; student: string; branch: string }
+  | { ok: true; pay_url: string | null; amount: number | null; method: Track['method'] | 'external'; track: string | null; student: string; branch: string;
+      program_name: string | null; whatsapp_group_url: string | null }
   | { ok: false; error: string };
 
 export async function enroll(input: EnrollInput): Promise<EnrollResult> {

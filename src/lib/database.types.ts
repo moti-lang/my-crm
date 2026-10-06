@@ -272,6 +272,9 @@ export type Database = {
           age_groups: string | null;
           form_options: Json;
           photo_consent_text: string | null;
+          collect_payments: boolean;
+          program_name: string | null;
+          whatsapp_group_url: string | null;
         };
         Insert: {
           id?: string;
@@ -296,6 +299,9 @@ export type Database = {
           age_groups?: string | null;
           form_options?: Json;
           photo_consent_text?: string | null;
+          collect_payments?: boolean;
+          program_name?: string | null;
+          whatsapp_group_url?: string | null;
         };
         Update: {
           id?: string;
@@ -320,6 +326,9 @@ export type Database = {
           age_groups?: string | null;
           form_options?: Json;
           photo_consent_text?: string | null;
+          collect_payments?: boolean;
+          program_name?: string | null;
+          whatsapp_group_url?: string | null;
         };
         Relationships: [];
       };
@@ -1355,6 +1364,7 @@ export type Database = {
           whatsapp_opt_in: boolean | null;
           photo_consent_text: string | null;
           payment_track: Json | null;
+          external_payment: boolean;
         };
         Insert: {
           id?: string;
@@ -1399,6 +1409,7 @@ export type Database = {
           whatsapp_opt_in?: boolean | null;
           photo_consent_text?: string | null;
           payment_track?: Json | null;
+          external_payment?: boolean;
         };
         Update: {
           id?: string;
@@ -1443,6 +1454,7 @@ export type Database = {
           whatsapp_opt_in?: boolean | null;
           photo_consent_text?: string | null;
           payment_track?: Json | null;
+          external_payment?: boolean;
         };
         Relationships: [
           {
@@ -2029,6 +2041,12 @@ export type Database = {
       rpc_issue_attendance_link: {
         Args: {
           p_branch: string;
+        };
+        Returns: string;
+      };
+      rpc_payment_link_program: {
+        Args: {
+          p_token: string;
         };
         Returns: string;
       };

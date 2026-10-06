@@ -98,7 +98,7 @@ function Simulator() {
         faq: (faq.data ?? []).filter((f) => f.is_active).map((f) => ({ question: f.question, answer: f.answer, branch_id: f.branch_id })),
         knowledge: (knowledge.data ?? []).filter((k) => k.is_active).map((k) => ({ title: k.title, body: k.body, branch_id: k.branch_id })),
         branches: activeBranches.map((b) => b.name),
-        branchRows: activeBranches.map((b) => ({ id: b.id, name: b.name })),
+        branchRows: activeBranches.map((b) => ({ id: b.id, name: b.name, program_name: b.program_name })),
         branchId: asBranch || null,
         mayQuotePrices: may.data === true, lead,
       });

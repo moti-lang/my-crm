@@ -41,7 +41,7 @@ async function handle(req: Request): Promise<Response> {
 
   // הסימולטור שולח את השורות הגולמיות (עם branch_id) ואת הסניף שנבחר בו;
   // ההרכבה — אותה פונקציה כמו בוואטסאפ.
-  const raw = input as Partial<AnswerContext> & { branchRows?: LayerBranch[]; branchId?: string | null };
+  const raw = input as Partial<AnswerContext> & { branchRows?: (LayerBranch & { program_name?: string | null })[]; branchId?: string | null };
   const layered = layerForBranch(
     (Array.isArray(input.faq) ? input.faq : []) as LayerFaq[],
     (Array.isArray(input.knowledge) ? input.knowledge : []) as LayerKnowledge[],
@@ -54,6 +54,7 @@ async function handle(req: Request): Promise<Response> {
     faq: layered.faq,
     knowledge: layered.knowledge,
     branches: Array.isArray(input.branches) ? input.branches : [],
+    programName: (Array.isArray(raw.branchRows) ? raw.branchRows : []).find((b) => b.id === layered.branchId)?.program_name?.trim() || null,
     mayQuotePrices: input.mayQuotePrices === true,
     lead: input.lead ?? null,
   };

@@ -171,7 +171,7 @@ export function Collection() {
                       aria-label={`בחירת ${d.full_name}`}
                     />
                   </td>
-                  <td className="px-3 py-2">{d.full_name}{(() => { const f = flags.data?.get(d.student_id as string); return f ? <StudentTags method={f.payment_track?.method} label={f.payment_track?.label} whatsapp={f.whatsapp_opt_in} /> : null; })()}</td>
+                  <td className="px-3 py-2">{d.full_name}{(() => { const f = flags.data?.get(d.student_id as string); return f ? <StudentTags method={f.payment_track?.method} label={f.payment_track?.label} whatsapp={f.whatsapp_opt_in} external={f.external_payment} /> : null; })()}</td>
                   <td className="px-3 py-2">{d.branch_name}</td>
                   <td className="px-3 py-2">{d.parent_name ?? '—'}</td>
                   <td className="px-3 py-2" dir="ltr">

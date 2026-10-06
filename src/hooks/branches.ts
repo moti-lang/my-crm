@@ -5,7 +5,7 @@ import type { Database, Tables } from '@/lib/database.types';
 export type Branch = Tables<'branches'>;
 export type BranchInput = Pick<Database['public']['Tables']['branches']['Update'],
   'name' | 'city' | 'address' | 'supervisor_name' | 'supervisor_phone' | 'schedule_text' | 'weekdays' | 'lesson_time' |
-  'age_groups' | 'capacity' | 'enrollment_open' | 'terms' | 'plan' | 'monthly_rent' | 'form_options' | 'photo_consent_text'>;
+  'age_groups' | 'capacity' | 'enrollment_open' | 'terms' | 'plan' | 'monthly_rent' | 'form_options' | 'photo_consent_text' | 'collect_payments' | 'program_name' | 'whatsapp_group_url'>;
 
 export type FormOptions = { ask_whatsapp: boolean; ask_photo: boolean; ask_track: boolean };
 export const DEFAULT_FORM_OPTIONS: FormOptions = { ask_whatsapp: true, ask_photo: true, ask_track: true };

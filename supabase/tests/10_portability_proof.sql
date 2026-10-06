@@ -129,7 +129,7 @@ do $$
 -- עזרי הבדיקה (t_*, assert_*) נקראים בחבילות גם בתור anon ונמחקים בסוף
 -- הריצה. drop_assert_helpers אינו מוחרג: הוא נמצא בענן עם הרשאת הרצה
 -- ל-anon בדיוק בגלל ההחרגה שהייתה כאן.
-declare fn record; allowed text[] := array['rpc_attendance_sheet','rpc_attendance_submit','rpc_payment_link_public','rpc_enrollment_public'];
+declare fn record; allowed text[] := array['rpc_attendance_sheet','rpc_attendance_submit','rpc_payment_link_public','rpc_enrollment_public','rpc_payment_link_program'];
         n int := 0;
 begin
   for fn in
@@ -144,7 +144,7 @@ begin
       n := n + 1;
     end if;
   end loop;
-  perform assert_eq(n::bigint, 4, '★ בדיוק ארבע פונקציות פתוחות ל-anon (נוכחות ×2, דף התשלום, פרטי ההרשמה); rpc_enroll רק דרך הפונקציה');
+  perform assert_eq(n::bigint, 5, '★ בדיוק חמש פונקציות פתוחות ל-anon (נוכחות ×2, דף התשלום ושם החוג שלו, פרטי ההרשמה); rpc_enroll רק דרך הפונקציה');
 end $$;
 
 -- ═════════ 6. אין תלות בטבלאות auth מלבד ה-FK ═════════
