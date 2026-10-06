@@ -47,12 +47,12 @@ export function Enroll() {
         <header className="text-center">{program_name && <p className="text-xs text-soft">{program_name}</p>}<h1 className="text-2xl">ההרשמה נקלטה 🌸</h1></header>
         <section className="card space-y-3 p-5">
           {result.method === 'external' ? (
-            <p className="text-sm">{result.student} רשומה ל{result.branch}. ההרשמה אושרה, ונתראה בחוג!</p>
+            <p className="text-sm">{result.student} רשומה ל{result.branch}. ההרשמה אושרה, נתראה בקרוב!</p>
           ) : result.method === 'cash' || !result.pay_url ? (
             <>
               <p className="text-sm">{result.student} רשומה ל{result.branch}, במסלול: {result.track}.</p>
               {result.amount != null && <p className="text-center font-display text-3xl tabular-nums">{formatILS(result.amount)}</p>}
-              <p className="text-sm text-soft">התשלום במזומן מתקבל בחוג. ההרשמה תאושר סופית כשהתשלום יירשם.</p>
+              <p className="text-sm text-soft">התשלום במזומן מתקבל בסניף. ההרשמה תאושר סופית כשהתשלום יירשם.</p>
             </>
           ) : (
             <>
@@ -77,7 +77,7 @@ export function Enroll() {
     <main className="mx-auto max-w-md space-y-4 p-5 text-ink">
       <header className="text-center">
         {program_name && <p className="text-xs text-soft">{program_name}</p>}
-        <h1 className="text-2xl">הרשמה לחוג · {branch.name}</h1>
+        <h1 className="text-2xl">הרשמה · {branch.name}</h1>
         {(branch.schedule || branch.age_groups) && (
           <p className="mt-1 text-sm text-soft">{[branch.schedule, branch.age_groups].filter(Boolean).join(' · ')}</p>
         )}
@@ -85,7 +85,7 @@ export function Enroll() {
       {!open ? (
         <section className="card p-5 text-center text-sm">
           {closed_reason === 'full'
-            ? 'ההרשמה לסניף מלאה. אפשר לפנות לחוג לרשימת המתנה.'
+            ? 'ההרשמה לסניף מלאה. אפשר לפנות אלינו לרשימת המתנה.'
             : 'ההרשמה לסניף סגורה כרגע.'}
         </section>
       ) : (
@@ -100,7 +100,7 @@ export function Enroll() {
         <Field k="email" label="מייל" type="email" dir="ltr" form={form} set={set} error={touched ? errors.email : undefined} />
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" checked={form.mailing_consent} onChange={(e) => set('mailing_consent', e.target.checked)} />
-          <span>אני מאשרת הצטרפות לרשימת התפוצה במייל ולקו החוג (עדכונים על שיעורים, מופעים וצילומים)</span>
+          <span>אני מאשרת הצטרפות לרשימת התפוצה במייל ולקו העדכונים (עדכונים על שיעורים, מופעים וצילומים)</span>
         </label>
 
         {questions.whatsapp && (

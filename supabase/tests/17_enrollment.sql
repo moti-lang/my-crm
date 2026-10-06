@@ -355,6 +355,22 @@ reset role;
 select assert_true((select status = 'active' and external_payment and tuition_total = 0 from students where full_name = 'ידנית חיצוני'), 'ידנית: גם היא פעילה ובתשלום חיצוני');
 rollback;
 
+\echo 'בלי המילה "חוג" כברירת מחדל:'
+begin;
+-- הסניף בלי שם חוג: לא "תודה שנרשמת לחוג!", אלא "תודה שנרשמת!".
+update branches set program_name = null where id = 'bbbbbbbb-0000-0000-0000-000000000001';
+select t_enroll('נוי', '0526660009', '12.0.0.9', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'card1');
+select assert_true((select body like 'תודה שנרשמת!%' and body not like '%חוג%' from reminders r join students s on s.id = r.student_id where s.first_name = 'נוי'),
+                   '★ סניף בלי שם: ההודעה "תודה שנרשמת!" — בלי המילה "חוג"');
+update branches set program_name = 'דרמה בכיף' where id = 'bbbbbbbb-0000-0000-0000-000000000001';
+select t_enroll('גל', '0526660010', '12.0.0.10', true, 'bbbbbbbb-0000-0000-0000-000000000001', 'card1');
+select assert_true((select body like 'תודה שנרשמת לדרמה בכיף!%' from reminders r join students s on s.id = r.student_id where s.first_name = 'גל'),
+                   '★ סניף עם שם: השם מופיע בהודעה');
+select assert_true(not exists (select 1 from pg_proc where proname in ('rpc_enroll', 'rpc_create_payment_link', 'rpc_payment_link_public', 'rpc_enrollment_public')
+                                and regexp_replace(prosrc, '--[^\n]*', '', 'g') ~ '[''"][^''"]*חוג[^''"]*[''"]'),
+                   '★ אין "חוג" בשום טקסט קבוע בפונקציות ההרשמה והתשלום');
+rollback;
+
 \echo 'הוספת תלמידה ידנית:'
 begin;
 set local role authenticated;

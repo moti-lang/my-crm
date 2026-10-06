@@ -83,7 +83,7 @@ export function computeTrack(def: TrackDef, annualTotal: number, registrationFee
 
 /** ההסבר להורה, במילים. */
 export function describeTrack(t: Track): string {
-  if (t.method === 'cash') return `${t.total} ₪ במזומן, משולמים בחוג.`;
+  if (t.method === 'cash') return `${t.total} ₪ במזומן, משולמים בסניף.`;
   if (t.method === 'card_once') return `${t.total} ₪ בכרטיס אשראי, בתשלום אחד עכשיו.`;
   const rest = t.installments - 1;
   return `${t.first_charge} ₪ עכשיו (דמי רישום + תשלום ראשון), ואחריו ${rest} תשלומים חודשיים של ${t.installment_amount} ₪.`;

@@ -22,6 +22,7 @@ select set_config('request.jwt.claims', t_claims('branch_manager'::user_role), t
 select assert_true((rpc_create_payment_link(t_debtor(:BEITAR)) ->> 'amount')::numeric = (select balance from v_student_balance where student_id = t_debtor(:BEITAR)), '★ מנהלת ביתר: הסכום = היתרה הפתוחה');
 select assert_eq((select count(*) from reminders where kind = 'payment_link' and student_id = t_debtor(:BEITAR) and status = 'scheduled'), 1, '★ הודעת וואטסאפ עם הקישור נכנסה לתור');
 select assert_true((select body like '%/pay/%' and body like '%7 ימים%' from reminders where kind = 'payment_link' and student_id = t_debtor(:BEITAR)), 'ההודעה מכילה את הקישור שלנו ואת התוקף');
+select assert_true((select body not like '%חוג%' and body not like '%הניה%' from reminders where kind = 'payment_link' and student_id = t_debtor(:BEITAR)), '★ סניף בלי שם חוג: בהודעה אין "חוג" ואין שם של סניף אחר');
 select assert_true(length(t_link_token(t_debtor(:BEITAR))) = 64, 'טוקן של 64 תווי הקס (~244 ביט) — אי אפשר לנחש');
 select assert_no_effect('★ סכום גדול מהחוב נדחה', format('select rpc_create_payment_link(%L, 999999)', t_debtor(:BEITAR)), 'select count(*)::text from payment_links');
 select assert_no_effect('★ מנהלת ביתר לא יוצרת קישור לתלמידה במודיעין', format('select rpc_create_payment_link(%L)', t_debtor(:MODIIN)), 'select count(*)::text from payment_links');

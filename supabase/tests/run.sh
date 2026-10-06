@@ -31,6 +31,9 @@ node_test "public-surface.test.mjs" "✓|✗|משטח|נכשלו"
 echo "═══ מחיקת שאלות ═══"
 node_test "question-delete.test.mjs" "✓|✗|נכשלו|עברו"
 
+echo "═══ בלי \"חוג\" בטופס ═══"
+node_test "program-word.test.mjs" "✓|✗|נכשלו|עברו"
+
 echo "═══ שומרי הפונקציות ═══"
 node_test "function-guards.test.mjs" "✗|מוגנות|נכשלו"
 
