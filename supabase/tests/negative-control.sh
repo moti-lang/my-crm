@@ -914,6 +914,11 @@ expect_fail_code "wa-provision שומר בלי לוודא שהשרת עונה" \
   'sed -i "/השרת לא אישר את המפתח/d" "$F"' \
   "node supabase/tests/wa-provision.test.mjs"
 
+expect_fail_code "★ הבוט כבוי — והודעות נכנסות עדיין מעובדות" \
+  "$DIR/../functions/wa-webhook/index.ts" \
+  'sed -i "/if (paused?.value === true) return json/d" "$F"' \
+  "node supabase/tests/wa-bot-switch.test.mjs"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { humanError } from '@/lib/errors';
+import { useBotPaused, useSetBotPaused } from '@/hooks/agent';
 
 type WaAdmin = {
   ok: boolean; configured?: boolean; server?: string; error?: string;
@@ -24,6 +25,31 @@ async function callWaAdmin(action: 'status' | 'connect' | 'disconnect'): Promise
  * חיבור מספר הוואטסאפ: מצב, QR לסריקה ישירות מהמסך, וניתוק. בעלים בלבד.
  * מפתח ה-API של השרת לא מגיע לדפדפן — רק מצב ותמונת QR (דרך wa-admin).
  */
+/** מתג הבוט: כבוי = מתכתבים ישירות מהטלפון, הודעות נכנסות לא מגיעות למערכת. */
+function BotSwitch() {
+  const paused = useBotPaused();
+  const set = useSetBotPaused();
+  if (paused.isLoading) return null;
+  const on = paused.data !== true;
+  return (
+    <div className={`rounded-field border p-3 ${on ? 'border-rule' : 'border-warn/50 bg-warn/10'}`}>
+      <label className="flex items-center justify-between gap-3">
+        <span>
+          <b>{on ? 'הבוט פעיל' : 'הבוט כבוי'}</b>
+          <span className="block text-xs text-soft">
+            {on
+              ? 'הודעות נכנסות מגיעות למערכת: הסוכן עונה להורים ופקודות מבוצעות.'
+              : 'הודעות נכנסות לא מגיעות למערכת ולא מקבלות תשובה אוטומטית. אפשר להתכתב ישירות מהטלפון.'}
+          </span>
+        </span>
+        <input type="checkbox" role="switch" aria-label="הבוט פעיל" className="h-5 w-5 shrink-0" checked={on} disabled={set.isPending}
+          onChange={(e) => set.mutate(!e.target.checked)} />
+      </label>
+      {set.error != null && <p className="mt-1 text-xs text-bad" role="alert">{humanError(set.error)}</p>}
+    </div>
+  );
+}
+
 export function WaConnect() {
   const qc = useQueryClient();
   const [polling, setPolling] = useState(false);
@@ -55,6 +81,7 @@ export function WaConnect() {
   }
   return (
     <div className="space-y-3 text-sm">
+      <BotSwitch />
       {s.state === 'connected' ? (
         <p className="text-ok">מחובר{s.me?.phone ? ` · ${s.me.phone}` : ''}{s.me?.name ? ` (${s.me.name})` : ''}</p>
       ) : s.state === 'qr' && s.qrDataUrl ? (

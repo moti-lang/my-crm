@@ -42,6 +42,7 @@ node_test "error-screen.test.mjs" "✓|✗|נכשלו|עברו"
 
 echo "═══ וואטסאפ: הקמה ו-QR ═══"
 node_test "wa-provision.test.mjs" "✓|✗|נכשלו|עברו"
+node_test "wa-bot-switch.test.mjs" "✓|✗|נכשלו|עברו"
 
 echo "═══ כל המסכים — דפדפן אמיתי, לכל תפקיד ═══"
 node_test "ui-screens.test.mjs" "✓|✗|──|נכשלו|נטענו"

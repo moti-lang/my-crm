@@ -52,8 +52,13 @@ Deno.serve(async (req) => {
 
   try {
     switch (event) {
-      case 'message.received':
+      case 'message.received': {
+        // ★ "הבוט כבוי" (הגדרות): הבעלים מתכתבת ישירות מהטלפון. הודעות נכנסות לא
+        //   נשמרות, לא מקבלות תשובה ולא מפעילות פקודות. אישור 200 — שה-Hub לא ינסה שוב.
+        const { data: paused } = await db.from('settings').select('value').eq('key', 'wa_bot_paused').maybeSingle();
+        if (paused?.value === true) return json({ ok: true, ignored: 'bot_paused' });
         return await handleIncoming(db, payload);
+      }
       case 'connection.changed':
         return await handleConnectionChanged(db, payload);
       case 'message.sent':

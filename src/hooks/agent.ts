@@ -236,3 +236,26 @@ export async function simulateAnswer(input: {
   if (error) throw new Error(error.message);
   return data as AnswerOutcome;
 }
+
+// ─────────── "הבוט כבוי": הודעות נכנסות בוואטסאפ לא מגיעות למערכת ───────────
+export function useBotPaused() {
+  return useQuery({
+    queryKey: ['wa-bot-paused'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('settings').select('value').eq('key', 'wa_bot_paused').maybeSingle();
+      if (error) throw new Error(error.message);
+      return data?.value === true;
+    },
+  });
+}
+
+export function useSetBotPaused() {
+  const invalidate = useInvalidate([['wa-bot-paused']]);
+  return useMutation({
+    mutationFn: async (paused: boolean) => {
+      const { error } = await supabase.from('settings').upsert({ key: 'wa_bot_paused', value: paused }, { onConflict: 'key' });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidate,
+  });
+}
