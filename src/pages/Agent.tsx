@@ -177,6 +177,15 @@ function Simulator() {
 }
 
 // ─────────── שיחות ───────────
+// מאיפה הגיעה תשובת הסוכן — כדי לעקוב שהוא עונה נכון.
+const ROUTE_LABEL: Record<string, string> = {
+  customer_answer: 'מהמאגר / מהמידע',
+  customer_greeting: 'ברכה (קבועה)',
+  customer_no_answer: 'אין תשובה → הועבר להניה',
+  customer_lead: 'הרשמה',
+  customer_error: 'תקלה במודל',
+};
+
 function Conversations() {
   const convs = useConversations();
   const [phone, setPhone] = useState<string | null>(null);
@@ -228,17 +237,24 @@ function Conversations() {
               <p className="bg-warn/10 px-3 py-1.5 text-xs text-warn">הסוכן שותק בשיחה הזו. ההודעות נרשמות, את עונה.</p>
             )}
             <div className="flex-1 space-y-2 overflow-y-auto p-3">
-              {messages.isLoading ? <CardSkeleton rows={3} /> : (messages.data ?? []).map((m) => (
+              {messages.isLoading ? <CardSkeleton rows={3} /> : (messages.data ?? []).map((m) => {
+                const meta = (m.meta ?? {}) as { dry_run?: boolean; route?: string };
+                // ★ מצב צפייה: הסוכן ניסח, אבל שום דבר לא נשלח להורה.
+                const draft = m.direction === 'out' && meta.dry_run === true;
+                return (
                 <div key={m.id} className={`flex ${m.direction === 'in' ? 'justify-start' : 'justify-end'}`}>
-                  <div className={`max-w-[80%] rounded-card px-3 py-2 text-sm ${m.direction === 'in' ? 'bg-shade' : 'bg-plum text-white'}`}>
+                  <div className={`max-w-[80%] rounded-card px-3 py-2 text-sm ${m.direction === 'in' ? 'bg-shade' : draft ? 'border-2 border-dashed border-plum bg-paper text-ink' : 'bg-plum text-white'}`}>
+                    {draft && <p className="mb-1 text-[11px] font-bold text-plum">טיוטה · לא נשלחה להורה</p>}
                     <p className="whitespace-pre-wrap">{m.body}</p>
                     <p className="mt-1 text-[11px] opacity-70">
                       {new Date(m.created_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })}
+                      {m.direction === 'out' && meta.route && ROUTE_LABEL[meta.route] ? ` · ${ROUTE_LABEL[meta.route]}` : ''}
                       {m.direction === 'out' && m.status === 'failed' ? ' · לא נשלח' : ''}
                     </p>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

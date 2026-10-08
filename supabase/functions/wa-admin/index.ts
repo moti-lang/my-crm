@@ -7,6 +7,7 @@ import { userClient } from '../_shared/supabase.ts';
 import { preflight, withCors } from '../_shared/cors.ts';
 import { requireUserJwt } from '../_shared/guard.ts';
 import { waConfig } from '../_shared/wa.ts';
+import { WA_DRY_RUN } from '../_shared/env.ts';
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
@@ -40,7 +41,7 @@ async function handle(req: Request): Promise<Response> {
     if (!res.ok) return json({ ok: false, configured: true, server: cfg.url, error: `השרת החזיר ${res.status}` }, 502);
     const me = s.me as { phone?: string; name?: string; display?: string } | null | undefined;
     return json({
-      ok: true, configured: true, server: cfg.url,
+      ok: true, configured: true, server: cfg.url, dryRun: WA_DRY_RUN,
       state: s.state ?? null, qrDataUrl: s.qrDataUrl ?? null,
       me: me ? { phone: me.display ?? me.phone ?? null, name: me.name ?? null } : null,
     });

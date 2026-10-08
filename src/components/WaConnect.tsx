@@ -5,7 +5,7 @@ import { humanError } from '@/lib/errors';
 import { useBotPaused, useSetBotPaused } from '@/hooks/agent';
 
 type WaAdmin = {
-  ok: boolean; configured?: boolean; server?: string; error?: string;
+  ok: boolean; configured?: boolean; server?: string; error?: string; dryRun?: boolean;
   state?: 'disconnected' | 'connecting' | 'qr' | 'connected' | 'logged_out' | null;
   qrDataUrl?: string | null; me?: { phone: string | null; name: string | null } | null;
 };
@@ -82,6 +82,12 @@ export function WaConnect() {
   return (
     <div className="space-y-3 text-sm">
       <BotSwitch />
+      {s.dryRun && (
+        <p className="rounded-field border border-plum/40 bg-plum/5 p-3 text-xs">
+          <b>מצב צפייה:</b> הסוכן מנסח תשובות לכל הודעה, אבל <b>שום דבר לא נשלח</b> — לא תשובות ולא תזכורות.
+          את הטיוטות רואים בסוכן ← שיחות. להפעלת שליחה אמיתית — לבקש מ-Claude.
+        </p>
+      )}
       {s.state === 'connected' ? (
         <p className="text-ok">מחובר{s.me?.phone ? ` · ${s.me.phone}` : ''}{s.me?.name ? ` (${s.me.name})` : ''}</p>
       ) : s.state === 'qr' && s.qrDataUrl ? (

@@ -924,6 +924,11 @@ expect_fail_code "★ ברכה: הניסוח של המודל עובר במקום
   'sed -i "/  if (answer.kind === .greeting.) answer.reply = GREETING_REPLY;/d" "$F"' \
   "node supabase/tests/customer-agent.test.mjs"
 
+expect_fail_code "טיוטות שלא נשלחו נראות כמו הודעות שיצאו" \
+  "$DIR/../../src/pages/Agent.tsx" \
+  'sed -i "/{draft && <p className=.*טיוטה · לא נשלחה להורה<\/p>}/d" "$F"' \
+  "node supabase/tests/wa-bot-switch.test.mjs"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \
