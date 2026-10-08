@@ -919,6 +919,11 @@ expect_fail_code "★ הבוט כבוי — והודעות נכנסות עדיי
   'sed -i "/if (paused?.value === true) return json/d" "$F"' \
   "node supabase/tests/wa-bot-switch.test.mjs"
 
+expect_fail_code "★ ברכה: הניסוח של המודל עובר במקום הטקסט הקבוע (פרטים מומצאים)" \
+  "$DIR/../functions/_shared/answer-schema.ts" \
+  'sed -i "/  if (answer.kind === .greeting.) answer.reply = GREETING_REPLY;/d" "$F"' \
+  "node supabase/tests/customer-agent.test.mjs"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \

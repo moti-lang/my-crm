@@ -123,6 +123,7 @@ function Simulator() {
   const BLOCKED: Record<string, string> = { price: 'נחסם: ניסה לנקוב מחיר', promise: 'נחסם: הבטיח מקום/הנחה', ungrounded: 'נחסם: בלי מקור' };
   const sourceLabel = (t: SimTurn) => {
     if (t.kind === 'lead') return 'הרשמה';
+    if (t.kind === 'greeting') return 'ברכה (תשובה קבועה)';
     if (t.source === 'faq') return `מהמאגר · ${t.faq ?? ''}`;
     if (t.source === 'knowledge') return `מהמידע על החוג · ${t.knowledgeTitle ?? ''}`;
     return 'אין תשובה → הפניה להניה';

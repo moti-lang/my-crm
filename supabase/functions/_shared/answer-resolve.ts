@@ -1,4 +1,4 @@
-import { NO_ANSWER_REPLY, quotesPrice, promisesPlaceOrDiscount, type AgentAnswer, type AnswerSource } from './answer-schema.ts';
+import { NO_ANSWER_REPLY, GREETING_REPLY, quotesPrice, promisesPlaceOrDiscount, type AgentAnswer, type AnswerSource } from './answer-schema.ts';
 
 /**
  * מה באמת יוצא להורה — סדר העדיפות והשומרים, נאכפים בקוד:
@@ -40,6 +40,8 @@ export function resolveAnswer(answer: AgentAnswer, input: ResolveInput): Resolve
     ({ reply: NO_ANSWER_REPLY, source: null, faqQuestion: null, knowledgeTitle: null, blocked, original });
 
   if (answer.kind === 'no_answer') return noAnswer(null);
+  // ברכה: הטקסט הקבוע בלבד — לא מה שהמודל ניסח.
+  if (answer.kind === 'greeting') return { reply: GREETING_REPLY, source: null, faqQuestion: null, knowledgeTitle: null, blocked: null, original };
   if (answer.kind === 'lead') {
     // שיחת הרשמה: הניסוח של המודל, אבל בלי מחירים כשהמתג כבוי.
     if (!input.mayQuotePrices && quotesPrice(answer.reply)) {

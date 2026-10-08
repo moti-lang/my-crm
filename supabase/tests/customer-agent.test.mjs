@@ -33,7 +33,7 @@ const bundle = (src, name) => {
 };
 const { answerCustomer } = await import(bundle('supabase/functions/_shared/customer.ts', 'customer.mjs'));
 const { deliverReply } = await import(bundle('supabase/functions/_shared/reply.ts', 'reply.mjs'));
-const { NO_ANSWER_REPLY, PROVIDER_ERROR_REPLY, quotesPrice, promisesPlaceOrDiscount, validateAnswer } =
+const { NO_ANSWER_REPLY, GREETING_REPLY, PROVIDER_ERROR_REPLY, quotesPrice, promisesPlaceOrDiscount, validateAnswer } =
   await import(bundle('supabase/functions/_shared/answer-schema.ts', 'schema.mjs'));
 
 let fails = 0;
@@ -103,6 +103,16 @@ console.log('\nשאלה שבמאגר:');
   check('לא נוצרה תלמידה', writesTo(r.writes, 'students').length === 0);
   check('אין התראה', r.alerts.length === 0);
   check('★ התשובה נשלחה בוואטסאפ', r.sent.length === 1 && r.sent[0].body === r.decision.reply);
+}
+
+// ═══════ 1א. ברכה בלבד ═══════
+console.log('\nברכה בלבד:');
+{
+  const r = await run('שלום בוקר טוב');
+  check('★ ברכה מקבלת תשובה ידידותית, לא "אין לי תשובה"', r.decision.route === 'customer_greeting' && r.decision.reply === GREETING_REPLY, `${r.decision.route}: ${r.decision.reply}`);
+  check('★ הטקסט הקבוע בלבד — שעה שהמודל "הוסיף" לא עוברת', !/16:00/.test(r.decision.reply));
+  check('לא נרשמה שאלה ללא מענה, אין התראה', writesTo(r.writes, 'unanswered_questions').length === 0 && r.alerts.length === 0);
+  check('התשובה נשלחה', r.sent.length === 1 && r.sent[0].body === GREETING_REPLY);
 }
 
 // ═══════ 2. שאלה שאינה במאגר ═══════

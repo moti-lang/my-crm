@@ -4,6 +4,10 @@
  * (אין תשובה), כך שבדיקה ששכחה להקליט לא "מצליחה" בטעות.
  */
 export const ANSWER_FIXTURES: Record<string, string> = {
+  'שלום בוקר טוב': JSON.stringify({
+    kind: 'greeting', confidence: 0.98, reply: 'בוקר טוב! איך אפשר לעזור? החוג ביום שני ב-16:00',
+    source: null, faq_question: null, knowledge_title: null, lead: null, lead_complete: false,
+  }),
   'באילו סניפים החוג פועל?': JSON.stringify({
     kind: 'answer', confidence: 0.95,
     reply: 'החוג פועל בביתר עילית, מודיעין עילית, ירושלים רמות, בית שמש ואשדוד 😊',

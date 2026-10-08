@@ -7,7 +7,7 @@
  */
 import { extractJson } from './command-schema.ts';
 
-export const ANSWER_KINDS = ['answer', 'no_answer', 'lead'] as const;
+export const ANSWER_KINDS = ['answer', 'no_answer', 'lead', 'greeting'] as const;
 export type AnswerKind = (typeof ANSWER_KINDS)[number];
 
 /** פרטי ליד. כולם אופציונליים עד שהשיחה מסתיימת. */
@@ -37,6 +37,12 @@ export type AgentAnswer = {
 };
 
 /** התשובה היחידה המותרת כשאין תשובה במאגר (סעיף 4.4, חוק 2). מילה במילה. */
+/**
+ * ברכה / תודה בלי שאלה. הטקסט קבוע בקוד — המודל רק מסווג. כך שום פרט
+ * (שעה, מחיר, הבטחה) לא יכול להשתחל לתשובה לברכה.
+ */
+export const GREETING_REPLY = 'היי! 😊 כאן העוזרת של החוג. במה אפשר לעזור?';
+
 export const NO_ANSWER_REPLY =
   'זו שאלה טובה שאין לי עליה תשובה מדויקת — אני מעבירה אותה להניה והיא תחזור אלייך בהקדם 🙏';
 
@@ -119,6 +125,7 @@ export function validateAnswer(raw: string, dryRun: boolean): AnswerOutcome {
   const answer = result.answer;
   // חוק 2 נאכף כאן ולא מוסכם: "אין תשובה" מקבל תמיד את אותו משפט.
   if (answer.kind === 'no_answer') answer.reply = NO_ANSWER_REPLY;
+  if (answer.kind === 'greeting') answer.reply = GREETING_REPLY;
   // ליד "שלם" לפי המודל אבל חסר שדה — לא שלם.
   if (answer.kind === 'lead' && answer.lead_complete && !isLeadComplete(answer.lead)) answer.lead_complete = false;
   return { ok: true, answer, dryRun };

@@ -25,6 +25,7 @@ export type CustomerDecision =
   | { route: 'customer_takeover'; phone: string }
   | { route: 'customer_answer'; phone: string; reply: string; faqQuestion: string | null; source: AnswerSource; knowledgeTitle: string | null }
   | { route: 'customer_no_answer'; phone: string; reply: string; unansweredId?: string }
+  | { route: 'customer_greeting'; phone: string; reply: string }
   | { route: 'customer_lead'; phone: string; reply: string; lead: LeadFields; studentId: string | null; complete: boolean }
   | { route: 'customer_error'; phone: string; reply: string; reason: string };
 
@@ -122,6 +123,9 @@ export async function answerCustomer(
   }
 
   const answer = outcome.answer;
+
+  // ─── 4א. ברכה בלבד: תשובה קבועה, בלי "שאלה ללא מענה" ובלי התראה ───
+  if (answer.kind === 'greeting') return { route: 'customer_greeting', phone, reply: answer.reply };
 
   // ─── 4ב. אין תשובה במאגר ───
   if (answer.kind === 'no_answer') {
