@@ -929,6 +929,41 @@ expect_fail_code "טיוטות שלא נשלחו נראות כמו הודעות 
   'sed -i "/{draft && <p className=.*טיוטה · לא נשלחה להורה<\/p>}/d" "$F"' \
   "node supabase/tests/wa-bot-switch.test.mjs"
 
+expect_fail_code "★ פרטיות: לא בודקים שהלקוחה ב-SUMIT היא זו שדווחה — נפתחת קבלה של לקוח אחר" \
+  "$DIR/../functions/_shared/sumit.ts" \
+  'sed -i "/  if (link.customer_candidate \&\& cid !== String(link.customer_candidate)) return/d" "$F"' \
+  "node supabase/tests/sumit-privacy.test.mjs"
+
+expect_fail_code "★ פרטיות: מזהה מהדפדפן בלי מספר לקוחה — נפתח (תשלום וקבלה של אחר)" \
+  "$DIR/../functions/_shared/sumit.ts" \
+  'sed -i "s/    if (link.source !== .ipn. \&\& !link.customer_candidate \&\& !link.known_customer_id) {/    if (false) {/" "$F"' \
+  "node supabase/tests/sumit-privacy.test.mjs"
+
+expect_fail_code "★ מכסה: הסנכרון בודק כל קישור פתוח (גם בלי מזהה מ-SUMIT)" \
+  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
+  'sed -i "s/  where l.status in (.pending., .opened.) and l.sumit_pid_candidate is not null and/  where l.status in (\x27pending\x27, \x27opened\x27) and/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
+expect_fail_code "★ פרטיות: IPN של לקוח אחר נשמר עם הגוף" \
+  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
+  'sed -i "s/    insert into sumit_ipn_log (content_type, body, candidates, outcome) values (null, null, null, .not_ours.);/    insert into sumit_ipn_log (content_type, body, candidates, outcome) values (p_content_type, p_body, p_candidates, \x27not_ours\x27);/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
+expect_fail_code "מזהים מהדפדפן בלי מגבלת ניסיונות (ניחוש מזהים של אחרים)" \
+  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
+  'sed -i "s/  if p_source = .redirect. and l.confirm_attempts >= 3 and/  if false and/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
+expect_fail_code "★ מכסה: הוראות קבע נבדקות בכל ריצה (לא פעם ביום)" \
+  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
+  'sed -i "/    and (o.last_checked_at is null or o.last_checked_at < now() - interval .20 hours.)/d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
+expect_fail_code "הוראת קבע: אותו חיוב נרשם פעמיים" \
+  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
+  'sed -i "/     and not exists (select 1 from standing_order_charges c where c.standing_order_id = o.id and c.charged_at::date = p_prev) then/s/     and not exists.*then/     then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \
@@ -970,7 +1005,7 @@ expect_fail_code "הוראת קבע: מנהלת סניף יכולה לעצור" 
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
 expect_fail_code "הוראת קבע: לא מוודאים מול SUMIT שהעצירה תפסה" \
-  "$DIR/../migrations/0029_standing_cancel_verify.sql" \
+  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
   'sed -i "s/         or (o.status = .cancelled. and o.cancelled_at > now() - interval .14 days.))/         or false)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 

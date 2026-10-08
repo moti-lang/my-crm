@@ -12,14 +12,22 @@ export type Db = { rpc: (fn: string, args?: Record<string, unknown>) => Promise<
 
 export type SyncOutcome =
   | { result: 'recorded'; duplicate: boolean; status: string }
-  | { result: 'unpaid' | 'not_found' }
+  | { result: 'unpaid' | 'not_found' | 'pending' }
+  | { result: 'rejected'; reason: string }
   | { result: 'provider_error'; error: string }
   | { result: 'record_failed'; error: string };
 
 export async function syncPaymentLink(db: Db, sumit: SumitProvider, link: LinkRef): Promise<SyncOutcome> {
   const status = await sumit.getPaymentStatus(link);
   if (!status.ok) return { result: 'provider_error', error: status.error };
-  if (!status.found) return { result: 'not_found' };
+  if (!status.found) {
+    // ★ המזהה שהגיע לא אומת כשלנו — נמחק מהקישור (לא נבדק שוב) והבעלים יודעת.
+    if (status.rejected) {
+      if (link.token) await db.rpc('rpc_payment_link_candidate_rejected', { p_token: link.token, p_reason: status.rejected });
+      return { result: 'rejected', reason: status.rejected };
+    }
+    return { result: status.pending ? 'pending' : 'not_found' };
+  }
   if (!status.paid) return { result: 'unpaid' };
 
   const { data, error } = await db.rpc('rpc_record_sumit_payment', {

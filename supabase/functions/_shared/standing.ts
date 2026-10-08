@@ -28,7 +28,7 @@ export type StandingProvider = {
   create(input: CreateStandingInput): Promise<CreateStandingResult>;
   list(customerId: number): Promise<StandingItem[]>;
   cancel(customerId: number, recurringId: number): Promise<{ ok: true } | { ok: false; error: string }>;
-  payments(from: string, to: string): Promise<SumitPayment[]>;
+  // ★ אין payments(): רשימת התשלומים של החשבון כוללת לקוחות אחרים (0036). חיובים מזוהים מ-list() של הלקוחה שלנו.
 };
 
 // ─────────── פונקציות טהורות (נבדקות) ───────────
@@ -47,25 +47,6 @@ export function recurringChargeBody(i: CreateStandingInput) {
 }
 
 /** החיובים של הוראה אחת: של הלקוחה, מתאריך ההתחלה, בסכום של התשלום, שעוד לא נרשמו. */
-export function chargesForOrder(payments: SumitPayment[], order: { customer_id: number; amount: number; date_start: string }): SumitPayment[] {
-  const start = new Date(`${order.date_start}T00:00:00Z`).getTime() - 2 * 86400_000;   // סבולת שעון/אזור זמן
-  return payments.filter((p) =>
-    p.CustomerID != null && Number(p.CustomerID) === Number(order.customer_id)
-    && Math.abs(Number(p.Amount) - Number(order.amount)) < 0.005
-    && new Date(p.Date).getTime() >= start);
-}
-
-/** חלון החיפוש ב-payments/list לכל ההוראות בריצה אחת. */
-export function paymentsWindow(orders: { date_start: string; last_checked_at: string | null }[], now = new Date()): { from: string; to: string } | null {
-  if (orders.length === 0) return null;
-  const d = (x: Date) => x.toISOString().slice(0, 10);
-  const starts = orders.map((o) => {
-    const base = o.last_checked_at ? new Date(o.last_checked_at).getTime() - 7 * 86400_000 : new Date(`${o.date_start}T00:00:00Z`).getTime() - 2 * 86400_000;
-    return Math.max(base, new Date(`${o.date_start}T00:00:00Z`).getTime() - 2 * 86400_000);
-  });
-  return { from: d(new Date(Math.min(...starts))), to: d(new Date(now.getTime() + 86400_000)) };
-}
-
 // ─────────── הרצה יבשה ───────────
 class DryRunStanding implements StandingProvider {
   static created = new Map<number, { customerId: number; status: number }>();
@@ -86,7 +67,6 @@ class DryRunStanding implements StandingProvider {
     if (r) r.status = 1;
     return Promise.resolve({ ok: true });
   }
-  payments(): Promise<SumitPayment[]> { return Promise.resolve([]); }
 }
 
 // ─────────── SUMIT אמיתי ───────────
@@ -121,10 +101,6 @@ class RealStanding implements StandingProvider {
   async cancel(customerId: number, recurringId: number): Promise<{ ok: true } | { ok: false; error: string }> {
     try { await this.post('/billing/recurring/cancel/', { Customer: { ID: customerId }, RecurringCustomerItemID: recurringId }); return { ok: true }; }
     catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'שגיאה לא ידועה' }; }
-  }
-  async payments(from: string, to: string): Promise<SumitPayment[]> {
-    const r = await this.post('/billing/payments/list/', { Date_From: from, Date_To: to });
-    return (((r.Data ?? {}) as { Payments?: SumitPayment[] }).Payments ?? []);
   }
 }
 

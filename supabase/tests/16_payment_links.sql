@@ -83,7 +83,10 @@ create temp table t_exp as select t_link_token(t_debtor(:BEITAR)) as token;
 update payment_links set expires_at = now() - interval '1 hour' where token = (select token from t_exp);
 select assert_true((rpc_payment_link_public((select token from t_exp)) ->> 'state') = 'expired', '★ אחרי 7 ימים הדף אומר שפג');
 select assert_true((rpc_payment_link_set_page((select token from t_exp), 'https://x') ->> 'ok')::boolean = false, '★ ואי אפשר ליצור לו דף SUMIT');
-select assert_true(rpc_payment_links_to_sync()::text like '%' || (select token from t_exp) || '%', 'קישור שפג לפני פחות מיומיים עדיין נבדק (תשלום ברגע האחרון)');
+-- (0036) נבדק רק קישור ש-SUMIT מסרה לו מזהה תשלום; בלי מזהה — אין פנייה.
+select assert_true(rpc_payment_links_to_sync()::text not like '%' || (select token from t_exp) || '%', 'קישור בלי מזהה תשלום מ-SUMIT — לא נבדק');
+update payment_links set sumit_pid_candidate = '5001', candidate_source = 'redirect' where token = (select token from t_exp);
+select assert_true(rpc_payment_links_to_sync()::text like '%' || (select token from t_exp) || '%', 'קישור שפג לפני פחות מיומיים, עם מזהה מ-SUMIT — עדיין נבדק (תשלום ברגע האחרון)');
 select assert_true(rpc_payment_links_mark_checked('{}') >= 1, 'הסנכרון מסמן אותו expired');
 select assert_true((select status = 'expired' from payment_links where token = (select token from t_exp)), 'סטטוס expired');
 rollback;
@@ -130,8 +133,9 @@ update payment_links set sumit_redirect_id = 'f40d0ec0-16eb-4b22-9b78-3aab9ab1ec
 select assert_true((rpc_sumit_ipn_received('application/json', '{"anything":1}', jsonb_build_object('redirect_id', 'f40d0ec0-16eb-4b22-9b78-3aab9ab1ec50')) -> 'link' ->> 'external_identifier') = (select external_identifier from t_ipn), '★ IPN עם redirectid בלבד — הקישור מאותר');
 select assert_true((rpc_sumit_ipn_received('text/plain', 'x', jsonb_build_object('token', (select token from t_ipn))) -> 'link') is not null, 'IPN עם הטוקן בכתובת החזרה — מאותר');
 select assert_true(jsonb_typeof(rpc_sumit_ipn_received('text/plain', 'x', jsonb_build_object('external_identifier', 'tl-nope')) -> 'link') = 'null', 'IPN שלא מצביע על קישור שלנו — לא מאותר, אבל נרשם');
-select assert_eq((select count(*) from sumit_ipn_log where outcome like 'matched:%'), 2, '★ כל IPN נרשם גולמי, עם תוצאה');
-select assert_eq((select count(*) from sumit_ipn_log where outcome = 'no_link'), 1, 'גם מה שלא זוהה');
+select assert_eq((select count(*) from sumit_ipn_log where outcome like 'matched:%'), 2, '★ IPN שלנו נרשם גולמי, עם תוצאה');
+-- (0036) IPN שאינו שלנו — רק נספר: בלי גוף, בלי מועמדים.
+select assert_eq((select count(*) from sumit_ipn_log where outcome = 'not_ours' and body is null and candidates is null), 1, '★ מה שלא זוהה — נספר בלי גוף');
 -- הרישום עם שיטת התאמה וקישור לקבלה (הליבה f_record_sumit_payment_core נקראת מבפנים)
 select assert_true((select (rpc_record_sumit_payment(external_identifier, 'S-ipn', 2000, now(), 'DOC-9', 'heuristic', '2411653131', 'https://pay.sumit.co.il/x') ->> 'ok')::boolean from t_ipn), 'רישום עם שיטת התאמה');
 select assert_true((select match_method = 'heuristic' and sumit_customer_id = '2411653131' and sumit_document_url = 'https://pay.sumit.co.il/x' from payment_links where id = (select id from t_ipn)), '★ שיטת ההתאמה, מזהה הלקוחה וקישור הקבלה נשמרים');

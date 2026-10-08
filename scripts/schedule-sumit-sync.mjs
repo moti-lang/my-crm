@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * מתזמן את הבדיקה היזומה מול SUMIT: pg_cron קורא ל-cron-sumit-sync כל שעה,
+ * מתזמן את הבדיקה היזומה מול SUMIT: pg_cron קורא ל-cron-sumit-sync כל 3 שעות
+ * (מכסת קריאות API ב-SUMIT; תשלום מזוהה מיד דרך ה-webhook, זו רשת ביטחון),
  * עם אותו CRON_SECRET מה-Vault שהגיבוי משתמש בו (schedule-backup.mjs).
  * ומנפיק SUMIT_WEBHOOK_SECRET לפונקציה אם עדיין אין (מודפס פעם אחת —
  * זה מה שמזינים בטריגר ב-SUMIT, בכותרת x-webhook-secret).
@@ -18,7 +19,7 @@ try {
   const [vault] = await ex.run(`select 1 as ok from vault.decrypted_secrets where name = 'teichtal_cron_secret'`);
   if (!vault) throw new Error('אין teichtal_cron_secret ב-Vault — להריץ קודם npm run backup:schedule');
   await ex.run(`
-    select cron.schedule('${JOB}', '17 * * * *', $$
+    select cron.schedule('${JOB}', '17 */3 * * *', $$
       select net.http_post(
         url := 'https://${ref}.supabase.co/functions/v1/cron-sumit-sync',
         headers := jsonb_build_object('Content-Type', 'application/json',

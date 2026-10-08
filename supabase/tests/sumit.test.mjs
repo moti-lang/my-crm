@@ -89,44 +89,24 @@ console.log('\nהסנכרון — רושם רק מה ש-SUMIT אישרה:');
   check('כפילות (המסד אומר duplicate) — מדווח, לא נכשל', o.result === 'recorded' && o.duplicate === true && calls.length === 1);
 }
 
-console.log('\nההתאמה (מה שאומת: SUMIT לא בהכרח שומרת את המזהה שלנו):');
-{
-  const link = { external_identifier: 'tl-x', amount: 210, created_at: '2026-10-05T10:00:00Z', customer_name: 'רבקה כהן' };
-  const P = (o) => ({ ID: 1, CustomerID: 9, Date: '2026-10-05T14:00:00+03:00', ValidPayment: true, Status: '000', Amount: 210, ExternalIdentifier: null, DocumentID: 5, CustomerName: 'רבקה כהן', ...o });
-  check('★ ExternalIdentifier תואם — מנצח, גם אם השם שונה', sumit.matchPayment(link, [P({ ExternalIdentifier: 'tl-x', CustomerName: 'אחר' })])?.match === 'external_identifier');
-  check('★ בלי מזהה: שם + סכום + אחרי יצירת הקישור — heuristic', sumit.matchPayment(link, [P({})])?.match === 'heuristic');
-  check('★ שני מועמדים זהים — לא מנחשים (null)', sumit.matchPayment(link, [P({ ID: 1 }), P({ ID: 2 })]) === null);
-  check('★ תשלום לפני יצירת הקישור — לא שלנו', sumit.matchPayment(link, [P({ Date: '2026-10-04T12:00:00+03:00' })]) === null);
-  check('★ סכום שונה — לא heuristic', sumit.matchPayment(link, [P({ Amount: 200 })]) === null);
-  check('★ תשלום שנדחה (ValidPayment=false) — לא נספר', sumit.matchPayment(link, [P({ ValidPayment: false })]) === null);
-  check('מזהה תשלום מה-IPN — payment_id', sumit.matchPayment({ ...link, payment_id: '7' }, [P({ ID: 7, CustomerName: 'אחר', Amount: 1 })])?.match === 'payment_id');
-  check('שם עם רווחים כפולים — מנורמל', sumit.matchPayment(link, [P({ CustomerName: ' רבקה  כהן ' })])?.match === 'heuristic');
-  const c = sumit.extractIpnCandidates('application/x-www-form-urlencoded', 'PaymentID=2411644555&redirectid=f40d0ec0-16eb-4b22-9b78-3aab9ab1ec50&RedirectURL=https%3A%2F%2Fx%2Fpay%2F' + 'a'.repeat(64));
-  check('★ מועמדים מה-IPN: PaymentID, redirectid, token', c.payment_id === '2411644555' && c.redirect_id === 'f40d0ec0-16eb-4b22-9b78-3aab9ab1ec50' && c.token === 'a'.repeat(64));
-}
-
-console.log('\nהעשרה מהקבלה (אומת: רק הקבלה נושאת את המזהה שלנו):');
-{
-  const link = { external_identifier: 'tl-x', amount: 10, created_at: '2026-10-05T10:00:00Z', customer_name: 'בדיקת סאמיט' };
-  const row = (o) => ({ ID: 1, CustomerID: 9, Date: '2026-10-05T16:26:17+03:00', ValidPayment: true, Status: '000', Amount: 10, ExternalIdentifier: null, DocumentID: 0, ...o });
-  const calls = [];
-  const fetchers = {
-    getPayment: async (id) => { calls.push(['get', id]); return row({ ID: id, DocumentID: 500 + id }); },
-    getDocument: async (id) => { calls.push(['doc', id]); return { Customer: { ID: 9, Name: 'בדיקת סאמיט', ExternalIdentifier: id === 501 ? 'tl-x' : 'tl-other' }, DocumentDownloadURL: `https://pay/${id}` }; },
-  };
-  const enriched = await sumit.enrichWithDocuments([row({ ID: 2 }), row({ ID: 1 })], link, fetchers);
-  const m = sumit.matchPayment(link, enriched);
-  check('★ DocumentID=0 ברשימה → get מרענן → הקבלה → המזהה שלנו → התאמה לפי external_identifier', m?.match === 'external_identifier' && m.payment.ID === 1 && m.payment.DocumentURL === 'https://pay/501', JSON.stringify(m));
-  check('עוצר אחרי שמצא (לא שולף קבלות של כולן)', calls.filter((c) => c[0] === 'doc').length === 2);
-  const none = await sumit.enrichWithDocuments([row({ ID: 3, ValidPayment: false })], link, fetchers);
-  check('תשלום שנדחה — לא נשלפת לו קבלה', none.length === 0);
-  const old = await sumit.enrichWithDocuments([row({ ID: 4, Date: '2026-10-04T10:00:00+03:00' })], link, fetchers);
-  check('תשלום מלפני הקישור — מחוץ למועמדים', old.length === 0);
-}
 
 {
   const src = codeOf('supabase/functions/_shared/sumit.ts');
-  check('★ קישור ההורדה של הקבלה נקרא מ-Data (לא מ-Data.Document) — כפי ש-SUMIT מחזירה', /DocumentDownloadURL: data\.DocumentDownloadURL/.test(src));
+  check('★ קישור ההורדה של הקבלה נקרא מ-Data (לא מ-Data.Document) — כפי ש-SUMIT מחזירה', /documentUrl: data\?\.DocumentDownloadURL/.test(src));
+}
+
+console.log('\nבעלות לפני קבלה (ownershipBeforeReceipt):');
+{
+  const link = { external_identifier: 'tl-x', amount: 300, created_at: '2026-10-08T07:00:00Z', payment_id: '7', customer_candidate: '77' };
+  const P = (o) => ({ ID: 7, CustomerID: 77, Date: '2026-10-08T10:00:00+03:00', ValidPayment: true, Status: '000', Amount: 300, DocumentID: 1, ...o });
+  check('התשלום שנמסר, הלקוחה שדווחה, אחרי הקישור, בסכום — עובר', sumit.ownershipBeforeReceipt(link, P({})).ok);
+  check('★ לקוחה אחרת מזו שדווחה — נדחה', !sumit.ownershipBeforeReceipt(link, P({ CustomerID: 78 })).ok);
+  check('★ לקוחה אחרת מהמאומתת — נדחה', !sumit.ownershipBeforeReceipt({ ...link, customer_candidate: null, known_customer_id: '77' }, P({ CustomerID: 78 })).ok);
+  check('★ לפני יצירת הקישור — נדחה', !sumit.ownershipBeforeReceipt(link, P({ Date: '2026-10-07T10:00:00+03:00' })).ok);
+  check('★ סכום אחר (לקוחה לא מאומתת) — נדחה', !sumit.ownershipBeforeReceipt(link, P({ Amount: 299 })).ok);
+  check('סכום אחר כשהלקוחה מאומתת — עובר (יירשם כאי-התאמה)', sumit.ownershipBeforeReceipt({ ...link, known_customer_id: '77' }, P({ Amount: 299 })).ok);
+  check('מזהה אחר מזה שביקשנו — נדחה', !sumit.ownershipBeforeReceipt(link, P({ ID: 8 })).ok);
+  check('לא נמצא — נדחה', !sumit.ownershipBeforeReceipt(link, null).ok);
 }
 
 console.log('\nה-webhook — רמז בלבד:');

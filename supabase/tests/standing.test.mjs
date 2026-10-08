@@ -30,23 +30,6 @@ console.log('\nהבקשה ל-SUMIT:');
   check('★ 9 חיובים חודשיים של 110 מהחודש הבא', b.Items[0].Recurrence === 9 && b.Items[0].Duration_Months === 1 && b.Items[0].UnitPrice === 110 && b.Items[0].Date_Start === '2026-11-05');
 }
 
-console.log('\nהתאמת חיובים להוראה:');
-{
-  const order = { customer_id: 777, amount: 110, date_start: '2026-11-05' };
-  const pays = [
-    { ID: 1, CustomerID: 777, Amount: 110, Date: '2026-11-05T09:00:00+02:00', ValidPayment: true },
-    { ID: 2, CustomerID: 777, Amount: 110, Date: '2026-12-05T09:00:00+02:00', ValidPayment: false },
-    { ID: 3, CustomerID: 888, Amount: 110, Date: '2026-11-05T09:00:00+02:00', ValidPayment: true },
-    { ID: 4, CustomerID: 777, Amount: 210, Date: '2026-10-05T09:00:00+02:00', ValidPayment: true },
-    { ID: 5, CustomerID: 777, Amount: 110, Date: '2026-09-01T09:00:00+02:00', ValidPayment: true },
-  ];
-  const ids = so.chargesForOrder(pays, order).map((p) => p.ID).sort();
-  check('★ רק של הלקוחה, בסכום, מתאריך ההתחלה — כולל שנדחו', JSON.stringify(ids) === '[1,2]', JSON.stringify(ids));
-  const w = so.paymentsWindow([{ date_start: '2026-11-05', last_checked_at: null }], new Date('2026-11-20T00:00:00Z'));
-  check('חלון החיפוש: מיומיים לפני ההתחלה ועד מחר', w.from === '2026-11-03' && w.to === '2026-11-21', JSON.stringify(w));
-  check('אין הוראות — אין קריאה', so.paymentsWindow([]) === null);
-}
-
 console.log('\nהסנכרון:');
 function fakeDb(setup, toCheck = []) {
   const calls = [], inserts = [];
@@ -57,6 +40,7 @@ function fakeDb(setup, toCheck = []) {
       if (fn === 'rpc_standing_orders_to_check') return { data: toCheck, error: null };
       if (fn === 'rpc_standing_order_created') return { data: 'order-1', error: null };
       if (fn === 'rpc_record_standing_charge') return { data: { ok: true, duplicate: false, valid: args.p_valid }, error: null };
+      if (fn === 'rpc_standing_billing_observed') return { data: { ok: true, charge: args.p_prev ? { ok: true, duplicate: false, valid: true } : null }, error: null };
       return { data: { ok: true }, error: null };
     },
     from: () => ({ insert: async (row) => { inserts.push(row); return { error: null }; } }),
@@ -79,23 +63,24 @@ const S = { link_id: 'L1', student_name: 'רות', branch: 'ביתר', customer_
   // ספק שמחייב מיד ביצירה: נרשם ומתריע, לא נבלע.
   const sumit = { ...so.standingProvider(),
     create: async () => ({ ok: true, recurringId: 42, immediatePayment: { ID: 99, Amount: 110, Date: '2026-10-05', ValidPayment: true }, dryRun: false }),
-    list: async () => [], payments: async () => [], cancel: async () => ({ ok: true }) };
+    list: async () => [], cancel: async () => ({ ok: true }) };
   const f = fakeDb([S]);
   await syncStandingOrders(f.db, sumit);
   check('★ SUMIT חייבה מיד — החיוב נרשם', f.calls.some((c) => c.fn === 'rpc_record_standing_charge' && c.args.p_sumit_payment_id === 99));
   check('★ ...והבעלים מקבלת התראה', f.inserts.some((i) => i.kind === 'standing_order_immediate_charge'));
 }
 {
+  // ★ הלקוחה שלנו בלבד (listforcustomer). חיוב חדש = Date_PreviousBilling; כישלון = הסטטוס (rpc_standing_order_status בתוך observed).
+  const listed = [];
   const sumit = { create: async () => ({ ok: false, error: 'x', dryRun: false }),
-    list: async () => [{ ID: 42, Status: 14, Date_NextBilling: '2026-12-08T00:00:00', Date_PreviousBilling: '2026-12-05T00:00:00' }],
-    payments: async () => [{ ID: 7, CustomerID: 777, Amount: 110, Date: '2026-12-05T09:00:00', ValidPayment: false },
-                           { ID: 8, CustomerID: 777, Amount: 110, Date: '2026-11-05T09:00:00', ValidPayment: true }],
+    list: async (cid) => { listed.push(cid); return [{ ID: 42, Status: 0, Date_NextBilling: '2027-01-05T00:00:00', Date_PreviousBilling: '2026-12-05T00:00:00' }]; },
     cancel: async () => ({ ok: true }) };
   const f = fakeDb([], [{ id: 'O1', customer_id: 777, recurring_id: 42, amount: 110, date_start: '2026-11-05', last_checked_at: null, status: 'active' }]);
   const r = await syncStandingOrders(f.db, sumit);
-  const st = f.calls.find((c) => c.fn === 'rpc_standing_order_status');
-  check('★ המצב מ-SUMIT מועבר למסד (קוד, החיוב הבא)', st?.args.p_sumit_status === 14 && st.args.p_next === '2026-12-08');
-  check('★ חיוב תקין וחיוב שנדחה — שניהם נרשמים', r.charges === 1 && r.declined === 1, JSON.stringify(r));
+  const ob = f.calls.find((c) => c.fn === 'rpc_standing_billing_observed');
+  check('★ המצב מ-SUMIT מועבר למסד (קוד, החיוב הבא, החיוב הקודם)', ob?.args.p_sumit_status === 0 && ob.args.p_next === '2027-01-05' && ob.args.p_prev === '2026-12-05');
+  check('★ רק הלקוחה של ההוראה נשאלת', JSON.stringify(listed) === '[777]');
+  check('חיוב שזוהה נספר', r.charges === 1, JSON.stringify(r));
 }
 
 console.log('\nהקוד סביב:');

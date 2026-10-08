@@ -37,6 +37,17 @@ export function Pay() {
   useEffect(() => { void load(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
   // שם החוג של הסניף. ריק — לא מוצג שם.
   useEffect(() => { void supabase.rpc('rpc_payment_link_program', { p_token: token }).then(({ data }) => setProgram((data as string | null) ?? null)); }, [token]);
+  // ★ אחרי חזרה מ-SUMIT: SUMIT מוסיפה לכתובת את מזהי התשלום. מעבירים אותם לשרת פעם אחת —
+  //   השרת מאמת מול SUMIT את התשלום הזה בלבד. "שולם" לא נקבע כאן, רק בשרת.
+  const pid = params.get('OG-PaymentID'), cid = params.get('OG-CustomerID'), ext = params.get('OG-ExternalIdentifier');
+  const [confirmSent, setConfirmSent] = useState(false);
+  useEffect(() => {
+    if (!returned || !pid || confirmSent) return;
+    setConfirmSent(true);
+    const q = new URLSearchParams({ token, confirm: '1', pid, ext: ext ?? '' });
+    if (cid) q.set('cid', cid);
+    void supabase.functions.invoke(`sumit-checkout?${q.toString()}`, { method: 'POST' }).then(() => load());
+  }, [returned, pid, cid, ext, confirmSent]); // eslint-disable-line react-hooks/exhaustive-deps
   // אחרי חזרה מ-SUMIT: בודקים כל 5 שניות במשך 3 דקות אם השרת כבר רשם.
   useEffect(() => {
     if (!returned || (info?.ok && info.state === 'paid')) return;

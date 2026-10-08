@@ -6,7 +6,8 @@
 import { adminClient } from '../_shared/supabase.ts';
 import { preflight, withCors } from '../_shared/cors.ts';
 import { requirePayToken } from '../_shared/guard.ts';
-import { sumitProvider, checkoutOpenFor, CHECKOUT_CLOSED_MESSAGE } from '../_shared/sumit.ts';
+import { sumitProvider, checkoutOpenFor, CHECKOUT_CLOSED_MESSAGE, type LinkRef } from '../_shared/sumit.ts';
+import { syncPaymentLink, type Db } from '../_shared/sumit-sync.ts';
 import { env } from '../_shared/env.ts';
 
 const json = (payload: unknown, status = 200) =>
@@ -24,6 +25,9 @@ async function handle(req: Request): Promise<Response> {
 
   const token = new URL(req.url).searchParams.get('token') as string;
   const db = adminClient();
+  // ★ החזרה מ-SUMIT אחרי תשלום: OG-PaymentID / OG-CustomerID / OG-ExternalIdentifier.
+  //   מאמתים את התשלום הזה בלבד (ראה getPaymentStatus) — לא "שולם" מהדפדפן.
+  if (new URL(req.url).searchParams.get('confirm') === '1') return await confirm(db as unknown as Db, token, new URL(req.url).searchParams);
   try {
     // קודם מה שיש: אם כבר נוצר דף — מחזירים אותו.
     const { data: link, error } = await db.rpc('rpc_payment_link_set_page', { p_token: token, p_url: null });
@@ -70,4 +74,24 @@ async function handle(req: Request): Promise<Response> {
     console.error('[sumit-checkout]', e);
     return json({ ok: false, error: 'משהו השתבש. נסי שוב.' }, 500);
   }
+}
+
+/**
+ * אישור תשלום מהחזרה של SUMIT. המזהים מגיעים מהדפדפן, ולכן: רק עם ה-ExternalIdentifier
+ * של הקישור, עד 3 מזהים שונים לקישור (rpc_payment_link_candidate), ואימות מלא מול SUMIT
+ * של התשלום הזה בלבד. הקבלה נוצרת שניות אחרי התשלום — עד 3 בדיקות, 4 שניות ביניהן.
+ */
+async function confirm(db: Db, token: string, q: URLSearchParams): Promise<Response> {
+  const pid = q.get('pid'), cid = q.get('cid') || null, ext = q.get('ext');
+  const { data, error } = await db.rpc('rpc_payment_link_candidate', { p_token: token, p_external_identifier: ext, p_payment_id: pid, p_customer_id: cid, p_source: 'redirect' });
+  if (error) return json({ ok: false, error: 'שגיאה בשמירת האישור' }, 500);
+  const r = data as { ok: boolean; error?: string; already_paid?: boolean; link?: LinkRef };
+  if (!r.ok) return json({ ok: false, error: r.error }, 400);
+  if (r.already_paid || !r.link) return json({ ok: true, result: 'paid' });
+  let outcome = await syncPaymentLink(db, sumitProvider(), r.link);
+  for (let i = 0; i < 2 && outcome.result === 'pending'; i++) {
+    await new Promise((res) => setTimeout(res, 4000));
+    outcome = await syncPaymentLink(db, sumitProvider(), r.link);
+  }
+  return json({ ok: true, result: outcome.result });
 }

@@ -22,8 +22,17 @@ Deno.serve(async (req) => {
   // ★ כל IPN נרשם גולמי (sumit_ipn_log): הפורמט של SUMIT נלמד מהשטח, לא מניחים.
   const { data: found, error } = await db.rpc('rpc_sumit_ipn_received', { p_content_type: req.headers.get('content-type') ?? '', p_body: raw, p_candidates: candidates });
   if (error) return json({ ok: false, error: 'DB' }, 500);
-  if (!found?.link) return json({ ok: true, ignored: 'לא זוהה קישור שלנו בגוף', candidates });
-  const link = { ...found.link, payment_id: candidates.payment_id };
+  // ★ לא שלנו — לא נשמר (רק נספר), ואין שום פנייה ל-SUMIT.
+  if (!found?.link) return json({ ok: true, ignored: 'not_ours' });
+  let link = found.link;
+  // מזהה תשלום מה-IPN נשמר על הקישור, ומאומת כמו מזהה מהחזרה מהדף.
+  if (candidates.payment_id) {
+    const { data: c } = await db.rpc('rpc_payment_link_candidate', { p_token: link.token, p_external_identifier: link.external_identifier,
+      p_payment_id: candidates.payment_id, p_customer_id: null, p_source: 'ipn' });
+    if (c?.already_paid) return json({ ok: true, result: 'paid' });
+    if (c?.ok && c.link) link = c.link;
+  }
+  if (!link.payment_id) return json({ ok: true, result: 'no_payment_id' });
   const outcome = await syncPaymentLink(db, sumitProvider(), link);
   console.log(`[sumit-webhook] ${link.external_identifier}: ${outcome.result}`);
   // 200 תמיד כשעובד — כדי ש-SUMIT לא תשלח שוב ושוב; המצב האמיתי נבדק גם ב-cron.
