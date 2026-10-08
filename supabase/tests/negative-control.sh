@@ -940,7 +940,7 @@ expect_fail_code "★ פרטיות: מזהה מהדפדפן בלי מספר לק
   "node supabase/tests/sumit-privacy.test.mjs"
 
 expect_fail_code "★ מכסה: הסנכרון בודק כל קישור פתוח (גם בלי מזהה מ-SUMIT)" \
-  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
+  "$DIR/../migrations/0037_sumit_call_caps.sql" \
   'sed -i "s/  where l.status in (.pending., .opened.) and l.sumit_pid_candidate is not null and/  where l.status in (\x27pending\x27, \x27opened\x27) and/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
 
@@ -950,19 +950,44 @@ expect_fail_code "★ פרטיות: IPN של לקוח אחר נשמר עם הג�
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
 
 expect_fail_code "מזהים מהדפדפן בלי מגבלת ניסיונות (ניחוש מזהים של אחרים)" \
-  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
-  'sed -i "s/  if p_source = .redirect. and l.confirm_attempts >= 3 and/  if false and/" "$F"' \
+  "$DIR/../migrations/0037_sumit_call_caps.sql" \
+  'sed -i "s/  if p_source = .redirect. and l.confirm_attempts >= 3 then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
 
 expect_fail_code "★ מכסה: הוראות קבע נבדקות בכל ריצה (לא פעם ביום)" \
-  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
+  "$DIR/../migrations/0037_sumit_call_caps.sql" \
   'sed -i "/    and (o.last_checked_at is null or o.last_checked_at < now() - interval .20 hours.)/d" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
 
 expect_fail_code "הוראת קבע: אותו חיוב נרשם פעמיים" \
-  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
+  "$DIR/../migrations/0037_sumit_call_caps.sql" \
   'sed -i "/     and not exists (select 1 from standing_order_charges c where c.standing_order_id = o.id and c.charged_at::date = p_prev) then/s/     and not exists.*then/     then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
+expect_fail_code "★ מכסה: קישור תקוע נבדק בכל ריצה (בלי תקרת 3 בדיקות)" \
+  "$DIR/../migrations/0037_sumit_call_caps.sql" \
+  'sed -i "/    and l.sync_checks < 3/d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
+expect_fail_code "★ מכסה: בדיקות הסנכרון לא נספרות" \
+  "$DIR/../migrations/0037_sumit_call_caps.sql" \
+  'sed -i "s/         sync_checks = sync_checks + case when status in (.pending., .opened.) then 1 else 0 end/         sync_checks = sync_checks/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
+expect_fail_code "★ מכסה: ריענון דף החזרה לא נספר (בדיקה מול SUMIT בכל ריענון)" \
+  "$DIR/../migrations/0037_sumit_call_caps.sql" \
+  'sed -i "s/         confirm_attempts = confirm_attempts + case when p_source = .redirect. then 1 else 0 end/         confirm_attempts = confirm_attempts + case when p_source = \x27redirect\x27 and sumit_pid_candidate is distinct from p_payment_id then 1 else 0 end/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
+expect_fail_code "★ מכסה: הוראה שהבדיקה שלה נכשלת נבדקת לתמיד" \
+  "$DIR/../migrations/0037_sumit_call_caps.sql" \
+  'sed -i "/    and o.check_failures < 3/d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
+
+expect_fail_code "★ מכסה: הוראה שלא הוחזרה מ-SUMIT לא נספרת (נבדקת בכל ריצה)" \
+  "$DIR/../../supabase/functions/_shared/standing-sync.ts" \
+  'sed -i "s/        await db.rpc(.rpc_standing_order_check_failed., { p_id: o.id, p_error: .ההוראה לא הוחזרה/        void ({ p_id: o.id, p_error: \x27ההוראה לא הוחזרה/" "$F"' \
+  "node supabase/tests/sumit-privacy.test.mjs"
 
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
@@ -1005,7 +1030,7 @@ expect_fail_code "הוראת קבע: מנהלת סניף יכולה לעצור" 
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
 expect_fail_code "הוראת קבע: לא מוודאים מול SUMIT שהעצירה תפסה" \
-  "$DIR/../migrations/0036_sumit_own_payments_only.sql" \
+  "$DIR/../migrations/0037_sumit_call_caps.sql" \
   'sed -i "s/         or (o.status = .cancelled. and o.cancelled_at > now() - interval .14 days.))/         or false)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 

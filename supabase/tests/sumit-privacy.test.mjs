@@ -127,6 +127,20 @@ console.log('\nהוראות קבע:');
   check('★ רק listforcustomer של הלקוחה שלנו — בלי רשימת התשלומים של החשבון', lists().length === 0 && log.every((c) => c.path === '/billing/recurring/listforcustomer/' && c.body.Customer?.ID === 77), JSON.stringify(log.map((c) => c.path)));
   check('חיוב מזוהה דרך rpc_standing_billing_observed (Date_PreviousBilling)', out.charges === 1 && rpcs.some((c) => c.fn === 'rpc_standing_billing_observed' && c.args.p_prev === '2026-10-07'));
 }
+// ★ מכסה: בדיקה שנכשלה נספרת — אחרת ההוראה חוזרת בכל ריצה, וכל ריצה עולה קריאה.
+for (const [label, recurringId, broken] of [['ההוראה לא הוחזרה מ-SUMIT', 2, false], ['SUMIT החזירה שגיאה', 1, true]]) {
+  log = [];
+  const rpcs = [];
+  const db = { rpc: async (fn, args) => { rpcs.push({ fn, args });
+      if (fn === 'rpc_standing_orders_to_setup') return { data: [], error: null };
+      if (fn === 'rpc_standing_orders_to_check') return { data: [{ id: 'o2', customer_id: 77, recurring_id: recurringId, amount: 300, date_start: '2026-10-07', last_checked_at: null, status: 'active' }], error: null };
+      return { data: {}, error: null }; },
+    from: () => ({ insert: async () => ({ error: null }) }) };
+  const realFetch = globalThis.fetch;
+  if (broken) globalThis.fetch = async () => new Response(JSON.stringify({ Data: null, Status: 1, UserErrorMessage: 'שגיאה', TechnicalErrorDetails: null }), { status: 200 });
+  try { await syncStandingOrders(db, standing.standingProvider()); } finally { globalThis.fetch = realFetch; }
+  check(`★ ${label} — הבדיקה נספרת (rpc_standing_order_check_failed), לא חוזרת בכל ריצה`, rpcs.some((c) => c.fn === 'rpc_standing_order_check_failed' && c.args.p_id === 'o2'));
+}
 
 console.log('\nבקוד:');
 {

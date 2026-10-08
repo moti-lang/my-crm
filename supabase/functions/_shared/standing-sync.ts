@@ -4,6 +4,7 @@
  *  2. הוראות שיש סיבה לבדוק (מועד חיוב / שבוע / ביטול — rpc_standing_orders_to_check, פעם ביום לכל היותר):
  *     המצב ב-SUMIT של הלקוחה שלנו בלבד (listforcustomer). חיוב חדש = Date_PreviousBilling שהתקדם
  *     (rpc_standing_billing_observed); חיוב שנכשל = הסטטוס. ★ בלי רשימת התשלומים של החשבון.
+ *     בדיקה שנכשלה נספרת (rpc_standing_order_check_failed): פעם ביום לכל היותר, ואחרי 3 ברצף — עוצרים.
  * כל הכתיבה דרך RPC במסד (service_role). כאן רק השיחה עם SUMIT.
  */
 import type { Db } from './sumit-sync.ts';
@@ -57,11 +58,16 @@ export async function syncStandingOrders(db: Db, sumit: StandingProvider) {
           p_next: item.Date_NextBilling?.slice(0, 10) ?? null, p_prev: item.Date_PreviousBilling?.slice(0, 10) ?? null });
         const c = (data as { charge?: { duplicate?: boolean; valid?: boolean } | null } | null)?.charge;
         if (c && !c.duplicate) { if (c.valid) out.charges++; else out.declined++; }
+      } else {
+        // ★ גם בדיקה שלא מצאה את ההוראה נספרת — אחרת היא חוזרת בכל ריצה (קריאה בכל פעם).
+        await db.rpc('rpc_standing_order_check_failed', { p_id: o.id, p_error: 'ההוראה לא הוחזרה מ-SUMIT ללקוחה הזו' });
+        out.errors++;
       }
       out.checked++;
     } catch (e) {
       out.errors++;
       console.error('[standing-sync]', o.id, e);
+      await db.rpc('rpc_standing_order_check_failed', { p_id: o.id, p_error: e instanceof Error ? e.message : 'שגיאה לא ידועה' });
     }
   }
   return out;

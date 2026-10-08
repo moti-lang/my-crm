@@ -15,9 +15,9 @@ select assert_true(not (rpc_payment_link_candidate(repeat('a', 64), 'tl-other', 
 select assert_true(not (rpc_payment_link_candidate(repeat('a', 64), 'tl-11111111-1111-1111-1111-111111111111', '50x1', '77', 'redirect') ->> 'ok')::boolean, 'מזהה לא מספרי — נדחה');
 select assert_true((rpc_payment_link_candidate(repeat('a', 64), 'tl-11111111-1111-1111-1111-111111111111', '5001', '77', 'redirect') -> 'link' ->> 'payment_id') = '5001', 'מזהה תקין — נשמר על הקישור');
 select assert_true((select jsonb_array_length(rpc_payment_links_to_sync())) = 1, 'ורק הוא בסנכרון');
-select assert_true((rpc_payment_link_candidate(repeat('a', 64), 'tl-11111111-1111-1111-1111-111111111111', '5001', '77', 'redirect') ->> 'ok')::boolean, 'אותו מזהה שוב — לא נספר כניסיון חדש');
+select assert_true((rpc_payment_link_candidate(repeat('a', 64), 'tl-11111111-1111-1111-1111-111111111111', '5001', '77', 'redirect') ->> 'ok')::boolean, 'אותו מזהה שוב (ריענון) — מתקבל');
 select rpc_payment_link_candidate(repeat('a', 64), 'tl-11111111-1111-1111-1111-111111111111', '5002', '77', 'redirect');
-select rpc_payment_link_candidate(repeat('a', 64), 'tl-11111111-1111-1111-1111-111111111111', '5003', '77', 'redirect');
+select assert_true(not (rpc_payment_link_candidate(repeat('a', 64), 'tl-11111111-1111-1111-1111-111111111111', '5001', '77', 'redirect') ->> 'ok')::boolean, '★ מכסה: אישור רביעי מהדפדפן נחסם — גם ריענון עם אותו מזהה (כל אישור = בדיקה מול SUMIT)');
 select assert_true(not (rpc_payment_link_candidate(repeat('a', 64), 'tl-11111111-1111-1111-1111-111111111111', '5004', '77', 'redirect') ->> 'ok')::boolean, '★ מזהה רביעי שונה מהדפדפן — נחסם (אין "ניחוש")');
 select assert_true((rpc_payment_link_candidate(repeat('a', 64), 'tl-11111111-1111-1111-1111-111111111111', '5004', null, 'ipn') ->> 'ok')::boolean, 'מה-IPN (שרת SUMIT) — בלי מגבלת ניסיונות');
 select rpc_payment_link_candidate_rejected(repeat('a', 64), 'בדיקה');
@@ -70,5 +70,52 @@ values ('eeeeeeee-0000-0000-0000-0000000000b2', :SHIRA, :BEITAR, 'eeeeeeee-0000-
 select rpc_record_standing_charge('eeeeeeee-0000-0000-0000-0000000000b2', 2411999999, 100, (current_date - 1)::timestamptz, true, null);
 select rpc_standing_billing_observed('eeeeeeee-0000-0000-0000-0000000000b2', 0, current_date + 29, current_date - 1);
 select assert_eq((select count(*) from standing_order_charges where standing_order_id = 'eeeeeeee-0000-0000-0000-0000000000b2'), 1, '★ חיוב שנרשם קודם במזהה אמיתי — לא נרשם שוב (אין חיוב כפול בכרטיס)');
+rollback;
+\echo '★ מכסה: סנכרון כל 3 שעות במשך שבוע (56 ריצות):'
+begin;
+insert into payment_links (token, external_identifier, student_id, branch_id, amount, status)
+values (repeat('e', 64), 'tl-33333333-3333-3333-3333-333333333333', :SHIRA, :BEITAR, 300, 'opened'),
+       (repeat('f', 64), 'tl-44444444-4444-4444-4444-444444444444', :SHIRA, :BEITAR, 300, 'opened');
+-- קישור שהמזהה שלו לא נסגר (חיוב שנדחה / קבלה שלא נוצרה) — כל ריצה שמחזירה אותו = קריאה ל-SUMIT.
+select rpc_payment_link_candidate(repeat('e', 64), 'tl-33333333-3333-3333-3333-333333333333', '6001', '77', 'redirect');
+create temp table sim (what text, calls int) on commit drop;
+do $$
+declare i int; c int := 0; t text[];
+begin
+  for i in 1..56 loop
+    select array_agg(x ->> 'token') into t from jsonb_array_elements(rpc_payment_links_to_sync()) x;
+    if t is not null then c := c + coalesce(array_length(t, 1), 0); perform rpc_payment_links_mark_checked(t); end if;
+  end loop;
+  insert into sim values ('link', c);
+end $$;
+select assert_eq((select calls from sim where what = 'link'), 3, '★ קישור תקוע נבדק 3 פעמים בשבוע — לא 56');
+select assert_eq((select count(*) from system_alerts where kind = 'sumit_sync_gave_up' and meta ->> 'token' = repeat('e', 64)), 1, '...ואז התראה אחת לבדיקה ידנית (לא בכל ריצה)');
+select assert_true((select sync_checks = 0 from payment_links where token = repeat('f', 64)), 'קישור בלי מזהה — לא נבדק ולא נספר');
+-- קישור ששולם באותה ריצה — לא נספר.
+update payment_links set status = 'paid', paid_at = now() where token = repeat('f', 64);
+select rpc_payment_links_mark_checked(array[repeat('f', 64)]);
+select assert_true((select sync_checks = 0 from payment_links where token = repeat('f', 64)), 'קישור ששולם — לא נספר');
+
+-- הוראת קבע ש-SUMIT לא מחזירה (או שגיאה) — הבדיקה נספרת. סימולציה: כל ריצה מזיזה את הזמן 3 שעות אחורה.
+insert into payment_links (id, token, external_identifier, student_id, branch_id, amount, status) values ('eeeeeeee-0000-0000-0000-0000000000a3', repeat('g', 64), 'x-so3', :SHIRA, :BEITAR, 100, 'paid');
+insert into standing_orders (id, student_id, branch_id, payment_link_id, sumit_customer_id, sumit_recurring_id, amount, installments, installments_total, date_start, consent_text, consented_at, status, next_billing)
+values ('eeeeeeee-0000-0000-0000-0000000000b3', :SHIRA, :BEITAR, 'eeeeeeee-0000-0000-0000-0000000000a3', 77, 4444, 100, 3, 4, current_date, 'אישור', now(), 'active', current_date);
+do $$
+declare i int; c int := 0;
+begin
+  for i in 1..56 loop
+    if jsonb_array_length(rpc_standing_orders_to_check()) > 0 then
+      c := c + 1; perform rpc_standing_order_check_failed('eeeeeeee-0000-0000-0000-0000000000b3', 'בדיקה');
+    end if;
+    update standing_orders set last_checked_at = last_checked_at - interval '3 hours' where id = 'eeeeeeee-0000-0000-0000-0000000000b3';
+  end loop;
+  insert into sim values ('standing', c);
+end $$;
+select assert_eq((select calls from sim where what = 'standing'), 3, '★ הוראה שהבדיקה שלה נכשלת — 3 קריאות בשבוע, ואז עוצרים (לא 56, לא 8)');
+select assert_eq((select count(*) from system_alerts where kind = 'standing_order_check_gave_up'), 1, '...והבעלים מקבלת התראה אחת');
+select rpc_standing_billing_observed('eeeeeeee-0000-0000-0000-0000000000b3', 0, current_date + 30, null);
+select assert_true((select check_failures = 0 from standing_orders where id = 'eeeeeeee-0000-0000-0000-0000000000b3'), 'בדיקה שהצליחה — מונה הכישלונות מתאפס');
+select assert_no_execute('anon', 'rpc_standing_order_check_failed(uuid, text)');
+select assert_no_execute('authenticated', 'rpc_standing_order_check_failed(uuid, text)');
 rollback;
 \echo '  כל בדיקות הפרטיות מול SUMIT עברו'

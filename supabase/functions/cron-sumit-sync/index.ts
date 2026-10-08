@@ -1,7 +1,8 @@
-// cron-sumit-sync — בדיקה יזומה מול SUMIT, כל שעה, על כל הקישורים הפתוחים.
+// cron-sumit-sync — בדיקה יזומה מול SUMIT (כל 3 שעות).
 //
-// זה מה שמכסה הורה שסגרה את הדף באמצע, רשת שנפלה, או טריגר שלא הוגדר:
-// התשלום נקלט גם בלי webhook. קישורים שפגו מסומנים expired.
+// ★ רק מה שיש סיבה לבדוק: קישור עם מזהה תשלום ש-SUMIT מסרה ועוד לא אומת (עד 3 בדיקות),
+//   והוראות קבע סביב מועד החיוב (פעם ביום לכל היותר). ריצה בלי כאלה — אפס קריאות ל-SUMIT.
+// קישורים שפגו מסומנים expired.
 import { adminClient } from '../_shared/supabase.ts';
 import { requireCronSecret } from '../_shared/guard.ts';
 import { sumitProvider } from '../_shared/sumit.ts';
