@@ -66,7 +66,9 @@ rollback;
 \echo 'מה שהקישור מחזיר:'
 begin;
 select t_setup_link();
-select assert_true((rpc_attendance_sheet(t_tok()))::text !~ '(972|parent_phone|balance|tuition|address|email)',
+-- טלפון = ערך "972XXXXXXXX" שלם. לא "972" בכל מקום: מזהה אקראי של תלמידה (uuid) מכיל
+-- לפעמים את הרצף 972 (…5972e20b…), והבדיקה נפלה סתם, לפי מזל, אחרי חלק מהאיפוסים.
+select assert_true((rpc_attendance_sheet(t_tok()))::text !~ '("972[0-9]{8,9}"|"0[0-9]{8,9}"|parent_phone|balance|tuition|address|email)',
                    '★ הגיליון אינו מכיל טלפון, כתובת, אימייל או סכום');
 select assert_eq((select count(*) from jsonb_object_keys(rpc_attendance_sheet(t_tok()) -> 'students' -> 0)), 3,
                  'לכל תלמידה בדיוק שלושה שדות: מזהה, שם, סימון');
