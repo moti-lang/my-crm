@@ -62,6 +62,7 @@ const TRIGGER_FUNCTIONS = {
   f_no_link_for_external: /קישור תשלום ידני לתלמידה בתשלום חיצוני — נדחה/,
   f_no_debt_reminder_external: /תזכורת חוב לתשלום חיצוני — לא יוצאת/,
   f_no_link_for_deleted: /קישור תשלום חדש לתלמידה מחוקה/,
+  f_authorized_number_normalize: /הטלפון נשמר כמו שה-webhook מזהה את השולחת/,
 };
 
 let fails = 0;

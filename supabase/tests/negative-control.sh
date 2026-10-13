@@ -989,6 +989,46 @@ expect_fail_code "★ מכסה: הוראה שלא הוחזרה מ-SUMIT לא נ�
   'sed -i "s/        await db.rpc(.rpc_standing_order_check_failed., { p_id: o.id, p_error: .ההוראה לא הוחזרה/        void ({ p_id: o.id, p_error: \x27ההוראה לא הוחזרה/" "$F"' \
   "node supabase/tests/sumit-privacy.test.mjs"
 
+expect_fail_code "★ פקודות: מנהלת סניף יכולה לבטל פעולה מהמסך" \
+  "$DIR/../migrations/0038_commands_screen.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/23_commands_screen.sql"
+
+expect_fail_code "★ פקודות: מספר מורשה נשמר כמו שהוקלד (050…) — הבוט לא יזהה אותו" \
+  "$DIR/../migrations/0038_commands_screen.sql" \
+  'sed -i "/  new.phone := f_normalize_phone(new.phone);/d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/23_commands_screen.sql"
+
+expect_fail_code "פקודות: לבעלים אין הרשאה לנרמול — הוספה מהמסך נכשלת" \
+  "$DIR/../migrations/0038_commands_screen.sql" \
+  'sed -i "/^grant execute on function f_normalize_phone(text) to authenticated, service_role;/d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/23_commands_screen.sql"
+
+expect_fail_code "★ פקודות: ניסיון שנדחה בהרשאות לא נרשם ביומן" \
+  "$DIR/../../supabase/functions/_shared/router.ts" \
+  'sed -i "/ניסיון שנדחה נרשם ביומן/,/^    });/d" "$F"' \
+  "node supabase/tests/command-router.test.mjs"
+
+expect_fail_code "★ פקודות: ביצוע שנכשל מדווח \"כבר בוצעה\"" \
+  "$DIR/../../supabase/functions/_shared/router.ts" \
+  'sed -i "s/      if (execError) {/      if (false) {/" "$F"' \
+  "node supabase/tests/command-router.test.mjs"
+
+expect_fail_code "★ פקודות: צ'אט הבדיקה פתוח לכל משתמשת מחוברת" \
+  "$DIR/../../supabase/functions/wa-command-test/index.ts" \
+  'sed -i "s/  if (role !== .owner.) return json(/  if (false) return json(/" "$F"' \
+  "node supabase/tests/commands-ui.test.mjs"
+
+expect_fail_code "פקודות: ניסיון שנדחה לא מסומן באדום ביומן" \
+  "$DIR/../../src/pages/Commands.tsx" \
+  'sed -i "s/ .border-bad\/50 bg-bad\/5. : ../ \x27\x27 : \x27\x27/" "$F"' \
+  "node supabase/tests/commands-ui.test.mjs"
+
+expect_fail_code "פקודות: כפתור ביטול גם לפעולה מלפני יותר מ-24 שעות" \
+  "$DIR/../../src/pages/Commands.tsx" \
+  'sed -i "s/ \&\& now - new Date(c.created_at).getTime() < DAY;/;/" "$F"' \
+  "node supabase/tests/commands-ui.test.mjs"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \

@@ -19,6 +19,7 @@ export type RouteDecision =
   | { route: 'command_parse_failed'; caller: AuthorizedNumber; parse: ParseOutcome }
   | { route: 'command_timeout'; caller: AuthorizedNumber; parse: ParseOutcome; reply: string }
   | { route: 'confirmed'; caller: AuthorizedNumber; result: Record<string, unknown>; reply: string }
+  | { route: 'execute_failed'; caller: AuthorizedNumber; error: string; reply: string }
   | { route: 'declined'; caller: AuthorizedNumber; reply: string }
   | { route: 'undo'; caller: AuthorizedNumber; result: Record<string, unknown>; reply: string }
   | { route: 'customer'; phone: string; rejectedAttempt: boolean };
@@ -54,6 +55,12 @@ export type RouterDeps = {
   alert: (a: { kind: string; severity: 'info' | 'warning' | 'critical'; title: string; body?: string; meta?: unknown }) => Promise<void>;
 };
 
+/** שגיאת ביצוע מהמסד בשפה של השולחת. הודעות שכתבנו (בעברית) עוברות כמות שהן; השאר — כללי. */
+export function humanExecError(message: string): string {
+  const m = (message ?? '').trim();
+  return /[א-ת]/.test(m) ? m.slice(0, 200) : 'הנתונים בפקודה לא תקינים';
+}
+
 /** ההקשר שנשלח למודל: שמות בלבד. */
 async function loadContext(db: Db, text: string): Promise<CommandContext> {
   const [branches, students, categories] = await Promise.all([
@@ -78,8 +85,10 @@ async function loadContext(db: Db, text: string): Promise<CommandContext> {
 export async function routeIncoming(
   db: Db,
   deps: RouterDeps,
-  message: { phone: string; body: string },
+  // channel: 'test' מצ'אט הבדיקה במסך (נרשם ביומן ככזה). מוואטסאפ — לא מועבר.
+  message: { phone: string; body: string; channel?: 'test' },
 ): Promise<RouteDecision> {
+  const tag = message.channel ? { channel: message.channel } : {};
   const { data: caller } = await db
     .from('authorized_numbers')
     .select('phone, label, scope, branch_id, can_delete, is_active, branches(name)')
@@ -137,7 +146,14 @@ export async function routeIncoming(
   if (pending) {
     if (YES.has(text.toLowerCase())) {
       // ★ הביצוע אטומי במסד. שתי "כן" בו זמנית → כתיבה אחת בלבד.
-      const { data: result } = await db.rpc('rpc_execute_command', { p_command_id: pending.id });
+      const { data: result, error: execError } = await db.rpc('rpc_execute_command', { p_command_id: pending.id });
+      if (execError) {
+        // ★ הביצוע נכשל (למשל תלמידה שלא נמצאה): הטרנזקציה בוטלה כולה ולא נרשם כלום.
+        //   עד עכשיו התשובה כאן הייתה "הפעולה כבר בוצעה" — השולחת חשבה שנרשם.
+        const why = humanExecError(execError.message);
+        await db.from('commands').update({ status: 'failed', error: why }).eq('id', pending.id).eq('status', 'pending_confirm');
+        return { route: 'execute_failed', caller: authorizedNumber, error: why, reply: `❌ לא בוצע: ${why}. לא נשמר כלום.` };
+      }
       const r = (result ?? {}) as Record<string, unknown>;
       return {
         route: 'confirmed', caller: authorizedNumber, result: r,
@@ -189,6 +205,11 @@ export async function routeIncoming(
   const verdict = authorizeCommand(authorizedNumber, parse.command);
 
   if (!verdict.allowed) {
+    // ניסיון שנדחה נרשם ביומן (כמו ניסיון ממספר לא מורשה). לא נוצרת פקודה ממתינה ולא מבוצע דבר.
+    await db.from('commands').insert({
+      phone: message.phone, raw_text: text, parsed: parse.command, intent: parse.command.intent,
+      status: 'rejected', error: verdict.message, ...tag,
+    });
     return {
       route: 'command', caller: authorizedNumber, parse,
       authorized: { allowed: false, reason: verdict.reason, message: verdict.message },
@@ -221,6 +242,7 @@ export async function routeIncoming(
     p_parsed: parse.command,
     p_intent: parse.command.intent,
   });
+  if (message.channel && commandId) await db.from('commands').update(tag).eq('id', commandId);
 
   return {
     route: 'command', caller: authorizedNumber, parse,

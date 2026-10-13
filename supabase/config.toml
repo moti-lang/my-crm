@@ -93,3 +93,6 @@ verify_jwt = false          # שרת הוואטסאפ החדש, בלי JWT. טו
 
 [functions.wa-admin]
 verify_jwt = true           # מסך ההגדרות; בעלים בלבד (auth_role במסד)
+
+[functions.wa-command-test]
+verify_jwt = true           # צ'אט הבדיקה במסך הפקודות; בעלים בלבד (auth_role במסד)

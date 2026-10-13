@@ -60,7 +60,8 @@ function makeDb(rows) {
       rpc: async (name, args) => {
         rpcCalls.push({ name, args });
         writes.push({ table: `rpc:${name}`, op: 'rpc', payload: args });
-        return { data: rows.__rpc?.[name] ?? null, error: null };
+        const err = rows.__rpcError?.[name];
+        return err ? { data: null, error: { message: err } } : { data: rows.__rpc?.[name] ?? null, error: null };
       },
     },
     writes, reads, rpcCalls,
@@ -355,6 +356,43 @@ console.log('\nזרימת האישור:');
     const { decision, writes } = await route(financeUser, 'תמחקי את שירה כהן');
     check('★ פעולה שנחסמה אינה נשמרת כממתינה',
           !writes.some((w) => w.table === 'rpc:rpc_create_pending_command'));
+    // ★ אבל הניסיון נרשם ביומן כ"נדחה" — זה מה שמסך הפקודות מציג באדום.
+    const logged = writes.filter((w) => w.table === 'commands' && w.op === 'insert');
+    check('★ ניסיון שנדחה בהרשאות נרשם ביומן (status=rejected, עם הסיבה)',
+          logged.length === 1 && logged[0].payload.status === 'rejected' && logged[0].payload.error === decision.authorized?.message
+          && logged[0].payload.raw_text === 'תמחקי את שירה כהן', JSON.stringify(writes));
+    check('★ ...וזו הכתיבה היחידה (לא בוצע דבר)', writes.length === 1, JSON.stringify(writes));
+  }
+
+  // ★ ביצוע שנכשל במסד (למשל תלמידה שלא נמצאה) — לא "כבר בוצעה"
+  {
+    const { decision, writes } = await route(owner, 'כן', {
+      commands: { single: pendingRow }, __rpcError: { rpc_execute_command: 'לא נמצאה תלמידה בשם שירה כ' },
+    });
+    check('★ ביצוע שנכשל מדווח ככישלון, לא "כבר בוצעה"', decision.route === 'execute_failed'
+          && decision.reply.includes('לא בוצע') && !decision.reply.includes('כבר בוצעה'), decision.reply);
+    check('★ ...עם הסיבה מהמסד', decision.reply.includes('לא נמצאה תלמידה בשם שירה כ'), decision.reply);
+    check('★ ...והפקודה מסומנת "נכשל" ביומן', writes.some((w) => w.table === 'commands' && w.op === 'update'
+          && w.payload.status === 'failed' && w.payload.error === 'לא נמצאה תלמידה בשם שירה כ'), JSON.stringify(writes));
+  }
+  {
+    const { decision } = await route(owner, 'כן', {
+      commands: { single: pendingRow }, __rpcError: { rpc_execute_command: 'invalid input syntax for type numeric: "abc"' },
+    });
+    check('שגיאה טכנית באנגלית — הודעה כללית בעברית', decision.reply.includes('הנתונים בפקודה לא תקינים') && !/numeric/.test(decision.reply), decision.reply);
+  }
+
+  // צ'אט הבדיקה: הפקודה מסומנת channel=test (גם ממתינה וגם ניסיון שנדחה)
+  {
+    const { db, writes } = makeDb({ ...base(owner), __rpc: { rpc_create_pending_command: 'cmd-t' } });
+    await routeIncoming(db, deps, { phone: owner.phone, body: 'שילמתי 860 תלבושות בביתר', channel: 'test' });
+    check('פקודה מצ\'אט הבדיקה מסומנת channel=test', writes.some((w) => w.table === 'commands' && w.op === 'update' && w.payload.channel === 'test'));
+    const { db: db2, writes: w2 } = makeDb({ ...base(financeUser) });
+    await routeIncoming(db2, deps, { phone: financeUser.phone, body: 'תמחקי את שירה כהן', channel: 'test' });
+    check('ניסיון שנדחה מצ\'אט הבדיקה מסומן channel=test', w2.some((w) => w.table === 'commands' && w.op === 'insert' && w.payload.channel === 'test'));
+    const { db: db3, writes: w3 } = makeDb({ ...base(owner), __rpc: { rpc_create_pending_command: 'cmd-w' } });
+    await routeIncoming(db3, deps, { phone: owner.phone, body: 'שילמתי 860 תלבושות בביתר' });
+    check('מוואטסאפ — בלי סימון (ברירת המחדל whatsapp)', !w3.some((w) => w.payload && 'channel' in w.payload));
   }
 }
 

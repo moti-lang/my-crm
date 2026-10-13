@@ -56,7 +56,7 @@ function makeDb(rows) {
   return {
     db: {
       from: build,
-      rpc: async (name) => ({ data: rows.__rpc?.[name] ?? null, error: null }),
+      rpc: async (name) => (rows.__rpcError?.[name] ? { data: null, error: { message: rows.__rpcError[name] } } : { data: rows.__rpc?.[name] ?? null, error: null }),
     },
     writes,
   };
@@ -149,6 +149,8 @@ const CONFIRM = [
   ['אישור', 'כן',  { ...PENDING, __rpc: { rpc_execute_command: { ok: true, result_table: 'ledger_entries' } } }],
   ['דחייה', 'לא',  { ...PENDING }],
   ['ביטול', 'בטל', { __rpc: { rpc_cancel_last_command: { ok: true } } }],
+  // ★ ביצוע שנכשל במסד — השולחת חייבת לדעת שלא נרשם (לא "כבר בוצעה").
+  ['ביצוע שנכשל', 'כן', { ...PENDING, __rpcError: { rpc_execute_command: 'לא נמצאה תלמידה בשם שירה כ' } }],
 ];
 for (const [label, body, extra] of CONFIRM) {
   const { decision, sends } = await routeAndDeliver(owner, body, extra);

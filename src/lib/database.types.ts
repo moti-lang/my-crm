@@ -373,6 +373,7 @@ export type Database = {
           confirmed_at: string | null;
           created_at: string;
           expires_at: string | null;
+          channel: string;
         };
         Insert: {
           id?: string;
@@ -387,6 +388,7 @@ export type Database = {
           confirmed_at?: string | null;
           created_at?: string;
           expires_at?: string | null;
+          channel?: string;
         };
         Update: {
           id?: string;
@@ -401,6 +403,7 @@ export type Database = {
           confirmed_at?: string | null;
           created_at?: string;
           expires_at?: string | null;
+          channel?: string;
         };
         Relationships: [];
       };
@@ -770,6 +773,11 @@ export type Database = {
           match_method: string | null;
           standing_consent_text: string | null;
           standing_consented_at: string | null;
+          sumit_pid_candidate: string | null;
+          sumit_cid_candidate: string | null;
+          candidate_source: string | null;
+          confirm_attempts: number;
+          sync_checks: number;
         };
         Insert: {
           id?: string;
@@ -799,6 +807,11 @@ export type Database = {
           match_method?: string | null;
           standing_consent_text?: string | null;
           standing_consented_at?: string | null;
+          sumit_pid_candidate?: string | null;
+          sumit_cid_candidate?: string | null;
+          candidate_source?: string | null;
+          confirm_attempts?: number;
+          sync_checks?: number;
         };
         Update: {
           id?: string;
@@ -828,6 +841,11 @@ export type Database = {
           match_method?: string | null;
           standing_consent_text?: string | null;
           standing_consented_at?: string | null;
+          sumit_pid_candidate?: string | null;
+          sumit_cid_candidate?: string | null;
+          candidate_source?: string | null;
+          confirm_attempts?: number;
+          sync_checks?: number;
         };
         Relationships: [
           {
@@ -1238,6 +1256,7 @@ export type Database = {
           cancelled_at: string | null;
           cancelled_by: string | null;
           created_at: string;
+          check_failures: number;
         };
         Insert: {
           id?: string;
@@ -1263,6 +1282,7 @@ export type Database = {
           cancelled_at?: string | null;
           cancelled_by?: string | null;
           created_at?: string;
+          check_failures?: number;
         };
         Update: {
           id?: string;
@@ -1288,6 +1308,7 @@ export type Database = {
           cancelled_at?: string | null;
           cancelled_by?: string | null;
           created_at?: string;
+          check_failures?: number;
         };
         Relationships: [
           {
@@ -1478,7 +1499,7 @@ export type Database = {
           id: string;
           received_at: string;
           content_type: string | null;
-          body: string;
+          body: string | null;
           candidates: Json | null;
           outcome: string | null;
         };
@@ -1486,7 +1507,7 @@ export type Database = {
           id?: string;
           received_at?: string;
           content_type?: string | null;
-          body: string;
+          body?: string | null;
           candidates?: Json | null;
           outcome?: string | null;
         };
@@ -1494,7 +1515,7 @@ export type Database = {
           id?: string;
           received_at?: string;
           content_type?: string | null;
-          body?: string;
+          body?: string | null;
           candidates?: Json | null;
           outcome?: string | null;
         };
@@ -1567,6 +1588,42 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      wa_config: {
+        Row: {
+          id: number;
+          server_url: string | null;
+          api_key: string | null;
+          webhook_secret: string | null;
+          provisioned_at: string | null;
+          provision_token_hash: string | null;
+          provision_expires_at: string | null;
+          setup_log: string | null;
+          setup_log_at: string | null;
+        };
+        Insert: {
+          id?: number;
+          server_url?: string | null;
+          api_key?: string | null;
+          webhook_secret?: string | null;
+          provisioned_at?: string | null;
+          provision_token_hash?: string | null;
+          provision_expires_at?: string | null;
+          setup_log?: string | null;
+          setup_log_at?: string | null;
+        };
+        Update: {
+          id?: number;
+          server_url?: string | null;
+          api_key?: string | null;
+          webhook_secret?: string | null;
+          provisioned_at?: string | null;
+          provision_token_hash?: string | null;
+          provision_expires_at?: string | null;
+          setup_log?: string | null;
+          setup_log_at?: string | null;
+        };
+        Relationships: [];
       };
       wa_messages: {
         Row: {
@@ -2054,6 +2111,29 @@ export type Database = {
         };
         Returns: string;
       };
+      rpc_owner_cancel_command: {
+        Args: {
+          p_command_id: string;
+        };
+        Returns: Json;
+      };
+      rpc_payment_link_candidate: {
+        Args: {
+          p_token: string;
+          p_external_identifier: string;
+          p_payment_id: string;
+          p_customer_id: string;
+          p_source: string;
+        };
+        Returns: Json;
+      };
+      rpc_payment_link_candidate_rejected: {
+        Args: {
+          p_token: string;
+          p_reason: string;
+        };
+        Returns: undefined;
+      };
       rpc_payment_link_program: {
         Args: {
           p_token: string;
@@ -2125,6 +2205,15 @@ export type Database = {
         };
         Returns: undefined;
       };
+      rpc_standing_billing_observed: {
+        Args: {
+          p_id: string;
+          p_sumit_status: number;
+          p_next: string;
+          p_prev: string;
+        };
+        Returns: Json;
+      };
       rpc_standing_consent: {
         Args: {
           p_token: string;
@@ -2147,6 +2236,13 @@ export type Database = {
         Args: {
           p_id: string;
           p_by: string;
+        };
+        Returns: undefined;
+      };
+      rpc_standing_order_check_failed: {
+        Args: {
+          p_id: string;
+          p_error: string;
         };
         Returns: undefined;
       };
@@ -2182,6 +2278,28 @@ export type Database = {
           p_content_type: string;
           p_body: string;
           p_candidates: Json;
+        };
+        Returns: Json;
+      };
+      rpc_wa_issue_provision_token: {
+        Args: {
+          p_hours: number;
+        };
+        Returns: string;
+      };
+      rpc_wa_provision: {
+        Args: {
+          p_token: string;
+          p_url: string;
+          p_api_key: string;
+          p_webhook_secret: string;
+        };
+        Returns: Json;
+      };
+      rpc_wa_setup_report: {
+        Args: {
+          p_token: string;
+          p_log: string;
         };
         Returns: Json;
       };

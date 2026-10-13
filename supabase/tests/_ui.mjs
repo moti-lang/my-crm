@@ -104,7 +104,11 @@ export async function startUi() {
    * דף חדש כמשתמשת מחוברת (userId) או כאורחת (null). כל בקשה ל-Supabase עוברת
    * ל-PostgREST המקומי; כל תשובת 4xx/5xx נרשמת — שאילתה שבורה היא כשל.
    */
-  async function newPage(userId) {
+  /**
+   * functions: Edge Functions שהבדיקה מריצה בקוד האמיתי שלהן (שם → handler(body)). כל השאר
+   * מחזירות {} כמו קודם. handler שמחזיר ok:false מוחזר כ-400, כמו הפונקציה בענן.
+   */
+  async function newPage(userId, { functions = {} } = {}) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const log = { pageErrors: [], badResponses: [] };
     page.on('pageerror', (e) => log.pageErrors.push(e.message));
@@ -124,6 +128,11 @@ export async function startUi() {
         return route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify(url.pathname.startsWith('/auth/v1/user') ? user : {}) });
       }
       if (url.pathname.startsWith('/functions/v1/')) {
+        const handler = functions[url.pathname.slice('/functions/v1/'.length).split('/')[0]];
+        if (handler) {
+          const out = await handler(JSON.parse(req.postData() || '{}'), url.searchParams);
+          return route.fulfill({ status: out?.ok === false ? 400 : 200, contentType: 'application/json', headers: cors, body: JSON.stringify(out) });
+        }
         return route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: '{}' });
       }
       if (url.pathname.startsWith('/rest/v1/')) {
@@ -149,7 +158,7 @@ export async function startUi() {
     rmSync(out, { recursive: true, force: true });
   }
 
-  return { app, newPage, stop };
+  return { app, rest, newPage, stop };
 }
 
 /** מצב המסך אחרי טעינה: קריסה (עם הפרטים הטכניים), שגיאת טעינה, וכותרת. */

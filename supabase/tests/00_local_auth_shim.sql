@@ -90,6 +90,12 @@ end $$;
 
 grant usage on schema public to anon, authenticated, service_role;
 
+-- כמו בסופבייס: service_role (מה ש-Edge Functions משתמשות בו) מקבל הרשאות מלאות על כל
+-- טבלה חדשה. בלי זה בדיקה שמריצה קוד של פונקציה מול המסד דרך PostgREST נכשלת מסיבה
+-- שלא קיימת בענן. (RLS הוא עוקף ממילא — bypassrls.)
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant all on sequences to service_role;
+
 -- קריטי לנאמנות ה-shim: בסופבייס אמיתי לתפקידים יש גישה לסכמת auth
 -- ולפונקציות שבה. בלי זה כל פוליסה שמשתמשת ב-auth.uid() ישירות נכשלת
 -- ב-"permission denied for schema auth" — כלומר בדיקות עוברות מהסיבה הלא נכונה.

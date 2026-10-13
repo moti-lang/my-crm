@@ -35,6 +35,7 @@ const SCREENS = [
   ['/standing-orders', 'הוראות קבע', ALL],
   ['/settings', 'הגדרות', ALL],
   ['/agent', 'סוכן הלקוחות', ['owner']],
+  ['/commands', 'פקודות וואטסאפ', ['owner']],
   ['/users', 'משתמשים', ['owner']],
   ['/mailing', 'רשימת תפוצה', ['owner']],
 ];

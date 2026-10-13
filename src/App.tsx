@@ -24,11 +24,11 @@ import { Pay } from '@/pages/Pay';
 import { Enroll } from '@/pages/Enroll';
 import { MailingList } from '@/pages/MailingList';
 import { Reminders } from '@/pages/Reminders';
-import { Placeholder } from '@/pages/Placeholder';
 import { Productions } from '@/pages/Productions';
 import { ProductionDetail } from '@/pages/ProductionDetail';
 import { Reports } from '@/pages/Reports';
 import { Agent } from '@/pages/Agent';
+import { Commands } from '@/pages/Commands';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false } },
@@ -80,7 +80,7 @@ function Gate() {
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/reminders" element={<Reminders />} />
         {profile.role === 'owner' && <Route path="/agent" element={<Agent />} />}
-        <Route path="/commands" element={<Placeholder title="פקודות וואטסאפ" round="סבב 6" />} />
+        {profile.role === 'owner' && <Route path="/commands" element={<Commands />} />}
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
         {/* ניהול משתמשים: הבעלים בלבד. לשאר התפקידים המסלול לא קיים. */}
