@@ -3,6 +3,18 @@
 \set BEITAR '''bbbbbbbb-0000-0000-0000-000000000001'''
 \ir _assert.sql
 
+-- ★ ראשון בקובץ, בכוונה: ההוספה מהמסך רצה בהרשאות הבעלים (לא כמנהל המסד) — כולל הטריגר
+--   והנרמול שבתוכו. אם מנהל המסד מפעיל את הטריגר קודם באותו חיבור, התוכנית שלו נשמרת
+--   בזיכרון ובדיקת ההרשאה לא חוזרת — והבדיקה הייתה עוברת גם כשלבעלים אין הרשאה.
+\echo 'הוספה מהמסך (בהרשאות הבעלים):'
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
+insert into authorized_numbers (phone, label, scope) values ('050-777-0006', 'מהמסך', 'all');
+select assert_true((select phone = '972507770006' from authorized_numbers where label = 'מהמסך'), '★ הבעלים מוסיפה מספר מהמסך — נשמר מנורמל');
+reset role;
+rollback;
+
 \echo 'מספרים מורשים:'
 begin;
 -- (ב-seed יש כבר שלושה מספרים; כאן מספרים חדשים.)
@@ -35,9 +47,6 @@ select assert_eq((select count(*) from authorized_numbers), 0, '★ מנהלת �
 select assert_eq((select count(*) from commands), 0, '★ מנהלת סניף לא רואה את יומן הפקודות');
 select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
 select assert_eq((select count(*) from authorized_numbers where phone like '9725077700%'), 3, 'הבעלים רואה את כל המספרים');
--- ★ ההוספה מהמסך רצה בהרשאות הבעלים (לא כמנהל המסד) — כולל הטריגר והנרמול.
-insert into authorized_numbers (phone, label, scope) values ('050-777-0006', 'מהמסך', 'all');
-select assert_true((select phone = '972507770006' from authorized_numbers where label = 'מהמסך'), '★ הבעלים מוסיפה מספר מהמסך — נשמר מנורמל');
 update authorized_numbers set is_active = false where label = 'חני';
 select assert_true((select not is_active from authorized_numbers where label = 'חני'), 'הבעלים משביתה מספר מהמסך');
 reset role;
