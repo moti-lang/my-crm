@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { FROM_LIST, useScrollMemory } from '@/hooks/listState';
 import { useAuth } from '@/auth/AuthProvider';
 import { useProductions, useAddProduction, PRODUCTION_STATUS_LABEL, type ProductionStatus } from '@/hooks/productions';
 import { formatILS, formatDate } from '@/lib/format';
@@ -14,6 +15,7 @@ export function Productions() {
   const productions = useProductions();
   const isOwner = profile?.role === 'owner';
   const [adding, setAdding] = useState(false);
+  useScrollMemory(!productions.isLoading);
 
   if (productions.isError) return <ErrorState error={productions.error} onRetry={() => void productions.refetch()} />;
 
@@ -49,7 +51,7 @@ export function Productions() {
             const over = budget > 0 && spent > budget;
             const profit = Number(p.profit ?? 0);
             return (
-              <Link key={p.production_id} to={`/productions/${p.production_id}`} className="card block p-4 transition-colors hover:bg-shade/40">
+              <Link key={p.production_id} to={`/productions/${p.production_id}`} state={FROM_LIST} className="card block p-4 transition-colors hover:bg-shade/40">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-display text-lg text-ink">{p.name}</p>

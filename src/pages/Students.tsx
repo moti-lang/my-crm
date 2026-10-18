@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStudents, useDeletedStudents, useRestoreStudent, usePurgeStudent, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
 import { useAuth } from '@/auth/AuthProvider';
 import { humanError } from '@/lib/errors';
@@ -11,6 +11,7 @@ import type { Column } from '@/lib/export-core';
 import { formatDate, formatILS, formatPhone } from '@/lib/format';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
 import type { Views } from '@/lib/database.types';
+import { useListParams, useOpenItem, useScrollMemory } from '@/hooks/listState';
 
 type Student = Views<'v_student_overview'>;
 type SortKey = 'full_name' | 'branch_name' | 'grade' | 'due' | 'paid' | 'balance' | 'attendance_pct';
@@ -41,20 +42,29 @@ const EXPORT_COLUMNS: Column<Student>[] = [
   { label: 'נוכחות %', value: (s) => s.attendance_pct, numeric: true },
 ];
 
+// מצב הרשימה בכתובת — נשמר בכניסה לכרטיס וביציאה ממנו (hooks/listState).
+const LIST_DEFAULTS = { q: '', branch: '', status: '', sort: 'full_name:asc', deleted: '' } as const;
+
 export function Students() {
   const students = useStudents();
   const branches = useBranches();
 
-  const [search, setSearch] = useState('');
-  const [branchId, setBranchId] = useState('');
-  const [status, setStatus] = useState('');
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'full_name', dir: 'asc' });
-  const [selected, setSelected] = useState<Student | null>(null);
+  const [list, setList] = useListParams(LIST_DEFAULTS);
+  const search = list.q, branchId = list.branch, status = list.status, withDeleted = list.deleted === '1';
+  const [sortKey, sortDir] = list.sort.split(':') as [SortKey, 'asc' | 'desc'];
+  const sort = { key: COLUMNS.some((c) => c.key === sortKey) ? sortKey : 'full_name', dir: sortDir === 'desc' ? 'desc' : 'asc' } as const;
+  const card = useOpenItem('student');
+  const selected = useMemo(() => (students.data ?? []).find((s) => s.id === card.openId) ?? null, [students.data, card.openId]);
   const [importing, setImporting] = useState(false);
   const [adding, setAdding] = useState(false);
   const { profile } = useAuth();
   const isOwner = profile?.role === 'owner';
-  const [withDeleted, setWithDeleted] = useState(false);
+  useScrollMemory(!students.isLoading);
+  // כרטיס של תלמידה שכבר לא ברשימה (נמחקה) — מסירים מהכתובת.
+  const { openId, close } = card;
+  useEffect(() => {
+    if (openId && students.data && !selected) close();
+  }, [openId, students.data, selected, close]);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -76,12 +86,12 @@ export function Students() {
         : String(av).localeCompare(String(bv), 'he');
       return sort.dir === 'asc' ? cmp : -cmp;
     });
-  }, [students.data, search, branchId, status, sort]);
+  }, [students.data, search, branchId, status, sort.key, sort.dir]);
 
   if (students.isError) return <ErrorState error={students.error} onRetry={() => void students.refetch()} />;
 
   const toggleSort = (key: SortKey) =>
-    setSort((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
+    setList({ sort: `${key}:${sort.key === key && sort.dir === 'asc' ? 'desc' : 'asc'}` });
 
   return (
     <div className="space-y-4">
@@ -113,16 +123,16 @@ export function Students() {
           className="field"
           placeholder="חיפוש לפי שם, הורה או טלפון"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => setList({ q: e.target.value })}
           aria-label="חיפוש תלמידות"
         />
-        <select className="field" value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="סינון לפי סניף">
+        <select className="field" value={branchId} onChange={(e) => setList({ branch: e.target.value })} aria-label="סינון לפי סניף">
           <option value="">כל הסניפים</option>
           {(branches.data ?? []).map((b) => (
             <option key={b.id} value={b.id}>{b.name}</option>
           ))}
         </select>
-        <select className="field" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="סינון לפי סטטוס">
+        <select className="field" value={status} onChange={(e) => setList({ status: e.target.value })} aria-label="סינון לפי סטטוס">
           <option value="">כל הסטטוסים</option>
           {Object.entries(STATUS_LABEL).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
@@ -131,7 +141,7 @@ export function Students() {
       </div>
       {isOwner && (
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={withDeleted} onChange={(e) => setWithDeleted(e.target.checked)} />
+          <input type="checkbox" checked={withDeleted} onChange={(e) => setList({ deleted: e.target.checked ? '1' : '' })} />
           כולל מחוקות
         </label>
       )}
@@ -172,12 +182,12 @@ export function Students() {
                 <tr
                   key={s.id}
                   className="cursor-pointer border-b border-rule last:border-0 hover:bg-shade"
-                  onClick={() => setSelected(s)}
+                  onClick={() => s.id && card.open(s.id)}
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      setSelected(s);
+                      if (s.id) card.open(s.id);
                     }
                   }}
                 >
@@ -208,7 +218,7 @@ export function Students() {
 
       {isOwner && withDeleted && <DeletedStudents search={search} />}
 
-      <StudentDrawer student={selected} onClose={() => setSelected(null)} />
+      <StudentDrawer student={selected} onClose={card.close} />
     </div>
   );
 }

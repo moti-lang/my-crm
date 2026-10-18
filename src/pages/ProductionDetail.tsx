@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useBackToList } from '@/hooks/listState';
 import { useAuth } from '@/auth/AuthProvider';
 import {
   useProduction, useProductionLedger, useProductionCast, useAddCast, useRemoveCast,
@@ -31,6 +32,7 @@ const ENTRY_COLUMNS: Column<Entry>[] = [
 export function ProductionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const back = useBackToList();
   const { profile } = useAuth();
   const isOwner = profile?.role === 'owner';
 
@@ -79,7 +81,7 @@ export function ProductionDetail() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <Link to="/productions" className="text-xs text-soft hover:underline">← כל ההפקות</Link>
+          <Link to="/productions" onClick={back} className="text-xs text-soft hover:underline">← כל ההפקות</Link>
           <h1 className="text-2xl">{p.name}</h1>
           <p className="text-sm text-soft">{p.year ?? ''}{p.release_date ? ` · הופץ ${formatDate(p.release_date)}` : ''}</p>
         </div>

@@ -1029,6 +1029,36 @@ expect_fail_code "פקודות: כפתור ביטול גם לפעולה מלפנ
   'sed -i "s/ \&\& now - new Date(c.created_at).getTime() < DAY;/;/" "$F"' \
   "node supabase/tests/commands-ui.test.mjs"
 
+expect_fail_code "★ רשימות: הכרטיס לא ברשומה בהיסטוריה — \"חזרה\" בטלפון יוצאת מהמסך" \
+  "$DIR/../../src/hooks/listState.ts" \
+  'sed -i "s/    setParams(next, { state: { openedFromList: true } });/    setParams(next, { replace: true });/" "$F"' \
+  "node supabase/tests/list-state-ui.test.mjs"
+
+expect_fail_code "★ רשימות: החיפוש חי רק בזיכרון — מתאפס ביציאה מהמסך" \
+  "$DIR/../../src/pages/Students.tsx" \
+  'sed -i "s/useListParams(LIST_DEFAULTS)/useState<Record<string, string>>({ ...LIST_DEFAULTS })/" "$F"' \
+  "node supabase/tests/list-state-ui.test.mjs"
+
+expect_fail_code "★ רשימות: הגלילה לא משוחזרת בחזרה" \
+  "$DIR/../../src/hooks/listState.ts" \
+  'sed -i "s/requestAnimationFrame(() => { window.scrollTo(0, y); settled.current = true; })/requestAnimationFrame(() => { settled.current = true; })/" "$F"' \
+  "node supabase/tests/list-state-ui.test.mjs"
+
+expect_fail_code "רשימות: \"כל ההפקות\" פותח רשימה חדשה במקום לחזור" \
+  "$DIR/../../src/pages/ProductionDetail.tsx" \
+  'sed -i "s/<Link to=\"\/productions\" onClick={back} /<Link to=\"\/productions\" /" "$F"' \
+  "node supabase/tests/list-state-ui.test.mjs"
+
+expect_fail_code "★ רשימות: סגירה כפולה אחרי מחיקה מהכרטיס — יוצאת מהמסך" \
+  "$DIR/../../src/hooks/listState.ts" \
+  'sed -i "s/    if (!openId || closing.current) return;/    if (!openId) return;/" "$F"' \
+  "node supabase/tests/list-state-ui.test.mjs"
+
+expect_fail_code "רשימות: סינוני ההוצאות לא נשמרים" \
+  "$DIR/../../src/pages/Expenses.tsx" \
+  'sed -i "s/useListParams(EXPENSE_FILTERS)/useState<Record<string, string>>({ ...EXPENSE_FILTERS })/" "$F"' \
+  "node supabase/tests/list-state-ui.test.mjs"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \

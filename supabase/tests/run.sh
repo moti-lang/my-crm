@@ -53,6 +53,9 @@ node_test "ui-screens.test.mjs" "✓|✗|──|נכשלו|נטענו"
 echo "▶ מסך פקודות וואטסאפ (דפדפן + המנוע האמיתי)"
 node_test "commands-ui.test.mjs" "✓|✗|נכשלו|עברו"
 
+echo "▶ מצב הרשימות בחזרה מכרטיס (דפדפן)"
+node_test "list-state-ui.test.mjs" "✓|✗|נכשלו|עברו"
+
 echo "═══ דפי הורים ומורות — דפדפן אמיתי ═══"
 node_test "ui-public.test.mjs" "✓|✗|──|נכשלו|נטענו"
 

@@ -1,13 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useListParams, useScrollMemory } from '@/hooks/listState';
 import { STANDING_LABEL, STANDING_TONE, useStandingOrders } from '@/hooks/standing';
 import { StandingOrderPanel } from '@/components/StandingOrderPanel';
 import { formatDate, formatILS } from '@/lib/format';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
 
 /** כל הוראות הקבע ומצבן. מה שצריך טיפול — באדום ולמעלה. */
+const STANDING_VIEW = { open: '' } as const;
+
 export function StandingOrders() {
   const list = useStandingOrders();
-  const [open, setOpen] = useState<string | null>(null);
+  // ההוראה שפרטיה פתוחים — בכתובת, כמו בשאר הרשימות; והגלילה נשמרת.
+  const [view, setView] = useListParams(STANDING_VIEW);
+  const open = view.open || null;
+  const setOpen = (id: string) => setView({ open: id });
+  useScrollMemory(!list.isLoading);
   const rows = useMemo(() => list.data ?? [], [list.data]);
   const attention = rows.filter((r) => r.needs_attention).length;
 
@@ -38,7 +45,7 @@ export function StandingOrders() {
                 <td className="px-3 py-2">{r.next_billing ? formatDate(r.next_billing) : '—'}</td>
                 <td className="px-3 py-2">
                   {open === r.id ? <StandingOrderPanel order={r} /> :
-                    <button type="button" className="text-xs text-plum hover:underline" onClick={() => setOpen(r.id)}>פרטים</button>}
+                    <button type="button" className="text-xs text-plum hover:underline" onClick={() => r.id && setOpen(r.id)}>פרטים</button>}
                 </td>
               </tr>
             ))}</tbody>

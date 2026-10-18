@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { FROM_LIST, useScrollMemory } from '@/hooks/listState';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthProvider';
 import { useBranches, useBranchPnl } from '@/hooks/queries';
@@ -13,6 +14,7 @@ export function Branches() {
   const pnl = useBranchPnl();
   const { profile } = useAuth();
   const [adding, setAdding] = useState(false);
+  useScrollMemory(!branches.isLoading);
 
   if (branches.isError) return <ErrorState error={branches.error} onRetry={() => void branches.refetch()} />;
   if (branches.isLoading) {
@@ -49,7 +51,7 @@ export function Branches() {
           const income = Number(p?.income_students ?? 0) + Number(p?.income_other ?? 0);
           const profit = income - Number(p?.expenses ?? 0);
           return (
-            <Link key={b.id} to={`/branches/${b.id}`} className="card block p-4 hover:bg-shade">
+            <Link key={b.id} to={`/branches/${b.id}`} state={FROM_LIST} className="card block p-4 hover:bg-shade">
               <div className="flex items-start justify-between gap-2">
                 <h2 className="font-display text-lg">{b.name}</h2>
                 <span className={`rounded-full px-2 py-0.5 text-xs ${b.is_active ? 'bg-ok/15 text-ok' : 'bg-shade text-soft'}`}>

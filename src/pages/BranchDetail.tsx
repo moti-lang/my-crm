@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useBackToList, useListParams, useOpenItem } from '@/hooks/listState';
 import { useAuth } from '@/auth/AuthProvider';
 import { useCloseBranch } from '@/hooks/queries';
 import { humanError } from '@/lib/errors';
@@ -20,14 +20,20 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'settings', label: 'הגדרות' },
 ];
 
+const BRANCH_VIEW = { tab: 'overview' } as const;
+
 export function BranchDetail() {
   const { id } = useParams<{ id: string }>();
   const branch = useBranch(id);
   const pnl = useBranchPnl();
   const students = useStudents();
-  const [params] = useSearchParams();
-  const [tab, setTab] = useState<Tab>(params.get('tab') === 'settings' ? 'settings' : 'overview');
-  const [selected, setSelected] = useState<Student | null>(null);
+  // הלשונית והכרטיס הפתוח בכתובת: "חזרה" בטלפון סוגרת את הכרטיס ונשארת באותה לשונית.
+  const [view, setView] = useListParams(BRANCH_VIEW);
+  const tab: Tab = TABS.some((t) => t.key === view.tab) ? view.tab as Tab : 'overview';
+  const setTab = (t: Tab) => setView({ tab: t });
+  const card = useOpenItem('student');
+  const selected: Student | null = (students.data ?? []).find((s) => s.id === card.openId && s.branch_id === id) ?? null;
+  const back = useBackToList();
   const { profile } = useAuth();
   const navigate = useNavigate();
   const closeBranch = useCloseBranch();
@@ -53,7 +59,7 @@ export function BranchDetail() {
   return (
     <div className="space-y-4">
       <header>
-        <Link to="/branches" className="text-sm text-soft hover:text-ink">← כל הסניפים</Link>
+        <Link to="/branches" onClick={back} className="text-sm text-soft hover:text-ink">← כל הסניפים</Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl">{b.name}</h1>
           <span className={`rounded-full px-2 py-0.5 text-xs ${b.is_active ? 'bg-ok/15 text-ok' : 'bg-shade text-soft'}`}>
@@ -124,7 +130,7 @@ export function BranchDetail() {
                   <tr
                     key={s.id}
                     className="cursor-pointer border-b border-rule last:border-0 hover:bg-shade"
-                    onClick={() => setSelected(s)}
+                    onClick={() => s.id && card.open(s.id)}
                   >
                     <td className="px-3 py-2 text-plum">{s.full_name}</td>
                     <td className="px-3 py-2">{s.grade ?? '—'}</td>
@@ -187,7 +193,7 @@ export function BranchDetail() {
         </div>
       )}
 
-      <StudentDrawer student={selected} onClose={() => setSelected(null)} />
+      <StudentDrawer student={selected} onClose={card.close} />
     </div>
   );
 }

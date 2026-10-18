@@ -1,5 +1,6 @@
 import { humanError } from '@/lib/errors';
 import { useMemo, useState } from 'react';
+import { useListParams, useScrollMemory } from '@/hooks/listState';
 import { useDebtors, useTemplates, useCreateReminders, useReconciliation, useCancelPaymentLink } from '@/hooks/finance';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
 import { useEnrolledUnpaid } from '@/hooks/enrollment';
@@ -21,6 +22,9 @@ const AGING_LABEL: Record<number, string> = {
   0: 'עד 30 יום', 30: '30+ ימים', 60: '60+ ימים', 90: '90+ ימים',
 };
 
+// הסניף והלשונית בכתובת — נשמרים כשיוצאים מהמסך וחוזרים ("חזרה").
+const COLLECTION_DEFAULTS = { branch: '', view: 'debtors' } as const;
+
 export function Collection() {
   const debtors = useDebtors();
   const branches = useBranches();
@@ -28,13 +32,16 @@ export function Collection() {
   const templates = useTemplates();
   const createReminders = useCreateReminders();
 
-  const [branchId, setBranchId] = useState('');
+  const [list, setList] = useListParams(COLLECTION_DEFAULTS);
+  const branchId = list.branch;
+  const view = (['debtors', 'links', 'enrolled'] as const).find((v) => v === list.view) ?? 'debtors';
+  const setView = (v: typeof view) => setList({ view: v });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState(false);
   const [templateKey, setTemplateKey] = useState('debt_reminder');
-  const [view, setView] = useState<'debtors' | 'links' | 'enrolled'>('debtors');
   const enrolled = useEnrolledUnpaid();
   const flags = useStudentFlags();
+  useScrollMemory(!debtors.isLoading);
   const enrolledCount = (enrolled.data ?? []).filter((e) => !branchId || e.branch_id === branchId).length;
 
   const rows = useMemo(
@@ -97,7 +104,7 @@ export function Collection() {
     <div className="space-y-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-2xl">גבייה</h1>
-        <select className="field w-auto" value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="סינון לפי סניף">
+        <select className="field w-auto" value={branchId} onChange={(e) => setList({ branch: e.target.value })} aria-label="סינון לפי סניף">
           <option value="">כל הסניפים</option>
           {(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>

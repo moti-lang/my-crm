@@ -1,5 +1,6 @@
 import { humanError } from '@/lib/errors';
 import { useMemo, useState } from 'react';
+import { useListParams, useScrollMemory } from '@/hooks/listState';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -29,6 +30,9 @@ const schema = z.object({
 });
 type FormValues = z.input<typeof schema>;
 
+// הסינונים בכתובת — נשמרים כשיוצאים מהמסך וחוזרים ("חזרה").
+const EXPENSE_FILTERS = { branch: '', category: '', from: '', to: '' } as const;
+
 export function Expenses() {
   const ledger = useLedger('branch');
   const branches = useBranches();
@@ -37,10 +41,9 @@ export function Expenses() {
   const addEntry = useAddLedgerEntry();
   const softDelete = useSoftDeleteEntry();
 
-  const [branchFilter, setBranchFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [filters, setFilters] = useListParams(EXPENSE_FILTERS);
+  const { branch: branchFilter, category: categoryFilter, from, to } = filters;
+  useScrollMemory(!ledger.isLoading);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const rows = useMemo(() => {
@@ -97,16 +100,16 @@ export function Expenses() {
       />
 
       <div className="grid gap-2 sm:grid-cols-4">
-        <select className="field" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} aria-label="סינון לפי סניף">
+        <select className="field" value={branchFilter} onChange={(e) => setFilters({ branch: e.target.value })} aria-label="סינון לפי סניף">
           <option value="">כל הסניפים</option>
           {(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
-        <select className="field" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="סינון לפי קטגוריה">
+        <select className="field" value={categoryFilter} onChange={(e) => setFilters({ category: e.target.value })} aria-label="סינון לפי קטגוריה">
           <option value="">כל הקטגוריות</option>
           {(categories.data ?? []).map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
-        <input type="date" className="field" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="מתאריך" />
-        <input type="date" className="field" value={to} onChange={(e) => setTo(e.target.value)} aria-label="עד תאריך" />
+        <input type="date" className="field" value={from} onChange={(e) => setFilters({ from: e.target.value })} aria-label="מתאריך" />
+        <input type="date" className="field" value={to} onChange={(e) => setFilters({ to: e.target.value })} aria-label="עד תאריך" />
       </div>
 
       {ledger.isLoading ? (
