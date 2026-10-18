@@ -84,8 +84,19 @@ try {
     && (await drawer.count()) === 0);
   check('★ ...והחיפוש והגלילה עדיין שם', (await search.inputValue()) === PREFIX && near(await scrollY(), y0), `scrollY=${await scrollY()}`);
 
-  // מחיקה מתוך הכרטיס (חלק מהעבודה ברצף): הכרטיס נסגר — פעם אחת. סגירה כפולה הייתה
-  // חוזרת אחורה פעמיים ויוצאת מהמסך.
+  // ★ סגירה כפולה: שתי בקשות סגירה באותו רגע (מחיקה סוגרת, וגם "התלמידה כבר לא ברשימה").
+  //   כאן באופן דטרמיניסטי — שתי לחיצות Escape באותה משימה, לפני שה"חזרה" הראשונה עובדה.
+  //   (המחיקה עצמה תלויה בתזמון: לפעמים הרענון מקדים, לפעמים לא.)
+  await page.locator('tbody tr', { hasText: `${PREFIX} 02` }).first().click();
+  await drawer.waitFor({ timeout: 10000 });
+  await page.evaluate(() => {
+    for (let i = 0; i < 2; i++) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  });
+  await page.waitForTimeout(800);
+  check('★ שתי סגירות רצופות — חוזרים פעם אחת בלבד (נשארים ברשימה, עם החיפוש)',
+    new URL(page.url()).pathname === '/students' && (await search.inputValue()) === PREFIX && (await drawer.count()) === 0, page.url());
+
+  // מחיקה מתוך הכרטיס (חלק מהעבודה ברצף): הכרטיס נסגר ונשארים ברשימה.
   await page.locator('tbody tr', { hasText: `${PREFIX} 60` }).first().click();
   await drawer.waitFor({ timeout: 10000 });
   await drawer.getByRole('button', { name: 'מחיקת תלמידה' }).click();

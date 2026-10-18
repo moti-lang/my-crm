@@ -17,6 +17,10 @@ run_suite() {
     -f "$DIR/$SUITE" >/tmp/nc-suite.out 2>&1
 }
 
+# בריצה ב-GitHub: כל בקרה שנכשלה נרשמת גם כהערה (annotation) על הריצה — רואים מה נפל בלי
+# להוריד את הלוג.
+gh_fail() { [ "${GITHUB_ACTIONS:-}" = "true" ] && echo "::error title=בקרת שלילה נכשלה::$1"; return 0; }
+
 expect_pass() {
   ran=$((ran+1))
   "$DIR/reset.sh" >/dev/null
@@ -36,11 +40,11 @@ expect_fail() {
   local label="$1" sql="$2"
   SUITE="${3:-02_rls_proof.sql}"
   "$DIR/reset.sh" >/dev/null
-  $PSQL -c "$sql" >/dev/null 2>&1 || { echo "  ! לא הצלחתי לפתוח את החור: $label"; fails=$((fails+1)); return; }
+  $PSQL -c "$sql" >/dev/null 2>&1 || { echo "  ! לא הצלחתי לפתוח את החור: $label"; gh_fail "$label (לא נפתח)"; fails=$((fails+1)); return; }
   if [[ "$SUITE" == __NODE__* ]]; then
     local cmd="${SUITE#__NODE__ }"
     if (cd "$DIR/../.." && eval "$cmd") >/tmp/nc-suite.out 2>&1; then
-      echo "  ✗ $label — החור נפתח והבדיקה עדיין עברה!"
+      echo "  ✗ $label — החור נפתח והבדיקה עדיין עברה!"; gh_fail "$label"
       fails=$((fails+1))
     else
       echo "  ✓ $label — הבדיקה נפלה כמצופה: $(grep -m1 '✗' /tmp/nc-suite.out | sed 's/^ *//')"
@@ -48,7 +52,7 @@ expect_fail() {
     return
   fi
   if run_suite; then
-    echo "  ✗ $label — החור נפתח והחבילה עדיין עברה. הבדיקה לא מכסה אותו!"
+    echo "  ✗ $label — החור נפתח והחבילה עדיין עברה. הבדיקה לא מכסה אותו!"; gh_fail "$label"
     fails=$((fails+1))
   else
     echo "  ✓ $label — החבילה נפלה כמצופה: $(grep -m1 '✗' /tmp/nc-suite.out | sed 's/^ *//')"
@@ -66,11 +70,11 @@ expect_fail_code() {
     mv "$file.bak" "$file"; return
   fi
   if cmp -s "$file" "$file.bak"; then
-    echo "  ! השינוי לא שינה את הקובץ: $label"; fails=$((fails+1))
+    echo "  ! השינוי לא שינה את הקובץ: $label"; gh_fail "$label (השינוי לא שינה)"; fails=$((fails+1))
     mv "$file.bak" "$file"; return
   fi
   if (cd "$DIR/../.." && eval "$cmd") >/dev/null 2>&1; then
-    echo "  ✗ $label — החור נפתח והבדיקה עדיין עברה!"
+    echo "  ✗ $label — החור נפתח והבדיקה עדיין עברה!"; gh_fail "$label"
     fails=$((fails+1))
   else
     echo "  ✓ $label — הבדיקה נפלה כמצופה"

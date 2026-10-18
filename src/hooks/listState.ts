@@ -89,6 +89,12 @@ export function useScrollMemory(ready: boolean) {
   // כניסה מהתפריט — גם כשכבר נמצאים במסך (אז הוא לא נטען מחדש): כתובת נקייה מתחילה מלמעלה.
   // פתיחת כרטיס (?student=…) או שינוי סינון אינם כתובת נקייה, ולכן לא קופצים.
   useEffect(() => {
+    // השחזור שלנו בלבד. השחזור האוטומטי של הדפדפן קורה ברגע ה"חזרה", כשהרשימה עוד לא
+    // מוצגת — נחתך, ותלוי בתזמון.
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+  }, []);
+
+  useEffect(() => {
     if (settled.current && navType === 'PUSH' && !search) window.scrollTo(0, 0);
   // לכל ניווט (key), לא לכל שינוי.
   // eslint-disable-next-line react-hooks/exhaustive-deps
