@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { MapPin } from "lucide-react";
-import { ACTION_META, ACTION_TYPES, HEATS, HEAT_META, KNOWN_CATEGORIES, LEAD_STATUSES, STATUS_META, TIMES_OF_DAY, TIME_OF_DAY_META, defaultTimeOfDay, type TimeOfDay } from "@/lib/categories";
+import { ACTION_META, ACTION_TYPES } from "@/lib/categories";
 import { api, OfflineError, errorMessage } from "@/lib/client/api";
 import { enqueueLead } from "@/lib/client/offline-queue";
 import { formTitle, formToPayload, type LeadFormValues } from "@/lib/client/lead-form-model";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Field, Input, Select, Textarea } from "@/components/ui/input";
+import { Field, Input, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { NextActionPicker } from "./next-action-picker";
 
@@ -21,7 +21,8 @@ export function LeadForm({
   mode,
   leadId,
   areas = [],
-  categories = [],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  categories: _categories = [],
   banner,
   onCancel,
 }: {
@@ -133,36 +134,6 @@ export function LeadForm({
         </div>
       </Card>
 
-      <Card className="flex flex-col gap-3">
-        <div className="font-bold">תחום</div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="תחום העסק">
-            <Input
-              list="categories-list"
-              value={v.category}
-              onChange={(e) => {
-                const c = e.target.value;
-                setV((s) => ({ ...s, category: c, bestTimeOfDay: s.bestTimeOfDay === "ANY" || s.bestTimeOfDay === defaultTimeOfDay(s.category) ? defaultTimeOfDay(c) : s.bestTimeOfDay }));
-              }}
-              placeholder="נגרייה / הסעות / קמעונאות"
-            />
-            <datalist id="categories-list">
-              {[...new Set([...categories, ...KNOWN_CATEGORIES])].map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
-          </Field>
-          <Field label="זמן ביקור מועדף" hint="תעשייה בבוקר, קמעונאות אחה״צ">
-            <Select value={v.bestTimeOfDay} onChange={(e) => set("bestTimeOfDay", e.target.value as TimeOfDay)}>
-              {TIMES_OF_DAY.map((t) => (
-                <option key={t} value={t}>
-                  {TIME_OF_DAY_META[t].label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-      </Card>
 
       <Card className="flex flex-col gap-3">
         <div className="font-bold">איש קשר</div>
@@ -190,28 +161,6 @@ export function LeadForm({
         </div>
       </Card>
 
-      <Card className="flex flex-col gap-3">
-        <div className="font-bold">סטטוס וחום</div>
-        <div className="no-scrollbar flex gap-2 overflow-x-auto">
-          {HEATS.map((h) => (
-            <Chip key={h} active={v.heat === h} onClick={() => set("heat", h)} title={HEAT_META[h].hint}>
-              {HEAT_META[h].emoji} {HEAT_META[h].label}
-            </Chip>
-          ))}
-        </div>
-        <Select value={v.status} onChange={(e) => set("status", e.target.value as LeadFormValues["status"])}>
-          {LEAD_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {STATUS_META[s].label} — {STATUS_META[s].hint}
-            </option>
-          ))}
-        </Select>
-        {(v.status === "LOST" || v.status === "PARKED" || v.status === "WON") && (
-          <Field label={v.status === "WON" ? "הערת סגירה" : "סיבה"}>
-            <Input value={v.closedReason} onChange={(e) => set("closedReason", e.target.value)} />
-          </Field>
-        )}
-      </Card>
 
       <Card className="flex flex-col gap-3">
         <div className="font-bold">המעקב הבא</div>
@@ -221,15 +170,6 @@ export function LeadForm({
       <Card className="flex flex-col gap-3">
         <div className="font-bold">מה ראיתי</div>
         <Textarea value={v.observation} onChange={(e) => set("observation", e.target.value)} placeholder="ניירת על השולחן, תור בכניסה, לוח מחיק עם הזמנות, 3 עובדים…" />
-        <Field label="כאבים">
-          <Textarea value={v.painPoints} onChange={(e) => set("painPoints", e.target.value)} className="min-h-16" />
-        </Field>
-        <Field label="במה עובדים היום">
-          <Input value={v.currentTools} onChange={(e) => set("currentTools", e.target.value)} placeholder="אקסל / מחברת / וואטסאפ / תוכנה ישנה" />
-        </Field>
-        <Field label="הערות חופשיות">
-          <Textarea value={v.notes} onChange={(e) => set("notes", e.target.value)} className="min-h-16" />
-        </Field>
       </Card>
 
       {mode === "create" && (
