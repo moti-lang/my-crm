@@ -5,20 +5,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import type { LeadFull } from "@/lib/leads";
-import { HEATS, HEAT_META, LEAD_STATUSES, STATUS_META, TIMES_OF_DAY, TIME_OF_DAY_META, ACTION_META, type ActionType, type LeadStatus, type TimeOfDay } from "@/lib/categories";
+import { ACTION_META, STATUS_META, type ActionType, type LeadStatus } from "@/lib/categories";
 import { agoLabel, formatIL, hmIL, relativeDayLabel, shortDateTime } from "@/lib/dates";
 import { displayPhone } from "@/lib/phone";
 import { leadTitle, cn } from "@/lib/utils";
 import { useAutosave } from "@/lib/client/use-autosave";
 import { instantToNext, nextToIso, type NextActionValue } from "@/lib/client/lead-form-model";
 import { Card, SectionTitle } from "@/components/ui/card";
-import { Chip } from "@/components/ui/badge";
 import { ActionIcon, NoPhoneTag } from "@/components/ui/domain";
 import { NextActionPicker } from "@/components/leads/next-action-picker";
 import { LeadCardActions, DeleteLeadButton, DeletePhotoButton, PhotoUploader } from "@/components/leads/lead-card-actions";
 import { TaskList } from "@/components/tasks/task-list";
 import type { TaskWithLead } from "@/lib/leads";
-import { InlineSelect, InlineText } from "./inline-field";
+import { InlineText } from "./inline-field";
 import { SaveIndicator } from "./save-indicator";
 import { TouchTimeline } from "./touch-timeline";
 import { LocationPanel } from "./location-panel";
@@ -64,7 +63,6 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
     setOverlay((o) => ({ ...o, [field]: value }));
     autosave.save({ [field]: value.trim() ? value : null }, immediate);
   };
-  const setField = (field: string, value: string) => autosave.save({ [field]: value }, true);
   const setLocation = (lat: number | null, lng: number | null) => {
     setCoords({ lat, lng });
     autosave.save({ lat, lng }, true);
@@ -124,26 +122,11 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
         <div className="mt-1 grid grid-cols-1 gap-x-4 sm:grid-cols-2">
           {text("area", { icon: "📍", placeholder: "אזור / רחוב" })}
           {text("addressNote", { icon: "🏢", placeholder: "כתובת / הערת מיקום" })}
-          {text("category", { icon: "🏷", placeholder: "תחום" })}
-          <InlineSelect<TimeOfDay> value={view.bestTimeOfDay as TimeOfDay} onChange={(v) => setField("bestTimeOfDay", v)} options={TIMES_OF_DAY.map((t) => ({ value: t, label: `🕒 ${TIME_OF_DAY_META[t].label}` }))} className="py-1" />
           {text("contactName", { icon: "👤", placeholder: "איש קשר" })}
           {text("contactRole", { icon: "🪪", placeholder: "תפקיד" })}
           {text("phone", { icon: "📞", placeholder: "טלפון (ריק = מסלול כניסה)", type: "tel", ltr: true })}
           {text("email", { icon: "✉️", placeholder: "מייל", type: "email", ltr: true })}
           {text("website", { icon: "🌐", placeholder: "אתר", type: "url", ltr: true })}
-        </div>
-        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <InlineSelect<LeadStatus> label="סטטוס" value={view.status as LeadStatus} onChange={(v) => setField("status", v)} options={LEAD_STATUSES.map((s) => ({ value: s, label: `${STATUS_META[s].label} — ${STATUS_META[s].hint}` }))} />
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs text-muted-foreground">חום</span>
-            <div className="flex gap-2">
-              {HEATS.map((h) => (
-                <Chip key={h} active={view.heat === h} onClick={() => setField("heat", h)} className="flex-1 justify-center" title={HEAT_META[h].hint}>
-                  {HEAT_META[h].emoji} {HEAT_META[h].label}
-                </Chip>
-              ))}
-            </div>
-          </div>
         </div>
         {!hasPhone && <NoPhoneTag className="mt-2" />}
       </div>
@@ -181,16 +164,6 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
 
       <LocationPanel lat={viewLat} lng={viewLng} area={view.area ?? null} addressNote={view.addressNote ?? null} onChange={setLocation} />
 
-      <Card className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <div className="font-bold">כאבים</div>
-          {text("painPoints", { placeholder: "מה כואב להם", multiline: true })}
-        </div>
-        <div>
-          <div className="font-bold">במה עובדים היום</div>
-          {text("currentTools", { placeholder: "אקסל / מחברת / וואטסאפ / תוכנה", multiline: true })}
-        </div>
-      </Card>
 
       {openTasks.length > 0 && (
         <div>
@@ -233,10 +206,6 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
         )}
       </div>
 
-      <Card>
-        <div className="font-bold">הערות</div>
-        {text("notes", { placeholder: "הערות חופשיות", multiline: true })}
-      </Card>
 
       <div className="text-xs text-muted-foreground">
         נראה לראשונה {formatIL(lead.firstSeenAt, "d.M.yyyy")} · מגע אחרון {agoLabel(lead.lastTouchAt, now)}
