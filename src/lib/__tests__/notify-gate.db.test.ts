@@ -78,6 +78,19 @@ describe.skipIf(!HAS_DB)("notification gate (DB)", () => {
     expect(again.deferred).toBe(0);
   });
 
+  it("משימה עם שעה מדויקת ובלי 'תזכורת לפני' מקבלת התראה בדיוק בשעה; משימת 'כל היום' לא", async () => {
+    const timed = await svc.createLead({ name: "בדיקה — פגישה 10:30", nextActionAt: dates.dateAtIL("2026-10-20", "10:30").toISOString(), nextActionType: "MEETING", phone: "052-4444444" });
+    const allDay = await svc.createLead({ name: "בדיקה — כל היום", nextActionAt: dates.dateAtIL("2026-10-20", "00:00").toISOString(), nextActionType: "VISIT", phone: "052-5555555" });
+    leads.push(timed.id, allDay.id);
+    const before = await cron.runReminders(dates.dateAtIL("2026-10-20", "10:25"));
+    expect((await prisma.task.findFirstOrThrow({ where: { leadId: timed.id, source: "NEXT_ACTION" } })).notifiedAt).toBeNull();
+    expect(before.blocked).toBe(false);
+    const at = await cron.runReminders(dates.dateAtIL("2026-10-20", "10:31"));
+    expect(at.due).toBeGreaterThanOrEqual(1);
+    expect((await prisma.task.findFirstOrThrow({ where: { leadId: timed.id, source: "NEXT_ACTION" } })).notifiedAt).not.toBeNull();
+    expect((await prisma.task.findFirstOrThrow({ where: { leadId: allDay.id, source: "NEXT_ACTION" } })).notifiedAt).toBeNull();
+  });
+
   it("אותה התראה שנחסמת שוב מגדילה מונה במקום שורה חדשה", async () => {
     const lead = await svc.createLead({ name: "בדיקה — חוזה", status: "CONTRACT", phone: "052-4444444" });
     leads.push(lead.id);

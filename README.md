@@ -71,7 +71,7 @@ npm run dev                 # http://localhost:3000
 
 `vercel.json` מגדיר שתי ריצות יומיות (מתאים לתוכנית Hobby החינמית): 05:30 UTC (דיגסט בוקר 07:30 בחורף / 08:30 בקיץ, אוטומציות, snapshot, סיכום שבועי בראשון) ו-17:30 UTC (סיכום יום). ה-tick מחליט לפי שעון ישראל מה להריץ ולא ירוץ פעמיים.
 
-לתזכורות בזמן אמת (משימות עם התראה לפני) צריך ריצה כל 15 דקות: או Vercel Pro (`*/15 * * * *` ב-`vercel.json`), או שירות חינמי כמו [cron-job.org](https://cron-job.org) שקורא כל 15 דקות ל-`https://<app>/api/cron/tick?secret=<CRON_SECRET>`.
+לתזכורות בשעה המדויקת (משימה עם שעה מקבלת התראה בדיוק בשעה, או X דקות לפני אם הוגדר) צריך ריצה תכופה של ה-tick. הריפו כולל GitHub Action (`.github/workflows/cron-tick.yml`) שקורא ל-`/api/cron/tick` כל 5 דקות. כדי להפעיל אותו: GitHub → Settings → Secrets and variables → Actions → New repository secret בשם `CRON_SECRET` עם אותו ערך כמו ב-Vercel. אם הכתובת שונה מברירת המחדל שבקובץ, הוסף Variable בשם `APP_URL`. (GitHub עשוי לאחר את הריצה בכמה דקות בשעות עומס.) חלופות: Vercel Pro (`*/5 * * * *` ב-`vercel.json`) או [cron-job.org](https://cron-job.org) שקורא ל-`https://<app>/api/cron/tick?secret=<CRON_SECRET>`.
 
 ### אופציונלי
 
