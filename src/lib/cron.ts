@@ -35,14 +35,18 @@ async function release(job: string, runKey: string) {
   await prisma.cronRun.deleteMany({ where: { job, runKey } });
 }
 
-/** תזכורות למשימות עם remindMinutesBefore. ביום חסום — נדחות לדיגסט הבא במקום להישלח. */
+/**
+ * תזכורות: משימה עם remindMinutesBefore מקבלת התראה X דקות לפני;
+ * משימה עם שעה מדויקת (לא "כל היום") ובלי הגדרה — מקבלת התראה בדיוק בשעה.
+ * ביום חסום — נדחות לדיגסט הבא במקום להישלח.
+ */
 export async function runReminders(now = new Date()) {
   const gate = await canNotifyAt(now);
   const tasks = await prisma.task.findMany({
     where: {
       done: false,
-      remindMinutesBefore: { not: null },
       notifiedAt: null,
+      OR: [{ remindMinutesBefore: { not: null } }, { allDay: false }],
       dueAt: { gte: addDaysIL(now, -1), lte: addDaysIL(now, 7) },
     },
     include: { lead: { select: leadSummarySelect } },
