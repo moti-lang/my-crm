@@ -77,6 +77,10 @@ self.addEventListener("push", (event) => {
     lang: "he",
     tag: data.tag || undefined,
     renotify: Boolean(data.tag),
+    silent: false,
+    vibrate: [200, 100, 200],
+    // תזכורת למשימה נשארת על המסך עד שנוגעים בה (נתמך באנדרואיד/דסקטופ)
+    requireInteraction: typeof data.tag === "string" && data.tag.startsWith("task-"),
     data: { url: data.url || "/" },
   };
   event.waitUntil(self.registration.showNotification(title, options));
