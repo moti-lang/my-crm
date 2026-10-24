@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { warmDb } from "@/lib/db";
 import { ok } from "@/lib/api-utils";
 import { resolveDatabaseUrl } from "@/lib/db-url";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   let db = false;
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await warmDb(); // ניסיונות חוזרים — מסד Neon רדום מתעורר בינתיים
     db = true;
   } catch {}
   const url = resolveDatabaseUrl();

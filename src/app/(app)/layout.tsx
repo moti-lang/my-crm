@@ -2,8 +2,11 @@ import { AppNav } from "@/components/shell/nav";
 import { Fab } from "@/components/shell/fab";
 import { SwRegister } from "@/components/shell/sw-register";
 import { SyncManager } from "@/components/shell/sync-manager";
+import { warmDb } from "@/lib/db";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // התעוררות של מסד Neon רדום: ניסיונות חוזרים לפני שהדפים שואלים את המסד
+  await warmDb();
   return (
     <div className="min-h-dvh md:flex">
       <AppNav />
