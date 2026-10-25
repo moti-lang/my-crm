@@ -210,6 +210,10 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             <dl className="space-y-1 text-sm">
               <Row label="הורה" value={student.parent_name} />
               <Row label="טלפון" value={formatPhone(student.parent_phone)} ltr />
+              <div className="flex gap-2">
+                <dt className="text-soft">מייל:</dt>
+                <dd dir="ltr">{student.email ? <a href={`mailto:${student.email}`} className="text-plum hover:underline">{student.email}</a> : '—'}</dd>
+              </div>
               <Row label="הצטרפה" value={formatDate(student.joined_on)} />
               {student.stopped_on && <Row label="הפסיקה" value={formatDate(student.stopped_on)} />}
               {student.stop_reason && <Row label="סיבה" value={student.stop_reason} />}

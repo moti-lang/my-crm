@@ -98,7 +98,8 @@ export async function startUi() {
     await new Promise((r) => setTimeout(r, 250));
   }
 
-  const browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox'] });
+  // אזור UTF-8 כמו במחשב של משתמשת: בלי LANG, כרומיום בלינוקס מוריד קובץ בשם עברי בשם "download".
+  const browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox'], env: { ...process.env, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' } });
 
   /**
    * דף חדש כמשתמשת מחוברת (userId) או כאורחת (null). כל בקשה ל-Supabase עוברת

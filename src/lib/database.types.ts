@@ -2041,7 +2041,7 @@ export type Database = {
       rpc_create_payment_link: {
         Args: {
           p_student: string;
-          p_amount: number;
+          p_amount?: number;
         };
         Returns: Json;
       };
@@ -2073,7 +2073,7 @@ export type Database = {
       rpc_enroll: {
         Args: {
           p: Json;
-          p_ip: string;
+          p_ip?: string;
         };
         Returns: Json;
       };
@@ -2089,7 +2089,7 @@ export type Database = {
       };
       rpc_enrollment_public: {
         Args: {
-          p_token: string;
+          p_token?: string;
         };
         Returns: Json;
       };
@@ -2176,7 +2176,7 @@ export type Database = {
           p_amount: number;
           p_charged_at: string;
           p_valid: boolean;
-          p_document_url: string;
+          p_document_url?: string;
         };
         Returns: Json;
       };
@@ -2186,10 +2186,10 @@ export type Database = {
           p_sumit_payment_id: string;
           p_amount: number;
           p_paid_at: string;
-          p_document_id: string;
-          p_match_method: string;
-          p_sumit_customer_id: string;
-          p_document_url: string;
+          p_document_id?: string;
+          p_match_method?: string;
+          p_sumit_customer_id?: string;
+          p_document_url?: string;
         };
         Returns: Json;
       };
@@ -2252,7 +2252,7 @@ export type Database = {
           p_ok: boolean;
           p_customer_id: number;
           p_recurring_id: number;
-          p_error: string;
+          p_error?: string;
         };
         Returns: string;
       };
@@ -2273,6 +2273,12 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: Json;
       };
+      rpc_students_export: {
+        Args: {
+          p_branch?: string;
+        };
+        Returns: Json[];
+      };
       rpc_sumit_ipn_received: {
         Args: {
           p_content_type: string;
@@ -2283,7 +2289,7 @@ export type Database = {
       };
       rpc_wa_issue_provision_token: {
         Args: {
-          p_hours: number;
+          p_hours?: number;
         };
         Returns: string;
       };

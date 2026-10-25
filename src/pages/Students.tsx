@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useStudents, useDeletedStudents, useRestoreStudent, usePurgeStudent, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
+import { useStudents, useDeletedStudents, useRestoreStudent, usePurgeStudent, fetchStudentsExport, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
 import { useAuth } from '@/auth/AuthProvider';
 import { humanError } from '@/lib/errors';
 import { useBranches } from '@/hooks/queries';
@@ -8,12 +8,11 @@ import { ImportStudents } from '@/components/ImportStudents';
 import { AddStudent } from '@/components/AddStudent';
 import { exportXlsx } from '@/lib/export';
 import type { Column } from '@/lib/export-core';
+import { studentExportColumns, exportFileName } from '@/lib/studentsExport';
 import { formatDate, formatILS, formatPhone } from '@/lib/format';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
-import type { Views } from '@/lib/database.types';
 import { useListParams, useOpenItem, useScrollMemory } from '@/hooks/listState';
 
-type Student = Views<'v_student_overview'>;
 type SortKey = 'full_name' | 'branch_name' | 'grade' | 'due' | 'paid' | 'balance' | 'attendance_pct';
 
 const COLUMNS: { key: SortKey | null; label: string }[] = [
@@ -22,6 +21,7 @@ const COLUMNS: { key: SortKey | null; label: string }[] = [
   { key: 'grade', label: 'כיתה' },
   { key: null, label: 'הורה' },
   { key: null, label: 'טלפון' },
+  { key: null, label: 'מייל' },
   { key: 'due', label: 'אמורה' },
   { key: 'paid', label: 'שילמה' },
   { key: 'balance', label: 'יתרה' },
@@ -29,28 +29,18 @@ const COLUMNS: { key: SortKey | null; label: string }[] = [
   { key: 'attendance_pct', label: 'נוכחות' },
 ];
 
-const EXPORT_COLUMNS: Column<Student>[] = [
-  { label: 'שם', value: (s) => s.full_name },
-  { label: 'סניף', value: (s) => s.branch_name },
-  { label: 'כיתה', value: (s) => s.grade ?? '' },
-  { label: 'הורה', value: (s) => s.parent_name ?? '' },
-  { label: 'טלפון', value: (s) => (s.parent_phone ? formatPhone(s.parent_phone) : '') },
-  { label: 'סטטוס', value: (s) => (s.status ? STATUS_LABEL[s.status as StudentStatus] : '') },
-  { label: 'אמורה', value: (s) => Number(s.due ?? 0), numeric: true },
-  { label: 'שילמה', value: (s) => Number(s.paid ?? 0), numeric: true },
-  { label: 'יתרה', value: (s) => Number(s.balance ?? 0), numeric: true },
-  { label: 'נוכחות %', value: (s) => s.attendance_pct, numeric: true },
-];
 
 // מצב הרשימה בכתובת — נשמר בכניסה לכרטיס וביציאה ממנו (hooks/listState).
-const LIST_DEFAULTS = { q: '', branch: '', status: '', sort: 'full_name:asc', deleted: '' } as const;
+const LIST_DEFAULTS = { q: '', branch: '', status: '', debt: '', sort: 'full_name:asc', deleted: '' } as const;
 
 export function Students() {
   const students = useStudents();
   const branches = useBranches();
 
   const [list, setList] = useListParams(LIST_DEFAULTS);
-  const search = list.q, branchId = list.branch, status = list.status, withDeleted = list.deleted === '1';
+  const search = list.q, branchId = list.branch, status = list.status, debt = list.debt, withDeleted = list.deleted === '1';
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [sortKey, sortDir] = list.sort.split(':') as [SortKey, 'asc' | 'desc'];
   const sort = { key: COLUMNS.some((c) => c.key === sortKey) ? sortKey : 'full_name', dir: sortDir === 'desc' ? 'desc' : 'asc' } as const;
   const card = useOpenItem('student');
@@ -71,8 +61,10 @@ export function Students() {
     const filtered = (students.data ?? []).filter((s) => {
       if (branchId && s.branch_id !== branchId) return false;
       if (status && s.status !== status) return false;
+      if (debt === 'owing' && !(Number(s.balance ?? 0) > 0)) return false;
+      if (debt === 'clear' && Number(s.balance ?? 0) > 0) return false;
       if (!term) return true;
-      return [s.full_name, s.parent_name, s.parent_phone, s.grade, s.branch_name]
+      return [s.full_name, s.parent_name, s.parent_phone, s.email, s.grade, s.branch_name]
         .some((v) => v?.toLowerCase().includes(term));
     });
 
@@ -86,7 +78,25 @@ export function Students() {
         : String(av).localeCompare(String(bv), 'he');
       return sort.dir === 'asc' ? cmp : -cmp;
     });
-  }, [students.data, search, branchId, status, sort.key, sort.dir]);
+  }, [students.data, search, branchId, status, debt, sort.key, sort.dir]);
+
+  // ★ הייצוא: כל הפרטים מהמסד (rpc_students_export — שם ההרשאה), בדיוק השורות שעל המסך
+  //   ובאותו סדר: חיפוש, סניף, סטטוס, חוב ומיון.
+  async function exportStudents() {
+    setExporting(true); setExportError(null);
+    try {
+      const all = await fetchStudentsExport();
+      const byId = new Map(all.map((r) => [r.id, r]));
+      const shown = rows.map((s) => byId.get(s.id ?? '')).filter((r): r is NonNullable<typeof r> => Boolean(r));
+      const hidden = all.some((r) => r.contact_hidden) || profile?.role === 'accountant';
+      const branchName = branchId ? (branches.data ?? []).find((b) => b.id === branchId)?.name : null;
+      exportXlsx(exportFileName(branchName), [{ name: 'תלמידות', columns: studentExportColumns(hidden) as Column<unknown>[], rows: shown }]);
+    } catch (e) {
+      setExportError(humanError(e));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (students.isError) return <ErrorState error={students.error} onRetry={() => void students.refetch()} />;
 
@@ -101,9 +111,9 @@ export function Students() {
           <p className="text-sm text-soft">
             {students.isLoading ? 'טוען…' : `${rows.length} מתוך ${students.data?.length ?? 0}`}
           </p>
-          <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={rows.length === 0}
-            onClick={() => exportXlsx('תלמידות', [{ name: 'תלמידות', columns: EXPORT_COLUMNS as Column<unknown>[], rows }])}>
-            ייצוא
+          <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={rows.length === 0 || exporting}
+            onClick={() => void exportStudents()}>
+            {exporting ? 'מייצא…' : 'ייצוא לאקסל'}
           </button>
           <button type="button" className="btn-primary px-3 py-1 text-xs" onClick={() => setAdding((v) => !v)} aria-pressed={adding}>
             הוספת תלמידה
@@ -117,11 +127,12 @@ export function Students() {
       {adding && <AddStudent onDone={() => setAdding(false)} />}
       {importing && <ImportStudents onClose={() => setImporting(false)} />}
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      {exportError && <p className="text-sm text-bad" role="alert">הייצוא נכשל: {exportError}</p>}
+      <div className="grid gap-2 sm:grid-cols-4">
         <input
           type="search"
           className="field"
-          placeholder="חיפוש לפי שם, הורה או טלפון"
+          placeholder="חיפוש לפי שם, הורה, טלפון או מייל"
           value={search}
           onChange={(e) => setList({ q: e.target.value })}
           aria-label="חיפוש תלמידות"
@@ -138,6 +149,11 @@ export function Students() {
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
+        <select className="field" value={debt} onChange={(e) => setList({ debt: e.target.value })} aria-label="סינון לפי יתרה">
+          <option value="">כל היתרות</option>
+          <option value="owing">חייבות</option>
+          <option value="clear">בלי חוב</option>
+        </select>
       </div>
       {isOwner && (
         <label className="flex items-center gap-2 text-sm">
@@ -151,11 +167,11 @@ export function Students() {
       ) : rows.length === 0 ? (
         <EmptyState
           title="אין תלמידות שמתאימות לסינון"
-          hint={search || branchId || status ? 'אפשר לנקות את הסינון ולנסות שוב.' : 'עדיין לא נוספו תלמידות.'}
+          hint={search || branchId || status || debt ? 'אפשר לנקות את הסינון ולנסות שוב.' : 'עדיין לא נוספו תלמידות.'}
         />
       ) : (
         <div className="card table-wrap">
-          <table className="w-full min-w-[52rem] text-sm">
+          <table className="w-full min-w-[60rem] text-sm">
             <thead className="border-b border-rule text-right text-soft">
               <tr>
                 {COLUMNS.map((c) => (
@@ -196,6 +212,7 @@ export function Students() {
                   <td className="px-3 py-2">{s.grade ?? '—'}</td>
                   <td className="px-3 py-2">{s.parent_name ?? '—'}</td>
                   <td className="px-3 py-2" dir="ltr">{formatPhone(s.parent_phone)}</td>
+                  <td className="px-3 py-2" dir="ltr">{s.email ?? '—'}</td>
                   <td className="px-3 py-2 tabular-nums">{formatILS(s.due)}</td>
                   <td className="px-3 py-2 tabular-nums">{formatILS(s.paid)}</td>
                   <td className={`px-3 py-2 tabular-nums ${Number(s.balance ?? 0) > 0 ? 'text-bad' : 'text-ok'}`}>

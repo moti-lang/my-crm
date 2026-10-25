@@ -13,7 +13,9 @@ select json_build_object(
       'name', p.proname,
       'args', (select coalesce(json_agg(json_build_object(
                  'name', coalesce(p.proargnames[i], 'arg' || i),
-                 'type', format_type(p.proargtypes[i-1], null)) order by i), '[]'::json)
+                 'type', format_type(p.proargtypes[i-1], null),
+                 -- פרמטר עם ברירת מחדל — אופציונלי (כמו ב-supabase gen types).
+                 'optional', i > p.pronargs - p.pronargdefaults) order by i), '[]'::json)
                from generate_series(1, p.pronargs) i),
       'returns', format_type(p.prorettype, null),
       'returns_set', p.proretset

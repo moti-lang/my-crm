@@ -99,9 +99,15 @@ try {
   // מחיקה מתוך הכרטיס (חלק מהעבודה ברצף): הכרטיס נסגר ונשארים ברשימה.
   await page.locator('tbody tr', { hasText: `${PREFIX} 60` }).first().click();
   await drawer.waitFor({ timeout: 10000 });
+  // ★ המרוץ שנתפס בריצה מלאה, כאן באופן דטרמיניסטי: התשלומים של הכרטיס מתעכבים אחרי המחיקה.
+  //   הרשימה מתרעננת קודם → הכרטיס נסגר ("כבר לא ברשימה") → ה"חזרה" מעובדת → ורק אז המחיקה
+  //   מסתיימת וקוראת לסגירה הישנה שלה. בלי ההגנה — חזרה שנייה, ויציאה מהמסך.
+  const slow = /\/rest\/v1\/payments\?/;
+  await page.route(slow, async (route) => { await new Promise((r) => setTimeout(r, 2000)); await route.fallback(); });
   await drawer.getByRole('button', { name: 'מחיקת תלמידה' }).click();
   await drawer.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => undefined);
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(3000);
+  await page.unroute(slow);
   check('★ מחיקה מהכרטיס: נשארים ברשימה, עם החיפוש', new URL(page.url()).pathname === '/students' && (await search.inputValue()) === PREFIX
     && (await page.locator('tbody tr', { hasText: `${PREFIX} 60` }).count()) === 0, page.url());
   const afterDelete = await countText();

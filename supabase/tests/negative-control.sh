@@ -1053,15 +1053,60 @@ expect_fail_code "רשימות: \"כל ההפקות\" פותח רשימה חדש
   'sed -i "s/<Link to=\"\/productions\" onClick={back} /<Link to=\"\/productions\" /" "$F"' \
   "node supabase/tests/list-state-ui.test.mjs"
 
-expect_fail_code "★ רשימות: סגירה כפולה אחרי מחיקה מהכרטיס — יוצאת מהמסך" \
+expect_fail_code "★ רשימות: סגירה כפולה — יוצאת מהמסך" \
   "$DIR/../../src/hooks/listState.ts" \
-  'sed -i "s/    if (!openId || closing.current) return;/    if (!openId) return;/" "$F"' \
+  'sed -i "s/    if (!current.current.openId || closing.current) return;/    if (!current.current.openId) return;/" "$F"' \
+  "node supabase/tests/list-state-ui.test.mjs"
+
+expect_fail_code "★ רשימות: סגירה ישנה (מהמחיקה) קוראת מצב מה-closure — חוזרת פעמיים ויוצאת מהמסך" \
+  "$DIR/../../src/hooks/listState.ts" \
+  'sed -i -e "s/    if (!current.current.openId || closing.current) return;/    if (!openId || closing.current) return;/" -e "s/  useEffect(() => { if (openId) closing.current = false; }, \[openId\]);/  useEffect(() => { closing.current = false; }, [openId]);/" -e "s/    if (current.current.state?.openedFromList) { navigate(-1); return; }/    if ((location.state as Opened)?.openedFromList) { navigate(-1); return; }/" "$F"' \
   "node supabase/tests/list-state-ui.test.mjs"
 
 expect_fail_code "רשימות: סינוני ההוצאות לא נשמרים" \
   "$DIR/../../src/pages/Expenses.tsx" \
   'sed -i "s/useListParams(EXPENSE_FILTERS)/useState<Record<string, string>>({ ...EXPENSE_FILTERS })/" "$F"' \
   "node supabase/tests/list-state-ui.test.mjs"
+
+expect_fail_code "★ ייצוא: מנהלת סניף מייצאת את כל הסניפים" \
+  "$DIR/../migrations/0039_students_export.sql" \
+  'sed -i "/    and (v_role <> .branch_manager. or o.branch_id in (select my_branches()))/d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/24_students_export.sql"
+
+expect_fail_code "★ ייצוא: רואת חשבון מקבלת טלפונים, כתובת ומייל" \
+  "$DIR/../migrations/0039_students_export.sql" \
+  'sed -i "s/then array\[.parent_phone., .alt_phone., .address., .email.\] else/then array[]::text[] else/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/24_students_export.sql"
+
+expect_fail_code "★ ייצוא: בלי הסוגריים — הטלפון של רואת חשבון לא נמחק מהשורה" \
+  "$DIR/../migrations/0039_students_export.sql" \
+  'sed -i -e "s/  select (to_jsonb(o)/  select to_jsonb(o)/" -e "s/.contact_hidden., v_role = .accountant.))/\x27contact_hidden\x27, v_role = \x27accountant\x27)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/24_students_export.sql"
+
+expect_fail_code "★ ייצוא: מתעלם מהסינון שעל המסך" \
+  "$DIR/../../src/pages/Students.tsx" \
+  'sed -i "s/const shown = rows.map((s) => byId.get(s.id ?? .*))/const shown = all.map((r) => byId.get(r.id))/" "$F"' \
+  "node supabase/tests/students-export-ui.test.mjs"
+
+expect_fail_code "★ ייצוא: עמודות הקשר נשארות בקובץ של רואת חשבון" \
+  "$DIR/../../src/pages/Students.tsx" \
+  'sed -i "s/columns: studentExportColumns(hidden)/columns: studentExportColumns(false)/" "$F"' \
+  "node supabase/tests/students-export-ui.test.mjs"
+
+expect_fail_code "★ תלמידות: מסך רואת החשבון ריק שוב" \
+  "$DIR/../../src/hooks/students.ts" \
+  'sed -i "s/  const accounting = profile?.role === .accountant.;/  const accounting = false;/" "$F"' \
+  "node supabase/tests/students-export-ui.test.mjs"
+
+expect_fail_code "תלמידות: החיפוש לא כולל מייל" \
+  "$DIR/../../src/pages/Students.tsx" \
+  'sed -i "s/s.full_name, s.parent_name, s.parent_phone, s.email, s.grade/s.full_name, s.parent_name, s.parent_phone, s.grade/" "$F"' \
+  "node supabase/tests/students-export-ui.test.mjs"
+
+expect_fail_code "ייצוא: טלפון כמספר (האפס נמחק באקסל)" \
+  "$DIR/../../src/lib/studentsExport.ts" \
+  'sed -i "s/const phone = (v: string | null | undefined): CellValue => (v ? formatPhone(v) : null);/const phone = (v: string | null | undefined): CellValue => (v ? Number(v) + 0 * formatPhone(v).length : null);/" "$F"' \
+  "node supabase/tests/students-export-ui.test.mjs"
 
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \

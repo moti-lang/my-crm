@@ -1,28 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Enums } from '@/lib/database.types';
+import { STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/lib/studentStatus';
+import { useAuth } from '@/auth/AuthProvider';
+import type { Views } from '@/lib/database.types';
+import type { StudentExportRow } from '@/lib/studentsExport';
 
-export type StudentStatus = Enums<'student_status'>;
-
-export const STATUS_LABEL: Record<StudentStatus, string> = {
-  active: 'פעילה',
-  pending: 'ממתינה',
-  stopped: 'הפסיקה',
-  graduated: 'סיימה',
-};
-
-export const STATUS_TONE: Record<StudentStatus, string> = {
-  active: 'bg-ok/15 text-ok',
-  pending: 'bg-warn/15 text-warn',
-  stopped: 'bg-bad/15 text-bad',
-  graduated: 'bg-shade text-soft',
-};
+export { STATUS_LABEL, STATUS_TONE, type StudentStatus };
 
 /** רשימת התלמידות. הסינון לפי סניף הוא נוחות בלבד — ההפרדה נאכפת ב-RLS. */
 export function useStudents() {
+  // ★ רואת חשבון: אין לה הרשאה על students (בגלל הטלפונים), ולכן v_student_overview ריק בשבילה
+  //   והמסך היה ריק. היא מקבלת את הרשימה מ-rpc_students_export — אותו מקור כמו הייצוא, בלי פרטי קשר.
+  const { profile } = useAuth();
+  const accounting = profile?.role === 'accountant';
   return useQuery({
-    queryKey: ['students'],
+    queryKey: ['students', accounting ? 'accounting' : 'overview'],
     queryFn: async () => {
+      if (accounting) {
+        const { data, error } = await supabase.rpc('rpc_students_export', {});
+        if (error) throw new Error(error.message);
+        return (data ?? []) as unknown as Views<'v_student_overview'>[];
+      }
       const { data, error } = await supabase
         .from('v_student_overview')
         .select('*')
@@ -31,6 +29,13 @@ export function useStudents() {
       return data ?? [];
     },
   });
+}
+
+/** כל הפרטים לייצוא לאקסל. ההרשאה במסד: מנהלת סניף — הסניף שלה; רואת חשבון — בלי פרטי קשר. */
+export async function fetchStudentsExport(branchId?: string | null): Promise<StudentExportRow[]> {
+  const { data, error } = await supabase.rpc('rpc_students_export', branchId ? { p_branch: branchId } : {});
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as StudentExportRow[];
 }
 
 export function useStudentPayments(studentId: string | null) {

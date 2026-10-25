@@ -49,10 +49,14 @@ export function useOpenItem(param: string) {
   const location = useLocation();
   const navigate = useNavigate();
   const openId = params.get(param);
-  // סגירה פעם אחת בלבד לכל פתיחה: שתי סגירות רצופות (מחיקה סוגרת, וגם "התלמידה כבר לא ברשימה")
+  // סגירה פעם אחת בלבד לכל פתיחה: שתי סגירות (מחיקה סוגרת, וגם "התלמידה כבר לא ברשימה")
   // היו חוזרות אחורה פעמיים — ויוצאות מהמסך.
+  // ★ המצב נקרא מ-ref ולא מה-closure: סגירה שמחכה בהבטחה (המחיקה) מחזיקה עותק ישן של close,
+  //   שבו הפריט עוד "פתוח". והשומר מתאפס רק בפתיחה חדשה — לא כשהפריט נסגר.
   const closing = useRef(false);
-  useEffect(() => { closing.current = false; }, [openId]);
+  const current = useRef({ openId, state: location.state as Opened });
+  current.current = { openId, state: location.state as Opened };
+  useEffect(() => { if (openId) closing.current = false; }, [openId]);
 
   const open = useCallback((id: string) => {
     const next = new URLSearchParams(params);
@@ -61,15 +65,13 @@ export function useOpenItem(param: string) {
   }, [params, param, setParams]);
 
   const close = useCallback(() => {
-    if (!openId || closing.current) return;
+    if (!current.current.openId || closing.current) return;
     closing.current = true;
     // נפתח מהרשימה → חוזרים אחורה (כמו כפתור "חזרה"), כך שההיסטוריה לא מתמלאת.
     // הגיעו ישר לכתובת עם הפריט → רק מסירים אותו מהכתובת.
-    if ((location.state as Opened)?.openedFromList) { navigate(-1); return; }
-    const next = new URLSearchParams(params);
-    next.delete(param);
-    setParams(next, { replace: true });
-  }, [openId, location.state, navigate, params, param, setParams]);
+    if (current.current.state?.openedFromList) { navigate(-1); return; }
+    setParams((prev) => { const next = new URLSearchParams(prev); next.delete(param); return next; }, { replace: true });
+  }, [navigate, param, setParams]);
 
   return { openId, open, close };
 }

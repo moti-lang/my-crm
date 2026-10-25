@@ -110,7 +110,7 @@ const main = async () => {
         out.push('        Args: Record<PropertyKey, never>;');
       } else {
         out.push('        Args: {');
-        for (const a of f.args) out.push(`          ${a.name}: ${tsType(a.type)};`);
+        for (const a of f.args) out.push(`          ${a.name}${a.optional ? '?' : ''}: ${tsType(a.type)};`);
         out.push('        };');
       }
       const ret = f.returns === 'void' ? 'undefined' : tsType(f.returns);

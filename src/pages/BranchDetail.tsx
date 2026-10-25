@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useBackToList, useListParams, useOpenItem } from '@/hooks/listState';
 import { useAuth } from '@/auth/AuthProvider';
 import { useCloseBranch } from '@/hooks/queries';
 import { humanError } from '@/lib/errors';
-import { useBranch, useStudents, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
+import { useBranch, useStudents, fetchStudentsExport, STATUS_LABEL, STATUS_TONE, type StudentStatus } from '@/hooks/students';
+import { exportXlsx } from '@/lib/export';
+import type { Column } from '@/lib/export-core';
+import { studentExportColumns, exportFileName } from '@/lib/studentsExport';
 import { useBranchPnl } from '@/hooks/queries';
 import { StudentDrawer } from '@/components/StudentDrawer';
 import { BranchSettings } from '@/components/BranchSettings';
@@ -34,6 +38,8 @@ export function BranchDetail() {
   const card = useOpenItem('student');
   const selected: Student | null = (students.data ?? []).find((s) => s.id === card.openId && s.branch_id === id) ?? null;
   const back = useBackToList();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const { profile } = useAuth();
   const navigate = useNavigate();
   const closeBranch = useCloseBranch();
@@ -65,7 +71,20 @@ export function BranchDetail() {
           <span className={`rounded-full px-2 py-0.5 text-xs ${b.is_active ? 'bg-ok/15 text-ok' : 'bg-shade text-soft'}`}>
             {b.is_active ? 'פעיל' : 'לא פעיל'}
           </span>
+          {/* כל התלמידות של הסניף, עם כל הפרטים. ההרשאה במסד (rpc_students_export). */}
+          <button type="button" className="btn-ghost ms-auto px-3 py-1 text-xs" disabled={exporting || branchStudents.length === 0}
+            onClick={async () => {
+              setExporting(true); setExportError(null);
+              try {
+                const rows = await fetchStudentsExport(b.id);
+                const hidden = rows.some((r) => r.contact_hidden) || profile?.role === 'accountant';
+                exportXlsx(exportFileName(b.name), [{ name: b.name, columns: studentExportColumns(hidden) as Column<unknown>[], rows }]);
+              } catch (e) { setExportError(humanError(e)); } finally { setExporting(false); }
+            }}>
+            {exporting ? 'מייצא…' : 'ייצוא לאקסל'}
+          </button>
         </div>
+        {exportError && <p className="text-sm text-bad" role="alert">הייצוא נכשל: {exportError}</p>}
         <p className="mt-0.5 text-sm text-soft">
           {[b.address, b.city].filter(Boolean).join(', ') || 'ללא כתובת'}
         </p>
