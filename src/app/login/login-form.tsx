@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function LoginForm({ next }: { next?: string }) {
+export function LoginForm({ next, initialError = null }: { next?: string; initialError?: string | null }) {
   const router = useRouter();
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -35,9 +35,13 @@ export function LoginForm({ next }: { next?: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3">
+    <form onSubmit={submit} method="post" action="/api/auth/login" className="flex flex-col gap-3">
+      {/* שדה משתמש קבוע ומוסתר — בלעדיו iOS/אנדרואיד לא מציעים לשמור את הסיסמה */}
+      <input type="text" name="username" autoComplete="username" value="sevev" readOnly tabIndex={-1} aria-hidden="true" className="hidden" />
+      {next && <input type="hidden" name="next" value={next} />}
       <Input
         type="password"
+        name="password"
         autoFocus
         autoComplete="current-password"
         placeholder="סיסמה"

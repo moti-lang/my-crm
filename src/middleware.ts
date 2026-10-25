@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, isAuthDisabled, verifySessionToken } from "@/lib/auth";
+import { SESSION_COOKIE, createSessionToken, isAuthDisabled, sessionCookieOptions, sessionNeedsRenewal, verifySessionToken } from "@/lib/auth";
 
 /** נתיבים פתוחים (בלי cookie): כניסה, cron (מוגן ב-CRON_SECRET), יומן ICS (מוגן בטוקן), קבצי PWA */
 const PUBLIC_PREFIXES = [
@@ -22,7 +22,12 @@ export async function middleware(req: NextRequest) {
   if (PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p))) return NextResponse.next();
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  if (await verifySessionToken(token)) return NextResponse.next();
+  if (await verifySessionToken(token)) {
+    const res = NextResponse.next();
+    // חידוש מתגלגל של ה-cookie — הכניסה נשמרת כל עוד משתמשים באפליקציה
+    if (sessionNeedsRenewal(token)) res.cookies.set(SESSION_COOKIE, await createSessionToken(), sessionCookieOptions());
+    return res;
+  }
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: "לא מחובר" }, { status: 401 });

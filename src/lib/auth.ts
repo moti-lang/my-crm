@@ -49,6 +49,18 @@ export async function verifySessionToken(token?: string | null): Promise<boolean
   return safeEqual(sig, expected);
 }
 
+/**
+ * חידוש מתגלגל: אם נשארו לטוקן פחות מ-11 חודשים (כלומר עבר יותר מחודש מאז שהונפק) — מנפיקים חדש לשנה.
+ * כך מי שמשתמש באפליקציה אף פעם לא "נזרק" החוצה.
+ */
+export function sessionNeedsRenewal(token?: string | null, now = Date.now()): boolean {
+  if (!token) return false;
+  const exp = Number(token.split(".")[0]);
+  if (!Number.isFinite(exp)) return false;
+  const remaining = exp - now;
+  return remaining < (YEAR_SECONDS - 30 * 24 * 60 * 60) * 1000;
+}
+
 export function checkPassword(input: string): boolean {
   const pw = process.env.APP_PASSWORD ?? "";
   if (!pw) return false;
