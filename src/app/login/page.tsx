@@ -1,11 +1,17 @@
 import Link from "next/link";
-import { isAuthConfigured, isAuthDisabled } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { SESSION_COOKIE, isAuthConfigured, isAuthDisabled, verifySessionToken } from "@/lib/auth";
 import { LoginForm } from "./login-form";
 
 export const metadata = { title: "כניסה" };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  const { next } = await searchParams;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
+  const { next, error } = await searchParams;
+  // כבר מחובר? לא מציגים שוב את מסך הסיסמה
+  if (!isAuthDisabled() && (await verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value))) {
+    redirect(next && next.startsWith("/") ? next : "/");
+  }
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 p-6">
       <div className="text-center">
@@ -22,7 +28,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           לא הוגדרה סיסמה. יש להגדיר את משתני הסביבה <code dir="ltr">APP_PASSWORD</code> ו-<code dir="ltr">AUTH_SECRET</code> (ראה README).
         </p>
       ) : (
-        <LoginForm next={next} />
+        <LoginForm next={next} initialError={error ? "סיסמה שגויה" : null} />
       )}
     </div>
   );
