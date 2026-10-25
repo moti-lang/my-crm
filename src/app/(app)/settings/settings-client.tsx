@@ -286,6 +286,35 @@ export function FailedQueuePanel() {
   );
 }
 
+/** ניקוי מטמון ו-Service Worker וטעינה מחדש — כשהאפליקציה "תקועה" על גרסה ישנה */
+export function RefreshAppButton() {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      variant="outline"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          if ("serviceWorker" in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map((r) => r.unregister()));
+          }
+          if ("caches" in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((k) => caches.delete(k)));
+          }
+        } catch {
+          // גם אם הניקוי נכשל — טעינה מחדש מהרשת עדיין עוזרת
+        }
+        window.location.replace(`/?refreshed=${Date.now()}`);
+      }}
+    >
+      <RefreshCw className="h-4 w-4" /> {busy ? "מרענן…" : "רענון האפליקציה"}
+    </Button>
+  );
+}
+
 export function LogoutButton() {
   const router = useRouter();
   return (

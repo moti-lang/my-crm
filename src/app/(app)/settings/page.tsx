@@ -5,7 +5,7 @@ import { claudeConfigured } from "@/lib/parse";
 import { isAuthDisabled } from "@/lib/auth";
 import { appUrl, getOrCreateIcsToken } from "@/lib/settings";
 import { Card, PageTitle } from "@/components/ui/card";
-import { Appearance, FailedQueuePanel, IcsControls, InstallHelp, JobsPanel, LogoutButton, PushControls, SnapshotsPanel } from "./settings-client";
+import { Appearance, FailedQueuePanel, IcsControls, InstallHelp, JobsPanel, LogoutButton, PushControls, RefreshAppButton, SnapshotsPanel } from "./settings-client";
 import { ImportPanel } from "./import-panel";
 import { CalendarPanel } from "./calendar-panel";
 
@@ -64,6 +64,10 @@ export default async function SettingsPage() {
       <FailedQueuePanel />
       <Section title="🎨 מראה">
         <Appearance />
+      </Section>
+      <Section title="🔄 רענון">
+        <p className="mb-2 text-sm text-muted-foreground">אם האפליקציה מתנהגת מוזר אחרי עדכון — זה מנקה את המטמון וטוען את הגרסה החדשה.</p>
+        <RefreshAppButton />
       </Section>
       <Section title="🔐 חשבון">
         {isAuthDisabled() ? <p className="text-sm text-muted-foreground">מסך הכניסה כבוי (AUTH_DISABLED).</p> : <LogoutButton />}

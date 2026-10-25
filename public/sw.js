@@ -1,5 +1,5 @@
 /* Service Worker — סבב: מעטפת אופליין בסיסית + Web Push */
-const CACHE = "sevev-v1";
+const CACHE = "sevev-v2";
 const PRECACHE = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -59,6 +59,10 @@ self.addEventListener("fetch", (event) => {
       ),
     );
   }
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("push", (event) => {

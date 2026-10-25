@@ -123,8 +123,12 @@ export function DeletePhotoButton({ photoId }: { photoId: string }) {
 export function DeleteLeadButton({ leadId, asMenuItem }: { leadId: string; asMenuItem?: boolean }) {
   const router = useRouter();
   const { toast } = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // אישור בתוך האפליקציה במקום window.confirm — הדיאלוג של הדפדפן לא אמין באפליקציה מותקנת ב-iOS
   async function del() {
-    if (!window.confirm("למחוק את הליד על כל המגעים, המשימות והתמונות שלו? אי אפשר לבטל.")) return;
+    if (busy) return;
+    setBusy(true);
     try {
       await api(`/api/leads/${leadId}`, { method: "DELETE" });
       toast("הליד נמחק", "info");
@@ -132,17 +136,34 @@ export function DeleteLeadButton({ leadId, asMenuItem }: { leadId: string; asMen
       router.refresh();
     } catch (e) {
       toast(errorMessage(e), "error");
+      setBusy(false);
+      setConfirming(false);
     }
+  }
+  if (confirming) {
+    return (
+      <div className={asMenuItem ? "flex flex-col gap-1 rounded-lg bg-danger/5 p-2" : "flex flex-wrap items-center gap-2"} role="alertdialog" aria-label="אישור מחיקת ליד">
+        <span className="text-sm">למחוק את הליד עם כל המגעים, המשימות והתמונות? אי אפשר לבטל.</span>
+        <div className="flex gap-2">
+          <Button type="button" variant="danger" size="sm" onClick={del} disabled={busy}>
+            <Trash2 className="h-4 w-4" /> {busy ? "מוחק…" : "כן, מחק"}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setConfirming(false)} disabled={busy}>
+            בטל
+          </Button>
+        </div>
+      </div>
+    );
   }
   if (asMenuItem) {
     return (
-      <button type="button" onClick={del} className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-start text-danger hover:bg-danger/10">
+      <button type="button" onClick={() => setConfirming(true)} className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-start text-danger hover:bg-danger/10">
         <Trash2 className="h-4 w-4" /> מחק ליד…
       </button>
     );
   }
   return (
-    <Button variant="ghost" size="sm" className="text-danger" onClick={del}>
+    <Button variant="ghost" size="sm" className="text-danger" onClick={() => setConfirming(true)}>
       <Trash2 className="h-4 w-4" /> מחק ליד
     </Button>
   );
