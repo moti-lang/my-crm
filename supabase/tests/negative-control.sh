@@ -1108,6 +1108,76 @@ expect_fail_code "ייצוא: טלפון כמספר (האפס נמחק באקס�
   'sed -i "s/const phone = (v: string | null | undefined): CellValue => (v ? formatPhone(v) : null);/const phone = (v: string | null | undefined): CellValue => (v ? Number(v) + 0 * formatPhone(v).length : null);/" "$F"' \
   "node supabase/tests/students-export-ui.test.mjs"
 
+expect_fail_code "★ מיילים: נשלח גם למי שלא אישרה תפוצה" \
+  "$DIR/../../supabase/functions/_shared/email-core.ts" \
+  'sed -i "/    else if (r.mailing_consent !== true) skipped.no_consent.push(r);/d" "$F"' \
+  "node supabase/tests/email-core.test.mjs"
+
+expect_fail_code "★ מיילים: בלי קישור הסרה בתחתית" \
+  "$DIR/../../supabase/functions/_shared/email-core.ts" \
+  'sed -i "s|<a href=\"\${esc(input.unsubscribeUrl)}\" style=\"color:#6b5d78\">להסרה מרשימת התפוצה</a>||" "$F"' \
+  "node supabase/tests/email-core.test.mjs"
+
+expect_fail_code "★ מיילים: התוכן לא מנוטרל (HTML מוזרק)" \
+  "$DIR/../../supabase/functions/_shared/email-core.ts" \
+  'sed -i "s/^const esc = (s: string) => s.replace.*$/const esc = (s: string) => s;/" "$F"' \
+  "node supabase/tests/email-core.test.mjs"
+
+expect_fail_code "★ מיילים: שבירת שורה בנושא (הזרקת כותרות)" \
+  "$DIR/../../supabase/functions/_shared/email-core.ts" \
+  'sed -i "s/  return renderTemplate(subject, vars).replace(\/\[\\\\r\\\\n\]+\/g, . .).trim().slice(0, 200);/  return renderTemplate(subject, vars).trim().slice(0, 200);/" "$F"' \
+  "node supabase/tests/email-core.test.mjs"
+
+expect_fail_code "★ מיילים: חתימת Resend בלי בדיקת זמן (שידור חוזר של אירוע ישן)" \
+  "$DIR/../../supabase/functions/_shared/email-core.ts" \
+  'sed -i "s/  if (!Number.isFinite(ts) || Math.abs(nowSec - ts) > 300) return false;/  if (!Number.isFinite(ts)) return false;/" "$F"' \
+  "node supabase/tests/email-core.test.mjs"
+
+expect_fail_code "מיילים: המסך מסמן אחרת מהשרת (מתעלם מהסרה)" \
+  "$DIR/../../src/lib/emailRecipients.ts" \
+  'sed -i "/  if (suppressed.has(to)) return .unsubscribed.;/d" "$F"' \
+  "node supabase/tests/email-core.test.mjs"
+
+expect_fail_code "★ מיילים: פתיחת קישור ההסרה מסירה לבד (סורקי קישורים)" \
+  "$DIR/../migrations/0040_parent_email.sql" \
+  'sed -i "s/  if p_confirm and not v_done then/  if not v_done then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/25_parent_email.sql"
+
+expect_fail_code "★ מיילים: אחרי הסרה, מייל שבתור עדיין יוצא" \
+  "$DIR/../migrations/0040_parent_email.sql" \
+  'sed -i "/    update email_messages set status = .cancelled., error = .הוסרה מהתפוצה. where to_email = m.to_email and status = .queued.;/d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/25_parent_email.sql"
+
+expect_fail_code "★ מיילים: בלי תקרה יומית (חריגה מהמסלול של הספק)" \
+  "$DIR/../migrations/0040_parent_email.sql" \
+  'sed -i "s/  v_room := greatest(0, least(p_limit, p_daily_cap - v_used));/  v_room := p_limit;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/25_parent_email.sql"
+
+expect_fail_code "★ מיילים: מייל שנקטע באמצע נשלח שוב לבד (כפילות להורה)" \
+  "$DIR/../migrations/0040_parent_email.sql" \
+  'sed -i "s/  update email_messages set status = .failed., error = .השליחה נקטעה באמצע/  update email_messages set status = \x27queued\x27, error = \x27השליחה נקטעה באמצע/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/25_parent_email.sql"
+
+expect_fail_code "★ מיילים: כתובת שחזרה / סימנה ספאם לא נחסמת" \
+  "$DIR/../migrations/0040_parent_email.sql" \
+  'sed -i "/    values (m.to_email, case when p_type = .email.bounced. then .bounce. else .complaint. end) on conflict do nothing;/d; s/    insert into email_suppressions (email, reason)\$/    perform 1;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/25_parent_email.sql"
+
+expect_fail_code "★ מיילים: נשלח גם בשבת" \
+  "$DIR/../../supabase/functions/_shared/email-flow.ts" \
+  'sed -i "s/  if (isBlocked(now, /  if (false \&\& isBlocked(now, /" "$F"' \
+  "node supabase/tests/email-ui.test.mjs"
+
+expect_fail_code "★ מיילים: נכנס לתור גם כשהספק לא מוגדר" \
+  "$DIR/../../supabase/functions/email-send/index.ts" \
+  'sed -i "/  if (!cfg.from) return json({ ok: false, configured: false/d" "$F"' \
+  "node supabase/tests/email-ui.test.mjs"
+
+expect_fail_code "★ מיילים: לא רק בעלים שולחת" \
+  "$DIR/../../supabase/functions/email-send/index.ts" \
+  'sed -i "s/  if (role !== .owner.) return json({ ok: false, error: .רק הבעלים. }, 403);//" "$F"' \
+  "node supabase/tests/email-ui.test.mjs"
+
 expect_fail_code "הוראת קבע: checkout בלי אישור ההורה" \
   "$DIR/../../supabase/functions/sumit-checkout/index.ts" \
   'sed -i "s/    if (needsConsent) {/    if (false) {/" "$F"' \

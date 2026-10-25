@@ -448,6 +448,146 @@ export type Database = {
           },
         ];
       };
+      email_campaigns: {
+        Row: {
+          id: string;
+          subject: string;
+          body: string;
+          attachment_name: string | null;
+          attachment_type: string | null;
+          attachment_size: number | null;
+          attachment_b64: string | null;
+          per_student: boolean;
+          skipped: Json;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          subject: string;
+          body: string;
+          attachment_name?: string | null;
+          attachment_type?: string | null;
+          attachment_size?: number | null;
+          attachment_b64?: string | null;
+          per_student?: boolean;
+          skipped?: Json;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          subject?: string;
+          body?: string;
+          attachment_name?: string | null;
+          attachment_type?: string | null;
+          attachment_size?: number | null;
+          attachment_b64?: string | null;
+          per_student?: boolean;
+          skipped?: Json;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      email_messages: {
+        Row: {
+          id: string;
+          campaign_id: string;
+          student_id: string | null;
+          to_email: string;
+          to_name: string | null;
+          subject: string;
+          body: string;
+          status: string;
+          provider_id: string | null;
+          error: string | null;
+          attempts: number;
+          unsubscribe_token: string;
+          created_at: string;
+          sending_at: string | null;
+          sent_at: string | null;
+          delivered_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          campaign_id: string;
+          student_id?: string | null;
+          to_email: string;
+          to_name?: string | null;
+          subject: string;
+          body: string;
+          status?: string;
+          provider_id?: string | null;
+          error?: string | null;
+          attempts?: number;
+          unsubscribe_token?: string;
+          created_at?: string;
+          sending_at?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          campaign_id?: string;
+          student_id?: string | null;
+          to_email?: string;
+          to_name?: string | null;
+          subject?: string;
+          body?: string;
+          status?: string;
+          provider_id?: string | null;
+          error?: string | null;
+          attempts?: number;
+          unsubscribe_token?: string;
+          created_at?: string;
+          sending_at?: string | null;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "email_messages_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "email_campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "email_messages_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: false;
+            referencedRelation: "students";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      email_suppressions: {
+        Row: {
+          email: string;
+          reason: string;
+          created_at: string;
+        };
+        Insert: {
+          email: string;
+          reason: string;
+          created_at?: string;
+        };
+        Update: {
+          email?: string;
+          reason?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       enrollment_requests: {
         Row: {
           id: string;
@@ -1732,6 +1872,26 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_email_campaigns: {
+        Row: {
+          id: string | null;
+          subject: string | null;
+          body: string | null;
+          created_at: string | null;
+          attachment_name: string | null;
+          attachment_size: number | null;
+          per_student: boolean | null;
+          skipped: Json | null;
+          total: number | null;
+          pending: number | null;
+          sent: number | null;
+          delivered: number | null;
+          bounced: number | null;
+          failed: number | null;
+          cancelled: number | null;
+        };
+        Relationships: [];
+      };
       v_enrolled_unpaid: {
         Row: {
           student_id: string | null;
@@ -2069,6 +2229,28 @@ export type Database = {
       rpc_deleted_students: {
         Args: Record<PropertyKey, never>;
         Returns: unknown[];
+      };
+      rpc_email_claim: {
+        Args: {
+          p_limit: number;
+          p_daily_cap: number;
+        };
+        Returns: unknown[];
+      };
+      rpc_email_event: {
+        Args: {
+          p_provider_id: string;
+          p_type: string;
+          p_detail?: string;
+        };
+        Returns: Json;
+      };
+      rpc_email_unsubscribe: {
+        Args: {
+          p_token: string;
+          p_confirm?: boolean;
+        };
+        Returns: Json;
       };
       rpc_enroll: {
         Args: {

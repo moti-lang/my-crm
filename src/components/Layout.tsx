@@ -19,7 +19,7 @@ const NAV: NavItem[] = [
   { to: '/commands', label: 'פקודות', icon: '⌘', roles: ['owner'] },
   { to: '/reports', label: 'דוחות', icon: '▤' },
   { to: '/settings', label: 'הגדרות', icon: '⚙', roles: ['owner'] },
-  { to: '/mailing', label: 'רשימת תפוצה', icon: '✉', roles: ['owner'] },
+  { to: '/mailing', label: 'מיילים להורים', icon: '✉', roles: ['owner'] },
   { to: '/users', label: 'משתמשים', icon: '⚇', roles: ['owner'] },
 ];
 

@@ -36,6 +36,11 @@ const CASES = [
   ['הקישור: {link}', { link: 'https://example.com/a/abc123' }],
   ['', {}],
   ['{unknown_variable} נשאר?', {}],
+  // משתנים בעברית — כמו שהבעלים כותבת אותם במייל ובוואטסאפ.
+  ['שלום {שם ההורה}, יתרה של {יתרה} עבור {שם התלמידה} בסניף {סניף}.',
+   { parent_name: 'רחלי כהן', balance: '₪1,300', student_name: 'שירה', branch: 'ביתר עילית' }],
+  ['{שם ההורה} ו-{parent_name} — אותו משתנה', { parent_name: 'רחלי' }],
+  ['{שם לא מוכר} נשאר כמו שהוא', {}],
 ];
 
 let fails = 0;
@@ -60,6 +65,13 @@ console.log(`  ${varsMatch ? '✓' : '✗'} רשימת המשתנים זהה ב�
     && edge.renderTemplate('היי {supervisor_name}', { supervisor_name: 'מירי' }) === 'היי מירי';
   if (!ok) fails++;
   console.log(`  ${ok ? '✓' : '✗'} ★ תזכורת לאחראית פונה בשם האחראית ({supervisor_name})`);
+}
+
+{
+  const out = edge.renderTemplate('שלום {שם ההורה}, יתרה {יתרה} עבור {שם התלמידה} ({סניף})', { parent_name: 'רחלי', balance: '₪100', student_name: 'שירה', branch: 'ביתר' });
+  const ok = out === 'שלום רחלי, יתרה ₪100 עבור שירה (ביתר)' && JSON.stringify(front.HEBREW_VARIABLES) === JSON.stringify(edge.HEBREW_VARIABLES);
+  if (!ok) fails++;
+  console.log(`  ${ok ? '✓' : '✗'} ★ משתנים בעברית: {שם ההורה} {שם התלמידה} {סניף} {יתרה}${ok ? '' : `\n      ${out}`}`);
 }
 
 console.log(fails === 0 ? '\nשני מנועי התבניות זהים' : `\n${fails} הבדלים בין העותקים`);

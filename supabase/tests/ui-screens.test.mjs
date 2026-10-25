@@ -37,7 +37,7 @@ const SCREENS = [
   ['/agent', 'סוכן הלקוחות', ['owner']],
   ['/commands', 'פקודות וואטסאפ', ['owner']],
   ['/users', 'משתמשים', ['owner']],
-  ['/mailing', 'רשימת תפוצה', ['owner']],
+  ['/mailing', 'מיילים להורים', ['owner']],
 ];
 
 const { check, failed } = reporter();

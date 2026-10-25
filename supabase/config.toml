@@ -96,3 +96,12 @@ verify_jwt = true           # מסך ההגדרות; בעלים בלבד (auth_r
 
 [functions.wa-command-test]
 verify_jwt = true           # צ'אט הבדיקה במסך הפקודות; בעלים בלבד (auth_role במסד)
+
+[functions.email-send]
+verify_jwt = true           # מסך המיילים להורים; בעלים בלבד (auth_role במסד)
+
+[functions.cron-email]
+verify_jwt = false          # מוגנת בעצמה: CRON_SECRET (pg_cron)
+
+[functions.email-webhook]
+verify_jwt = false          # Resend לא שולחת JWT; מאומת בחתימת Svix (requireResendSignature)

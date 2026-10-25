@@ -1,4 +1,5 @@
-import { requireEnv } from './env.ts';
+import { env, requireEnv } from './env.ts';
+import { verifyResendSignature } from './email-core.ts';
 
 /**
  * שומרי הכניסה של Edge Functions. verify_jwt של הפלטפורמה אינו מספיק:
@@ -17,6 +18,8 @@ import { requireEnv } from './env.ts';
  *     והמסד מאמת אותו. כאן רק הצורה, כדי לא להריץ כלום על קלט זבל.
  *   requireEnrollBody — דף ההרשמה (ציבורי בכוונה): הצורה בלבד — POST, JSON
  *     קטן, עם שדות ההרשמה. ההרשאה האמיתית היא הגבלת הקצב במסד.
+ *   requireResendSignature — אירועי מסירה של מיילים (Resend): חתימת Svix על הגוף הגולמי,
+ *     ונדחה אירוע ישן מ-5 דקות. בלי RESEND_WEBHOOK_SECRET — הכל נדחה.
  * wa-webhook מוגנת בחתימת HMAC של ה-Hub (verifyHubSignature) ואינה כאן.
  */
 const deny = (status: number, error: string) =>
@@ -89,4 +92,16 @@ export function requireProvisionToken(req: Request): Response | null {
   const token = req.headers.get('x-provision-token') ?? '';
   if (req.method !== 'POST' || !/^[0-9a-f]{64}$/.test(token)) return deny(401, 'unauthorized');
   return null;
+}
+
+export async function requireResendSignature(req: Request): Promise<Response | null> {
+  if (req.method !== 'POST') return deny(405, 'שיטה לא נתמכת');
+  const secret = env('RESEND_WEBHOOK_SECRET');
+  if (!secret) return deny(503, 'אירועי המסירה עוד לא הוגדרו');
+  // clone: הגוף הגולמי נקרא כאן לאימות, וה-handler קורא אותו שוב.
+  const raw = await req.clone().text();
+  const ok = await verifyResendSignature(secret, {
+    id: req.headers.get('svix-id'), timestamp: req.headers.get('svix-timestamp'), signature: req.headers.get('svix-signature'),
+  }, raw);
+  return ok ? null : deny(401, 'חתימה לא תקינה');
 }

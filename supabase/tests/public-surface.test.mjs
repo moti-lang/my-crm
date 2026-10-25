@@ -38,10 +38,15 @@ console.log('\nמסלולים מחוץ לשער ההתחברות:');
 for (const r of publicRoutes) console.log(`    ${r}`);
 
 // שניים בלבד: מסך האחראית ודף התשלום של ההורה. שניהם עם טוקן, שניהם RPC בלבד.
-check('★ ארבעה מסלולים ציבוריים בלבד', publicRoutes.length === 4,
+check('★ חמישה מסלולים ציבוריים בלבד', publicRoutes.length === 5,
       `נמצאו: ${publicRoutes.join(', ')}`);
-check('★ והם /a/:token, /pay/:token, /enroll ו-/enroll/:token (קישור הסניף)', publicRoutes.join(',') === '/a/:token,/pay/:token,/enroll,/enroll/:token',
+check('★ והם /a/:token, /pay/:token, /enroll, /enroll/:token (קישור הסניף) ו-/unsubscribe/:token (הסרה מתפוצת המייל)',
+      publicRoutes.join(',') === '/a/:token,/pay/:token,/enroll,/enroll/:token,/unsubscribe/:token',
       `נמצא: ${publicRoutes.join(',')}`);
+const unsub = codeOf('src/pages/Unsubscribe.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+check('★ דף ההסרה מהתפוצה ניגש רק דרך RPC אחד (rpc_email_unsubscribe), לא לטבלאות ולא לפונקציות',
+      !/\.from\(/.test(unsub) && !/functions\.invoke/.test(unsub) && [...unsub.matchAll(/rpc\('([a-z_]+)'/g)].every((m) => m[1] === 'rpc_email_unsubscribe') && /rpc\('rpc_email_unsubscribe'/.test(unsub));
+check('★ דף ההסרה אינו מייבא את AuthProvider', !/AuthProvider|useAuth/.test(unsub));
 const enrollPage = codeOf('src/pages/Enroll.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 // החלק הציבורי של ה-hooks: עד ה-hook הראשון של הבעלים.
 const enrollPublicHooks = codeOf('src/hooks/enrollment.ts').split('export function useEnrolledUnpaid')[0];

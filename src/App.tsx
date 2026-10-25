@@ -29,6 +29,7 @@ import { ProductionDetail } from '@/pages/ProductionDetail';
 import { Reports } from '@/pages/Reports';
 import { Agent } from '@/pages/Agent';
 import { Commands } from '@/pages/Commands';
+import { Unsubscribe } from '@/pages/Unsubscribe';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false } },
@@ -110,6 +111,8 @@ export default function App() {
           {/* ציבורי: דף ההרשמה. RPC אחד, אימות והגבלת קצב במסד. */}
           <Route path="/enroll" element={<Enroll />} />
           <Route path="/enroll/:token" element={<Enroll />} />
+          {/* ציבורי: קישור ההסרה מהתפוצה שבתחתית כל מייל. הטוקן הוא ההרשאה. */}
+          <Route path="/unsubscribe/:token" element={<Unsubscribe />} />
           <Route
             path="*"
             element={
