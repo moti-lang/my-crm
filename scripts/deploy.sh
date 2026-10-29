@@ -83,7 +83,9 @@ step "4 · פרונט"
 if need VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; then
   npm run -s build && ok "בילד הצליח" || fail "בילד נכשל"
   if [ -n "${NETLIFY_AUTH_TOKEN:-}" ] && [ -n "${NETLIFY_SITE_ID:-}" ]; then
-    npx --yes netlify-cli deploy --prod --dir=dist --site "$NETLIFY_SITE_ID" \
+    # --no-build: מעלים בדיוק את dist שנבנה ועבר את שער הסודות. בלי זה netlify-cli (גרסה 27 ומעלה)
+    # בונה מחדש בעצמו — בלי משתני VITE_ — והאתר עולה בלי כתובת המסד (קרה ב-29/10/2026).
+    npx --yes netlify-cli deploy --prod --no-build --dir=dist --site "$NETLIFY_SITE_ID" \
       && ok "נפרס לנטליפיי" || fail "פריסה לנטליפיי נכשלה"
   else
     echo "  ! אין NETLIFY_AUTH_TOKEN/NETLIFY_SITE_ID — dist/ מוכן לגרירה ידנית"

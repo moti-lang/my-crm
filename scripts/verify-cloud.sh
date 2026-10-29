@@ -188,7 +188,8 @@ if step 7 "פרונט בנטליפיי + כתובת חיה"; then
   if need VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; then
     npm run build && ok "בילד עבר, כולל שער הסודות" || fail "בילד נכשל"
     if [ -n "${NETLIFY_AUTH_TOKEN:-}" ] && [ -n "${NETLIFY_SITE_ID:-}" ]; then
-      netlify_cli deploy --prod --dir=dist --site "$NETLIFY_SITE_ID" \
+      # --no-build: את dist שנבנה כאן ועבר את שער הסודות (ר' deploy.sh).
+      netlify_cli deploy --prod --no-build --dir=dist --site "$NETLIFY_SITE_ID" \
         && ok "נפרס" || fail "פריסה נכשלה"
       if [ -n "${SITE_URL:-}" ]; then
         # ★ הבדיקה שמוכיחה שניתוב ה-SPA עובד: הקישור של האחראית
