@@ -32,7 +32,7 @@ export function useEnrollmentPublic(token: string) {
 export type EnrollInput = {
   first_name: string; last_name: string; grade: string; school: string; phone: string; email: string;
   enroll_token: string; mailing_consent: boolean; terms_accepted: boolean;
-  whatsapp: '' | 'yes' | 'no'; photo: '' | 'yes' | 'no'; track: string;
+  whatsapp: '' | 'yes' | 'no'; photo: '' | 'yes' | 'no'; track: string; billing_day: string;
 };
 export type EnrollResult =
   | { ok: true; pay_url: string | null; amount: number | null; method: Track['method'] | 'external'; track: string | null; student: string; branch: string;

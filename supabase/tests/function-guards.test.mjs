@@ -27,6 +27,8 @@ export const EXPECTED = {
   'enroll': 'requireEnrollBody',
   // עצירת הוראת קבע: הבעלים מהמסך; ההרשאה עצמה נבדקת במסד בהרשאות המשתמשת.
   'standing-order-cancel': 'requireUserJwt',
+  // שינוי יום חיוב: כמו העצירה — הבעלים מהמסך, וההרשאה נבדקת במסד.
+  'standing-order-reschedule': 'requireUserJwt',
   // וואטסאפ: השרת החדש מוסר פרטים עם טוקן הקמה; מסך ההגדרות (בעלים) רואה מצב ו-QR.
   'wa-provision': 'requireProvisionToken', 'wa-admin': 'requireUserJwt', 'wa-command-test': 'requireUserJwt', 'email-send': 'requireUserJwt', 'email-webhook': 'requireResendSignature',
 };
@@ -53,7 +55,7 @@ for (const d of dirs) {
 const rem = codeOf(join(ROOT, 'cron-reminders/index.ts'));
 check('★ cron-reminders קורא ל-wa-send עם CRON_SECRET', /requireEnv\('CRON_SECRET'\)/.test(rem) && !/SUPABASE_SERVICE_ROLE_KEY/.test(rem));
 // CORS: כל פונקציה שהדפדפן קורא (verify_jwt=false + נקראת מ-src) עונה ל-OPTIONS.
-for (const d of ['enroll', 'sumit-checkout', 'standing-order-cancel', 'ai-answer']) {
+for (const d of ['enroll', 'sumit-checkout', 'standing-order-cancel', 'standing-order-reschedule', 'ai-answer']) {
   const src = codeOf(join(ROOT, d, 'index.ts'));
   check(`★ ${d}: עונה ל-preflight (OPTIONS) ומחזירה כותרות CORS — אחרת הדפדפן לא שולח את ה-POST`, /const pre = preflight\(req\);\s*if \(pre\) return pre;/.test(src) && /withCors\(req, await handle\(req\)\)/.test(src));
 }

@@ -1228,6 +1228,112 @@ expect_fail_code "כלי הגילוי מדפיס פרטי כרטיס" \
   'sed -i "s/<redacted>/\$2/" "$F"' \
   "node supabase/tests/sumit.test.mjs"
 
+# ─── יום החיוב בהוראת קבע (0041) ───
+expect_fail_code "★ יום חיוב: מתעלמים מ\"חויבה החודש\" (שני חיובים באותו חודש)" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/    when p_last_charge is not null and p_last_charge >= date_trunc(.month., p_today::timestamp)::date\$/    when false/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ יום חיוב: היום שנבחר = היום → חיוב היום (במקום בחודש הבא)" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/    when p_day > extract(day from p_today)\$/    when p_day >= extract(day from p_today)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ יום חיוב: התשלום הראשון לפי UTC ולא לפי שעון ישראל" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/  select (l.paid_at at time zone .Asia\/Jerusalem.)::date into v_paid/  select l.paid_at::date into v_paid/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ יום חיוב: משנים גם כשחיוב מתוכנן להיום (SUMIT אולי מחייבת עכשיו)" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/  if o.next_billing <= p_today then\$/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "יום חיוב: משנים גם באמצע ניסיון חוזר של חיוב שנדחה" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/  if o.status <> .active. then\$/  if o.status not in (\x27active\x27, \x27retrying\x27) then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ יום חיוב: לא רק הבעלים" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לשנות את יום החיוב./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ יום חיוב: ביומן לא נרשם מי שינתה" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/  values (p_id, .reschedule., p_from, p_to, v_from_day, p_day, p_remaining, p_by,/  values (p_id, \x27reschedule\x27, p_from, p_to, v_from_day, p_day, p_remaining, null,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ שינוי ידני ב-SUMIT לא מזוהה (התאריך זז בשקט)" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/  if o.status = .active. and v_new = .active. and o.next_billing is not null and p_next is not null and p_next <> o.next_billing\$/  if false/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ שינוי ידני: חיוב רגיל נרשם כ\"שינוי ב-SUMIT\" (מתבלבל)" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/     and not (v_new_charge and f_months_between(o.next_billing, p_next) = 1 and f_on_billing_day(p_next, v_day)) then/     then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ מספר החיובים שנותרו ב-SUMIT לא נבדק מול התוכנית" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/    v_ok := v_sumit = v_ours;/    v_ok := true;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ הרשמה: יום חיוב 29 (או זבל) מתקבל" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/    if v_day !~ .\^\[0-9\]{1,2}\$. or v_day::int not between 1 and 28 then/    if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ הרשמה: התאריכים בנוסח לא לפי היום שנבחר" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/    v_dates := f_standing_dates_on_day(coalesce(p_on, f_today_il()), v_day, v_n);/    v_dates := f_standing_dates(coalesce(p_on, current_date), v_n);/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ הרשמה: התאריך שאושר לא נשמר (ההוראה נוצרת בתאריך אחר)" \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/         standing_date_start = (c -> .dates. ->> 0)::date/         standing_date_start = null/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ שינוי יום חיוב: מעדכנים ב-SUMIT בלי לוודא כמה חיובים נותרו" \
+  "$DIR/../../supabase/functions/_shared/standing-reschedule.ts" \
+  'sed -i "s/  if (o.remaining_ok !== true) {/  if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ שינוי יום חיוב: מעדכנים גם כשהתאריך יצא שונה ממה שהבעלים ראתה" \
+  "$DIR/../../supabase/functions/_shared/standing-reschedule.ts" \
+  'sed -i "s/  if (plan.next !== expected) {/  if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ שינוי יום חיוב: נרשם אצלנו גם כש-SUMIT סירבה" \
+  "$DIR/../../supabase/functions/_shared/standing-reschedule.ts" \
+  'sed -i "s/  if (!r.ok) return fail(502, /  if (false) return fail(502, /" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ שינוי יום חיוב: בלי מספר החיובים שנותרו ל-SUMIT (חיוב נעלם או נוסף)" \
+  "$DIR/../../supabase/functions/_shared/standing.ts" \
+  'sed -i "s/, NextPaymentDate: i.nextDate, Recurrence: i.remaining };/, NextPaymentDate: i.nextDate };/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "הסנכרון לא מעביר את התאריך האחרון מ-SUMIT" \
+  "$DIR/../../supabase/functions/_shared/standing-sync.ts" \
+  'sed -i "s/          p_final: item.Date_Last?.slice(0, 10) ?? null });/          });/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ שינוי יום חיוב: אפשר לשמור בלי לראות את המשפט" \
+  "$DIR/../../src/components/StandingOrderPanel.tsx" \
+  'sed -i "s/          disabled={!plan?.ok || preview.isFetching || save.isPending}/          disabled={save.isPending}/" "$F"' \
+  "node supabase/tests/billing-day-ui.test.mjs"
+
+expect_fail_code "★ הרשמה: יום חיוב מסומן מראש" \
+  "$DIR/../../src/pages/Enroll.tsx" \
+  'sed -i "s/photo: .., track: .., billing_day: .. };/photo: \x27\x27, track: \x27\x27, billing_day: \x2720\x27 };/" "$F"' \
+  "node supabase/tests/billing-day-ui.test.mjs"
+
+expect_fail_code "★ הרשמה: יום החיוב לא נשלח" \
+  "$DIR/../../src/pages/Enroll.tsx" \
+  'sed -i "s/billing_day: askDay ? form.billing_day : .., enroll_token: token/billing_day: \x27\x27, enroll_token: token/" "$F"' \
+  "node supabase/tests/billing-day-ui.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

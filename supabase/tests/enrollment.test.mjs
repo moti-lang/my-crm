@@ -18,7 +18,7 @@ const dir = mkdtempSync(join(tmpdir(), 'enroll-'));
 const out = join(dir, 'e.cjs');
 execFileSync('npx', ['esbuild', 'src/lib/enrollment.ts', '--bundle', '--format=cjs', '--platform=node', `--outfile=${out}`, '--log-level=error']);
 const e = await import(out);
-const good = { first_name: 'רבקה', last_name: 'כהן', grade: 'ד', school: 'בית יעקב', phone: '052-111-2233', email: 'a@b.co.il', mailing_consent: true, terms_accepted: true, whatsapp: '', photo: '', track: '' };
+const good = { first_name: 'רבקה', last_name: 'כהן', grade: 'ד', school: 'בית יעקב', phone: '052-111-2233', email: 'a@b.co.il', mailing_consent: true, terms_accepted: true, whatsapp: '', photo: '', track: '', billing_day: '' };
 
 console.log('\nאימות בדף:');
 check('טופס תקין — בלי שגיאות', Object.keys(e.validateEnroll(good)).length === 0, JSON.stringify(e.validateEnroll(good)));
@@ -34,13 +34,27 @@ check('טופס תקין — בלי שגיאות', Object.keys(e.validateEnroll(
   check('/enroll בלי טוקן — ריק (המסד מוביל לסניף הפעיל היחיד)', e.enrollTokenFromPath('/enroll') === '' && e.enrollTokenFromPath('/enroll/') === '');
   check('טוקן זבל — ריק', e.enrollTokenFromPath('/enroll/<script>') === '' && e.enrollTokenFromPath('/enroll/abc') === '');
   const page = codeOf('src/pages/Enroll.tsx');
-  check('★ ההורה לא בוחרת סניף: אין בורר בדף', !/<select/.test(page) && !/branch_id/.test(page));
-  check('★ הדף שולח את הטוקן מהקישור', /enroll\(\{ \.\.\.form, enroll_token: token \}\)/.test(page) && /useEnrollmentPublic\(token\)/.test(page));
+  check('★ ההורה לא בוחרת סניף: הבורר היחיד בדף הוא יום החיוב', (page.match(/<select/g) ?? []).length === 1 && /<select[^>]*value=\{form\.billing_day\}/.test(page) && !/branch_id/.test(page));
+  check('★ הדף שולח את הטוקן מהקישור', /enroll\(\{ \.\.\.form, billing_day: askDay \? form\.billing_day : '', enroll_token: token \}\)/.test(page) && /useEnrollmentPublic\(token\)/.test(page));
+  check('★ יום חיוב: רק במסלול הוראת קבע, ובלי יום מסומן מראש', /const askDay = questions\.track && asksBillingDay\(chosen\);/.test(page) && /\{askDay && \(/.test(page)
+        && /<option value="">בחרי יום<\/option>/.test(page) && /billing_day: ''/.test(page));
   check('סניף סגור או מלא — אין טופס', /!open \?/.test(page));
   check('★ השאלות לפי הגדרות הסניף, ובלי ברירת מחדל מסומנת', /questions\.whatsapp &&/.test(page) && /questions\.photo &&/.test(page) && /questions\.track &&/.test(page) && /whatsapp: '', photo: '', track: ''/.test(page));
   check('★ מזומן: מסך סיום בלי קישור תשלום', /result\.method === 'cash'/.test(page));
 }
 check('★ בלי אישור תקנון — נחסם', e.validateEnroll({ ...good, terms_accepted: false }).terms_accepted !== undefined);
+{
+  const Q = { whatsapp: false, photo: false, track: true }, SO = { method: 'standing_order', installments: 10 };
+  const day = (v, t = SO, q = Q) => e.validateEnroll({ ...good, track: 'so10', billing_day: v }, q, t).billing_day;
+  check('★ הוראת קבע: יום חיוב חובה', day('') !== undefined && /1–28/.test(day('')));
+  check('★ יום 1 עד 28 — תקין; 0 / 29 / 31 / טקסט — נחסם', day('1') === undefined && day('20') === undefined && day('28') === undefined
+        && day('0') !== undefined && day('29') !== undefined && day('31') !== undefined && day('x') !== undefined);
+  check('תשלום אחד / מזומן / הוראה בתשלום אחד — לא שואלים יום חיוב', day('', { method: 'card_once', installments: 1 }) === undefined
+        && day('', { method: 'cash', installments: 1 }) === undefined && day('', { method: 'standing_order', installments: 1 }) === undefined);
+  check('שאלת התשלום מוסתרת בסניף — גם יום החיוב לא נשאל', day('', SO, { whatsapp: false, photo: false, track: false }) === undefined);
+  check('asksBillingDay: רק הוראת קבע עם חיובים חודשיים', e.asksBillingDay(SO) && !e.asksBillingDay({ method: 'standing_order', installments: 1 }) && !e.asksBillingDay({ method: 'card_once', installments: 1 }) && !e.asksBillingDay(null));
+  check('הבחירה: 1 עד 28 בלבד', e.BILLING_DAYS.length === 28 && e.BILLING_DAYS[0] === 1 && e.BILLING_DAYS[27] === 28);
+}
 check('★ שם עם תווים זרים — נחסם', e.validateEnroll({ ...good, first_name: '<b>x</b>' }).first_name !== undefined && e.validateEnroll({ ...good, first_name: 'רבקה1' }).first_name !== undefined);
 check("שם עם גרש ומקף — תקין", Object.keys(e.validateEnroll({ ...good, last_name: "כ״ץ-או'ברייאן" })).length === 0);
 check('טלפון קווי/קצר — נחסם; נייד מנורמל', e.validateEnroll({ ...good, phone: '03-1234567' }).phone !== undefined && e.normalizePhone('052-111-2233') === '972521112233');

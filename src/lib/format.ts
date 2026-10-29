@@ -18,6 +18,16 @@ export function formatDate(value: string | Date | null | undefined): string {
   return Number.isNaN(d.getTime()) ? '—' : format(d, 'dd/MM/yyyy');
 }
 
+/** dd/MM/yyyy HH:mm בשעון ישראל — ליומנים (מי שינה ומתי). */
+export function formatDateTime(value: string | null | undefined): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
+}
+
 /** 972521234567 → 052-123-4567 */
 export function formatPhone(phone: string | null | undefined): string {
   if (!phone) return '—';

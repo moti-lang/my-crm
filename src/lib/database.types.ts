@@ -918,6 +918,7 @@ export type Database = {
           candidate_source: string | null;
           confirm_attempts: number;
           sync_checks: number;
+          standing_date_start: string | null;
         };
         Insert: {
           id?: string;
@@ -952,6 +953,7 @@ export type Database = {
           candidate_source?: string | null;
           confirm_attempts?: number;
           sync_checks?: number;
+          standing_date_start?: string | null;
         };
         Update: {
           id?: string;
@@ -986,6 +988,7 @@ export type Database = {
           candidate_source?: string | null;
           confirm_attempts?: number;
           sync_checks?: number;
+          standing_date_start?: string | null;
         };
         Relationships: [
           {
@@ -1371,6 +1374,63 @@ export type Database = {
           },
         ];
       };
+      standing_order_events: {
+        Row: {
+          id: string;
+          standing_order_id: string;
+          kind: string;
+          from_date: string | null;
+          to_date: string | null;
+          from_day: number | null;
+          to_day: number | null;
+          remaining: number | null;
+          actor: string | null;
+          actor_label: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          standing_order_id: string;
+          kind: string;
+          from_date?: string | null;
+          to_date?: string | null;
+          from_day?: number | null;
+          to_day?: number | null;
+          remaining?: number | null;
+          actor?: string | null;
+          actor_label: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          standing_order_id?: string;
+          kind?: string;
+          from_date?: string | null;
+          to_date?: string | null;
+          from_day?: number | null;
+          to_day?: number | null;
+          remaining?: number | null;
+          actor?: string | null;
+          actor_label?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "standing_order_events_actor_fkey";
+            columns: ["actor"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "standing_order_events_standing_order_id_fkey";
+            columns: ["standing_order_id"];
+            isOneToOne: false;
+            referencedRelation: "standing_orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       standing_orders: {
         Row: {
           id: string;
@@ -1397,6 +1457,7 @@ export type Database = {
           cancelled_by: string | null;
           created_at: string;
           check_failures: number;
+          billing_day: number | null;
         };
         Insert: {
           id?: string;
@@ -1423,6 +1484,7 @@ export type Database = {
           cancelled_by?: string | null;
           created_at?: string;
           check_failures?: number;
+          billing_day?: number | null;
         };
         Update: {
           id?: string;
@@ -1449,6 +1511,7 @@ export type Database = {
           cancelled_by?: string | null;
           created_at?: string;
           check_failures?: number;
+          billing_day?: number | null;
         };
         Relationships: [
           {
@@ -2015,6 +2078,25 @@ export type Database = {
         };
         Relationships: [];
       };
+      v_standing_order_events: {
+        Row: {
+          id: string | null;
+          standing_order_id: string | null;
+          student_id: string | null;
+          full_name: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          kind: string | null;
+          from_date: string | null;
+          to_date: string | null;
+          from_day: number | null;
+          to_day: number | null;
+          remaining: number | null;
+          actor_label: string | null;
+          created_at: string | null;
+        };
+        Relationships: [];
+      };
       v_standing_orders: {
         Row: {
           id: string | null;
@@ -2036,6 +2118,8 @@ export type Database = {
           cancelled_at: string | null;
           created_at: string | null;
           needs_attention: boolean | null;
+          billing_day: number | null;
+          remaining: number | null;
         };
         Relationships: [];
       };
@@ -2393,6 +2477,7 @@ export type Database = {
           p_sumit_status: number;
           p_next: string;
           p_prev: string;
+          p_final?: string;
         };
         Returns: Json;
       };
@@ -2438,6 +2523,17 @@ export type Database = {
         };
         Returns: string;
       };
+      rpc_standing_order_rescheduled: {
+        Args: {
+          p_id: string;
+          p_by: string;
+          p_from: string;
+          p_to: string;
+          p_day: number;
+          p_remaining: number;
+        };
+        Returns: undefined;
+      };
       rpc_standing_order_status: {
         Args: {
           p_id: string;
@@ -2453,6 +2549,13 @@ export type Database = {
       };
       rpc_standing_orders_to_setup: {
         Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      rpc_standing_reschedule_preview: {
+        Args: {
+          p_id: string;
+          p_day: number;
+        };
         Returns: Json;
       };
       rpc_students_export: {

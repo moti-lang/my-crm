@@ -4,6 +4,7 @@
  *  2. הוראות שיש סיבה לבדוק (מועד חיוב / שבוע / ביטול — rpc_standing_orders_to_check, פעם ביום לכל היותר):
  *     המצב ב-SUMIT של הלקוחה שלנו בלבד (listforcustomer). חיוב חדש = Date_PreviousBilling שהתקדם
  *     (rpc_standing_billing_observed); חיוב שנכשל = הסטטוס. ★ בלי רשימת התשלומים של החשבון.
+ *     התאריך הבא זז בלי חיוב = שינוי ידני ב-SUMIT (נקלט ונרשם ביומן, במסד). Date_Last — כמה נותרו לפי SUMIT.
  *     בדיקה שנכשלה נספרת (rpc_standing_order_check_failed): פעם ביום לכל היותר, ואחרי 3 ברצף — עוצרים.
  * כל הכתיבה דרך RPC במסד (service_role). כאן רק השיחה עם SUMIT.
  */
@@ -55,7 +56,8 @@ export async function syncStandingOrders(db: Db, sumit: StandingProvider) {
       const item = items.find((i) => Number(i.ID) === Number(o.recurring_id));
       if (item) {
         const { data } = await db.rpc('rpc_standing_billing_observed', { p_id: o.id, p_sumit_status: item.Status ?? null,
-          p_next: item.Date_NextBilling?.slice(0, 10) ?? null, p_prev: item.Date_PreviousBilling?.slice(0, 10) ?? null });
+          p_next: item.Date_NextBilling?.slice(0, 10) ?? null, p_prev: item.Date_PreviousBilling?.slice(0, 10) ?? null,
+          p_final: item.Date_Last?.slice(0, 10) ?? null });
         const c = (data as { charge?: { duplicate?: boolean; valid?: boolean } | null } | null)?.charge;
         if (c && !c.duplicate) { if (c.valid) out.charges++; else out.declined++; }
       } else {

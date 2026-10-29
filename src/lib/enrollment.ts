@@ -20,13 +20,22 @@ export type EnrollForm = {
   mailing_consent: boolean; terms_accepted: boolean;
   /** השאלות שמוצגות לפי הגדרות הסניף. '' = טרם נענתה. */
   whatsapp: '' | 'yes' | 'no'; photo: '' | 'yes' | 'no'; track: string;
+  /** יום החיוב בהוראת קבע (1–28). '' = טרם נבחר. נשאל רק במסלול הוראת קבע. */
+  billing_day: string;
 };
 
 /** אילו שאלות הסניף מציג. שאלה מוסתרת אינה חובה ואינה נשלחת. */
 export type EnrollQuestions = { whatsapp: boolean; photo: boolean; track: boolean };
 
-/** הודעה לכל שדה פגום, בעברית. ריק = תקין. */
-export function validateEnroll(f: EnrollForm, q: EnrollQuestions = { whatsapp: false, photo: false, track: false }): Partial<Record<keyof EnrollForm, string>> {
+/** האם המסלול הוא הוראת קבע עם חיובים חודשיים — ואז ההורה בוחרת יום חיוב. */
+export function asksBillingDay(t: Pick<TrackDef, 'method' | 'installments'> | null | undefined): boolean {
+  return Boolean(t && t.method === 'standing_order' && t.installments >= 2);
+}
+export const BILLING_DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
+
+/** הודעה לכל שדה פגום, בעברית. ריק = תקין. track — המסלול שנבחר (ליום החיוב). */
+export function validateEnroll(f: EnrollForm, q: EnrollQuestions = { whatsapp: false, photo: false, track: false },
+                               track?: Pick<TrackDef, 'method' | 'installments'> | null): Partial<Record<keyof EnrollForm, string>> {
   const e: Partial<Record<keyof EnrollForm, string>> = {};
   if (!f.first_name.trim()) e.first_name = 'יש למלא שם פרטי';
   else if (!NAME_RE.test(f.first_name)) e.first_name = 'אותיות בלבד';
@@ -39,6 +48,10 @@ export function validateEnroll(f: EnrollForm, q: EnrollQuestions = { whatsapp: f
   if (q.whatsapp && !f.whatsapp) e.whatsapp = 'יש לבחור כן או לא';
   if (q.photo && !f.photo) e.photo = 'יש לבחור כן או לא';
   if (q.track && !f.track) e.track = 'יש לבחור אופן תשלום';
+  if (q.track && asksBillingDay(track)) {
+    const d = Number(f.billing_day);
+    if (!/^\d{1,2}$/.test(f.billing_day) || d < 1 || d > 28) e.billing_day = 'יש לבחור יום חיוב בחודש (1–28)';
+  }
   if (!f.terms_accepted) e.terms_accepted = 'יש לקרוא ולאשר את התקנון';
   return e;
 }

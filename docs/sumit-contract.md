@@ -110,8 +110,16 @@
 - **מצב:** `POST /billing/recurring/listforcustomer/` → `RecurringItems[]` עם `Status`
   (0 פעילה · 1 בוטלה · 3 הושבתה אחרי כישלון · 9 הסתיימה · 11 תקופת חסד ·
   12 ממתינה לחיוב ראשון · 13 בוטלה ע"י הלקוחה · 14 ממתינה לניסיון חוזר),
-  `Date_NextBilling`, `Date_PreviousBilling`.
+  `Date_NextBilling`, `Date_PreviousBilling`, `Date_Last` (מועד החיוב האחרון). הוראה שהסתיימה (9)
+  ממשיכה להחזיר `Date_NextBilling` — לא אומר כלום.
 - **ביטול:** `POST /billing/recurring/cancel/` עם `Customer` + `RecurringCustomerItemID`.
+- **שינוי יום חיוב — אומת** (ארגון הייצור, הוראת הבדיקה של 1 ₪, 29/10/2026):
+  `POST /billing/recurring/update/` עם `Customer.ID`, `RecurringCustomerItemID`,
+  `NextPaymentDate` (YYYY-MM-DD) ו-`Recurrence` = מספר החיובים **שנותרו**. התשובה: `Status: 0`,
+  `Data` ריק. אחריו `listforcustomer`: `Date_NextBilling` ו-`Date_Last` זזו לתאריך החדש,
+  `UnitPrice` והסטטוס לא השתנו, `Date_Start` נשאר (היסטוריה). `Date_Last` = הבא + (נותרו − 1) חודשים —
+  ממנו המערכת מחשבת כמה נותרו לפי SUMIT, ולא משנה כלום כשזה לא תואם לתוכנית.
+  התאריכים חוזרים עם אזור זמן ישראל (`2026-11-20T00:00:00+02:00`) — נחתכים ל-10 תווים.
 - **חיובים:** `payments/list` לפי תאריכים, מסוננים אצלנו לפי `CustomerID` וסכום.
 - **אין ב-API:** התרעה מראש על כרטיס שפג תוקפו; קביעת מדיניות ניסיונות חוזרים
   (`updatesettings` לא כולל זאת); אירוע/webhook לחיוב שנכשל.

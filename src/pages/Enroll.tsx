@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useEnrollmentPublic, enroll, type EnrollResult } from '@/hooks/enrollment';
-import { validateEnroll, describeTrack, enrollTokenFromPath, type EnrollForm, type EnrollQuestions } from '@/lib/enrollment';
+import { validateEnroll, describeTrack, enrollTokenFromPath, asksBillingDay, BILLING_DAYS, type EnrollForm, type EnrollQuestions } from '@/lib/enrollment';
 import { formatILS } from '@/lib/format';
 
 /**
@@ -11,7 +11,7 @@ import { formatILS } from '@/lib/format';
  * (rpc_enroll) שמאמת שדות ומגביל קצב במסד; הדף לא נוגע בטבלאות.
  * בסיום: קישור התשלום על החיוב הראשון מוצג מיד, ונשלח גם בוואטסאפ.
  */
-const EMPTY: EnrollForm = { first_name: '', last_name: '', grade: '', school: '', phone: '', email: '', mailing_consent: false, terms_accepted: false, whatsapp: '', photo: '', track: '' };
+const EMPTY: EnrollForm = { first_name: '', last_name: '', grade: '', school: '', phone: '', email: '', mailing_consent: false, terms_accepted: false, whatsapp: '', photo: '', track: '', billing_day: '' };
 const NO_QUESTIONS: EnrollQuestions = { whatsapp: false, photo: false, track: false };
 
 export function Enroll() {
@@ -23,7 +23,10 @@ export function Enroll() {
   const [result, setResult] = useState<EnrollResult | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
   const questions = info.data?.ok ? info.data.questions : NO_QUESTIONS;
-  const errors = useMemo(() => validateEnroll(form, questions), [form, questions]);
+  const chosen = info.data?.ok ? info.data.tracks.find((t) => t.key === form.track) ?? null : null;
+  // יום חיוב — רק במסלול הוראת קבע. בחירה במסלול אחר לא נשלחת.
+  const askDay = questions.track && asksBillingDay(chosen);
+  const errors = useMemo(() => validateEnroll(form, questions, chosen), [form, questions, chosen]);
   const set = <K extends keyof EnrollForm>(k: K, v: EnrollForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   async function submit(e: FormEvent) {
@@ -31,7 +34,7 @@ export function Enroll() {
     setTouched(true);
     if (Object.keys(errors).length) return;
     setBusy(true);
-    try { setResult(await enroll({ ...form, enroll_token: token })); }
+    try { setResult(await enroll({ ...form, billing_day: askDay ? form.billing_day : '', enroll_token: token })); }
     catch { setResult({ ok: false, error: 'לא הצלחנו לשלוח את ההרשמה. בדקי את החיבור ונסי שוב.' }); }
     finally { setBusy(false); }
   }
@@ -127,6 +130,21 @@ export function Enroll() {
               ))}
             </div>
             {touched && errors.track && <span className="mt-1 block text-xs text-bad">{errors.track}</span>}
+            {askDay && (
+              <label className="mt-3 block">
+                <span className="font-medium">באיזה יום בחודש לחייב את הוראת הקבע?</span>
+                <select className="field mt-1" value={form.billing_day} onChange={(e) => set('billing_day', e.target.value)} aria-label="יום החיוב בחודש">
+                  <option value="">בחרי יום</option>
+                  {BILLING_DAYS.map((d) => <option key={d} value={String(d)}>{d} לחודש</option>)}
+                </select>
+                <span className="mt-1 block text-xs text-soft">
+                  {form.billing_day
+                    ? `החיובים החודשיים יהיו ב-${form.billing_day} בכל חודש, החל מהחודש הבא. התאריכים המדויקים יוצגו לאישור לפני התשלום.`
+                    : 'החיוב הראשון (דמי רישום + תשלום ראשון) הוא עכשיו; החיובים החודשיים — ביום שתבחרי, החל מהחודש הבא.'}
+                </span>
+                {touched && errors.billing_day && <span className="mt-1 block text-xs text-bad">{errors.billing_day}</span>}
+              </label>
+            )}
           </fieldset>
         )}
 
