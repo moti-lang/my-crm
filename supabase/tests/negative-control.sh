@@ -424,17 +424,17 @@ expect_fail_code "הרשמה: מבנה תשלום של סניף לא תקין ע
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: התקנון לא חובה" \
-  "$DIR/../migrations/0032_no_default_program_word.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "s/  if v_terms is distinct from true then return/  if false then return/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת הקצב מוסרת" \
-  "$DIR/../migrations/0032_no_default_program_word.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הסכום נלקח מהבקשה (הזרקה)" \
-  "$DIR/../migrations/0032_no_default_program_word.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "s/          coalesce((v_plan ->> .tuition.)::numeric, 0), coalesce((v_plan ->> .registration_fee.)/          coalesce((p ->> \x27tuition_total\x27)::numeric, (v_plan ->> \x27tuition\x27)::numeric, 0), coalesce((v_plan ->> \x27registration_fee\x27)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -459,12 +459,12 @@ expect_fail_code "הסיכום היומי בלי שורות ההרשמה" \
   "node supabase/tests/enrollment.test.mjs"
 
 expect_fail_code "הרשמה: rpc_enroll נפתחת שוב ל-anon (עוקפים את הגבלת ה-IP)" \
-  "$DIR/../migrations/0030_branch_payments_group_name.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "s/grant execute on function rpc_enroll(jsonb, text) to service_role;/grant execute on function rpc_enroll(jsonb, text) to service_role, anon;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת ה-IP מוסרת" \
-  "$DIR/../migrations/0032_no_default_program_word.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if v_n_phone >= 3 then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -475,7 +475,7 @@ expect_fail_code "הרשמה: הדף קורא ל-RPC ישירות (בלי IP)" \
 
 expect_fail_code "טופס ההרשמה: רכיב מוגדר בתוך הרכיב (הפוקוס נופל אחרי כל אות)" \
   "$DIR/../../src/pages/Enroll.tsx" \
-  'sed -i "s/  const errors = useMemo(() => validateEnroll(form, questions), \[form, questions\]);/  const errors = useMemo(() => validateEnroll(form, questions), [form, questions]);\n  const Inner = () => null;/" "$F"' \
+  'sed -i "s/  const errors = useMemo(() => validateEnroll(form, questions, chosen), \[form, questions, chosen\]);/  const errors = useMemo(() => validateEnroll(form, questions, chosen), [form, questions, chosen]);\n  const Inner = () => null;/" "$F"' \
   "node supabase/tests/enrollment.test.mjs"
 
 expect_fail_code "enroll בלי תשובת preflight (הדפדפן לא שולח את ה-POST)" \
@@ -700,7 +700,7 @@ expect_fail_code "אזכור לא-מוסמך לאובייקט מסכמת extensi
 "$DIR/reset.sh" >/dev/null
 expect_fail_code "דף ההרשמה שולח סניף מהדפדפן במקום הטוקן מהקישור" \
   "$DIR/../../src/pages/Enroll.tsx" \
-  'sed -i "s/enroll({ ...form, enroll_token: token })/enroll({ ...form, enroll_token: \x27\x27 })/" "$F"' \
+  'sed -i "s/, enroll_token: token })/, enroll_token: \x27\x27 })/" "$F"' \
   "node supabase/tests/enrollment.test.mjs"
 
 expect_fail_code "התזכורת לאחראית בלי שם האחראית" \
@@ -744,7 +744,7 @@ expect_fail_code "מסלולים: הוראות קבע מוצגות להורים 
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "מזומן: נוצר קישור תשלום" \
-  "$DIR/../migrations/0032_no_default_program_word.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "s/  if b.collect_payments and v_track ->> .method. <> .cash. then/  if b.collect_payments then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -754,12 +754,12 @@ expect_fail_code "וואטסאפ: תזכורות יוצאות גם למי שענ
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "צילום: התשובה לא נכתבת לשדה שחוסם הפקות" \
-  "$DIR/../migrations/0032_no_default_program_word.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "s/          coalesce(v_photo, false), case when v_photo is not null then b.photo_consent_text end,/          true, case when v_photo is not null then b.photo_consent_text end,/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "שאלה מוסתרת: התשובה נלקחת מהבקשה בכל זאת" \
-  "$DIR/../migrations/0032_no_default_program_word.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "s/  if (v_opts ->> .ask_whatsapp.)::boolean then/  v_wa := (p ->> \x27whatsapp\x27) = \x27yes\x27;\n  if (v_opts ->> \x27ask_whatsapp\x27)::boolean then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -799,7 +799,7 @@ expect_fail_code "מחיקת שאלה ללא מענה בלי אישור" \
   "node supabase/tests/question-delete.test.mjs"
 
 expect_fail_code "הודעת ההרשמה חוזרת ל\"תודה שנרשמת לחוג\"" \
-  "$DIR/../migrations/0032_no_default_program_word.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "s/coalesce(. ל. || v_program, ..)/coalesce(\x27 ל\x27 || v_program, \x27 לחוג\x27)/g" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -964,7 +964,7 @@ expect_fail_code "★ מכסה: הוראות קבע נבדקות בכל ריצה
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
 
 expect_fail_code "הוראת קבע: אותו חיוב נרשם פעמיים" \
-  "$DIR/../migrations/0037_sumit_call_caps.sql" \
+  "$DIR/../migrations/0041_billing_day.sql" \
   'sed -i "/     and not exists (select 1 from standing_order_charges c where c.standing_order_id = o.id and c.charged_at::date = p_prev) then/s/     and not exists.*then/     then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/22_sumit_privacy.sql"
 
@@ -1209,8 +1209,8 @@ expect_fail_code "הוראת קבע: חיוב שנדחה בלי התראה" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
 expect_fail_code "הוראת קבע: הנוסח שאושר לא נשמר" \
-  "$DIR/../migrations/0028_standing_orders.sql" \
-  'sed -i "s/  update payment_links set standing_consent_text = c ->> .text., standing_consented_at = now() where id = l.id;/  update payment_links set standing_consented_at = now() where id = l.id;/" "$F"' \
+  "$DIR/../migrations/0041_billing_day.sql" \
+  'sed -i "s/  update payment_links set standing_consent_text = c ->> .text., standing_consented_at = now(),/  update payment_links set standing_consented_at = now(),/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
 expect_fail_code "הוראת קבע: מנהלת סניף יכולה לעצור" \
