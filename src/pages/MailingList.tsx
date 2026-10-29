@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMailingList } from '@/hooks/enrollment';
 import { useStudents, STATUS_LABEL } from '@/hooks/students';
 import { useBranches } from '@/hooks/queries';
@@ -102,12 +102,22 @@ function Compose({ onSent }: { onSent: () => void }) {
   const vars = sample ? { parent_name: sample.parent_name ?? '', student_name: sample.full_name ?? '', branch: sample.branch_name ?? '',
     balance: formatILS(sample.balance), paid: formatILS(sample.paid), total: formatILS(sample.due), date: formatDate(new Date()) } : null;
 
+  // הסמן אחרי המשתנה שנוסף — מיד כשהטקסט מתעדכן במסך, לפני ההקשה הבאה. (בפריים הבא זה מאוחר מדי
+  // במכונה עמוסה: הקלדה מהירה אחרי הלחיצה הייתה נכנסת לאמצע הטקסט.)
+  const caretAfter = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = bodyRef.current, at = caretAfter.current;
+    if (!el || at == null) return;
+    caretAfter.current = null;
+    el.focus();
+    el.setSelectionRange(at, at);
+  }, [body]);
   const insertVar = (name: string) => {
     const el = bodyRef.current, token = `{${name}}`;
     if (!el) { setBody((b) => b + token); return; }
     const [a, b] = [el.selectionStart ?? body.length, el.selectionEnd ?? body.length];
+    caretAfter.current = a + token.length;
     setBody(body.slice(0, a) + token + body.slice(b));
-    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + token.length, a + token.length); });
   };
 
   async function pickFile(f: File | undefined) {

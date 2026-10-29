@@ -62,6 +62,14 @@ try {
     return { ...(await flow.queueCampaign(service, { ...body, createdBy: OWNER })), configured: true };
   } };
   const { page, log } = await ui.newPage(OWNER, { functions });
+  // ★ מכונה עמוסה (כמו ב-CI): הפריים הבא מגיע רק אחרי שההקלדה כבר התחילה. "הוספת משתנה" לא
+  //   יכולה לקבוע את הסמן בפריים הבא — אחרת ההקלדה שאחרי הלחיצה נכנסת לאמצע הטקסט (נפל כך ב-CI).
+  await page.addInitScript(() => {
+    const q = [];
+    const flush = () => { while (q.length) { try { q.shift()(performance.now()); } catch { /* כמו בדפדפן */ } } };
+    window.requestAnimationFrame = (cb) => { q.push(cb); setTimeout(flush, 1500); return q.length; };
+    document.addEventListener('input', () => setTimeout(flush, 0), true);
+  });
   page.on('dialog', (d) => void d.accept());
 
   console.log('\nמסך השליחה — למי:');

@@ -1228,6 +1228,11 @@ expect_fail_code "כלי הגילוי מדפיס פרטי כרטיס" \
   'sed -i "s/<redacted>/\$2/" "$F"' \
   "node supabase/tests/sumit.test.mjs"
 
+expect_fail_code "★ מיילים: הסמן אחרי \"הוספת משתנה\" נקבע רק בפריים הבא (הקלדה מהירה נכנסת לאמצע)" \
+  "$DIR/../../src/pages/MailingList.tsx" \
+  'sed -i "s/    caretAfter.current = a + token.length;/    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + token.length, a + token.length); });/" "$F"' \
+  "node supabase/tests/email-ui.test.mjs"
+
 # ─── יום החיוב בהוראת קבע (0041) ───
 expect_fail_code "★ יום חיוב: מתעלמים מ\"חויבה החודש\" (שני חיובים באותו חודש)" \
   "$DIR/../migrations/0041_billing_day.sql" \
