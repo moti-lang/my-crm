@@ -409,7 +409,7 @@ expect_fail_code "SUMIT: הסכום לדף מגיע מהבקשה" \
   "node supabase/tests/sumit.test.mjs"
 
 expect_fail_code "SUMIT: הדף הציבורי חושף את הטלפון" \
-  "$DIR/../migrations/0032_no_default_program_word.sql" \
+  "$DIR/../migrations/0044_pay_page_billing_day.sql" \
   'sed -i "s/  return jsonb_build_object(.ok., true, .state., .open., .student., v_name, .branch., v_branch, .amount., l.amount,/  return jsonb_build_object(\x27ok\x27, true, \x27state\x27, \x27open\x27, \x27student\x27, v_name, \x27branch\x27, v_branch, \x27amount\x27, l.amount, \x27parent_phone\x27, (select parent_phone from students where id = l.student_id),/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/16_payment_links.sql"
 
