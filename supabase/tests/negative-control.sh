@@ -1344,6 +1344,52 @@ expect_fail_code "★ מכסה: הוראה שנוצרה עכשיו נבדקת מ
   'sed -i "s/          case when p_ok then now() end)/          null)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
+# ─── עריכת שם תלמידה (0043) ───
+expect_fail_code "★ עריכת שם: שינוי שם לא נרשם ביומן" \
+  "$DIR/../migrations/0043_student_rename.sql" \
+  'sed -i "s/create trigger students_rename_audit after update of full_name on students/create trigger students_rename_audit after update of notes on students/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
+
+expect_fail_code "★ עריכת שם: מנהלת סניף משנה שם של תלמידה מסניף אחר" \
+  "$DIR/../migrations/0043_student_rename.sql" \
+  'sed -i "s/  if not (v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches()))) then/  if not (v_role = \x27owner\x27 or v_role = \x27branch_manager\x27) then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
+
+expect_fail_code "★ עריכת שם: כל משתמשת (גם רואת חשבון) משנה שם" \
+  "$DIR/../migrations/0043_student_rename.sql" \
+  'sed -i "s/  if not (v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches()))) then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
+
+expect_fail_code "עריכת שם: שם כפול בסניף מתקבל" \
+  "$DIR/../migrations/0043_student_rename.sql" \
+  'sed -i "s/  if exists (select 1 from students o where o.id <> s.id/  if false and exists (select 1 from students o where o.id <> s.id/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
+
+expect_fail_code "★ עריכת שם: הודעה שכבר יצאה נכתבת מחדש (התיעוד משתנה)" \
+  "$DIR/../migrations/0043_student_rename.sql" \
+  'sed -i "s/     where student_id = s.id and status = .scheduled./     where student_id = s.id/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
+
+expect_fail_code "★ עריכת שם: תזכורת שעוד לא יצאה נשארת עם השם הישן" \
+  "$DIR/../migrations/0043_student_rename.sql" \
+  'sed -i "s/     where student_id = s.id and status = .scheduled./     where student_id = s.id and status = \x27cancelled\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
+
+expect_fail_code "עריכת שם: השם הפרטי מוחלף גם בתוך מילים אחרות (\"רות\" ב\"שירות\")" \
+  "$DIR/../migrations/0043_student_rename.sql" \
+  'sed -i "s/                        .(^|\[^֐-׿A-Za-z\])(\[והבכלמש\]?). ||/                        \x27()()\x27 ||/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
+
+expect_fail_code "★ עריכת שם: רואת חשבון רואה את כפתור העריכה" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/                {(profile?.role === .owner. || profile?.role === .branch_manager.) \&\& (/                {true \&\& (/" "$F"' \
+  "node supabase/tests/student-rename-ui.test.mjs"
+
+expect_fail_code "★ עריכת שם: היסטוריית השם לא מוצגת בכרטיס" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/          {(nameHistory.data ?? \[\]).length > 0 \&\& (/          {false \&\& (/" "$F"' \
+  "node supabase/tests/student-rename-ui.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

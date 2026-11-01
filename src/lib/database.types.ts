@@ -2459,6 +2459,14 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_rename_student: {
+        Args: {
+          p_id: string;
+          p_first: string;
+          p_last: string;
+        };
+        Returns: Json;
+      };
       rpc_restore_student: {
         Args: {
           p_student: string;
@@ -2557,6 +2565,12 @@ export type Database = {
           p_day: number;
         };
         Returns: Json;
+      };
+      rpc_student_name_history: {
+        Args: {
+          p_student: string;
+        };
+        Returns: unknown[];
       };
       rpc_students_export: {
         Args: {

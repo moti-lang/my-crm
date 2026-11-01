@@ -113,6 +113,11 @@
   `Date_NextBilling`, `Date_PreviousBilling`, `Date_Last` (מועד החיוב האחרון). הוראה שהסתיימה (9)
   ממשיכה להחזיר `Date_NextBilling` — לא אומר כלום.
 - **ביטול:** `POST /billing/recurring/cancel/` עם `Customer` + `RecurringCustomerItemID`.
+- **דף התשלום של SUMIT (`/billing/payments/beginredirect/`) — אין בחירת יום חיוב** (לפי המפרט, 01/11/2026):
+  הבקשה מקבלת לקוחה, פריטים (שם/מחיר/כמות — בלי `Date_Start`/`Recurrence`), כתובות חזרה, מזהה חיצוני,
+  מספר תשלומים בכרטיס (`MaximumPayments`), שפה, כותרת, תקנון (`TermsID`). אין שדה משלנו בדף ואין
+  מועד להוראת קבע — הדף גובה חיוב אחד ושומר את הכרטיס. ההוראה נוצרת אחר כך אצלנו ב-API עם כל `Date_Start`,
+  ולכן יום החיוב נבחר אצלנו: בטופס ההרשמה, ובנוסח האישור בדף `/pay` שלפני דף SUMIT.
 - **שינוי יום חיוב — אומת** (ארגון הייצור, הוראת הבדיקה של 1 ₪, 29/10/2026):
   `POST /billing/recurring/update/` עם `Customer.ID`, `RecurringCustomerItemID`,
   `NextPaymentDate` (YYYY-MM-DD) ו-`Recurrence` = מספר החיובים **שנותרו**. התשובה: `Status: 0`,

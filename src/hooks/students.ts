@@ -134,3 +134,32 @@ function useStudentRpc(fn: 'rpc_delete_student' | 'rpc_restore_student' | 'rpc_p
 export const useDeleteStudent = () => useStudentRpc('rpc_delete_student');
 export const useRestoreStudent = () => useStudentRpc('rpc_restore_student');
 export const usePurgeStudent = () => useStudentRpc('rpc_purge_student');
+
+/**
+ * עריכת שם התלמידה. השם במקום אחד — כל המסכים נטענים מחדש ומציגים אותו. הודעות שעוד לא יצאו
+ * מתעדכנות במסד, וכל שינוי נרשם ביומן (טריגר). ההרשאה במסד: בעלים, או מנהלת הסניף.
+ */
+export function useRenameStudent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; first: string; last: string }) => {
+      const { data, error } = await supabase.rpc('rpc_rename_student', { p_id: input.id, p_first: input.first, p_last: input.last });
+      if (error) throw new Error(error.message);
+      return data as { ok: boolean; full_name: string; from: string; reminders: number; emails: number };
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+/** היסטוריית השם בכרטיס: מתי, מי, מאיזה שם לאיזה. */
+export function useStudentNameHistory(studentId: string | null) {
+  return useQuery({
+    queryKey: ['student-name-history', studentId],
+    enabled: Boolean(studentId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_student_name_history', { p_student: studentId as string });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as { changed_at: string; changed_by: string; from_name: string; to_name: string }[];
+    },
+  });
+}

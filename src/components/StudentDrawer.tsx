@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
+import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
 import { StandingOrderPanel } from '@/components/StandingOrderPanel';
 import { useStandingOrders } from '@/hooks/standing';
-import { formatILS, formatDate, formatPhone } from '@/lib/format';
+import { formatILS, formatDate, formatDateTime, formatPhone } from '@/lib/format';
+import { NAME_RE } from '@/lib/enrollment';
 import { PaymentForm } from '@/components/PaymentForm';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
 import { useInstallmentProgress, useCancelEnrollment } from '@/hooks/enrollment';
@@ -39,6 +40,10 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const { profile } = useAuth();
   const deleteStudent = useDeleteStudent();
   const cancelEnrollment = useCancelEnrollment();
+  const nameHistory = useStudentNameHistory(student?.id ?? null);
+  const [renaming, setRenaming] = useState(false);
+  const [renamed, setRenamed] = useState<string | null>(null);
+  useEffect(() => { setRenaming(false); setRenamed(null); }, [student?.id]);
 
   if (!student) return null;
 
@@ -66,12 +71,24 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
         aria-label={`כרטיס התלמידה ${student.full_name}`}
       >
         <header className="flex items-start justify-between gap-3 border-b border-rule p-4">
-          <div>
-            <h2 className="font-display text-xl">{student.full_name}</h2>
+          <div className="min-w-0 flex-1">
+            {renaming && student.id ? (
+              <RenameForm id={student.id} fullName={student.full_name ?? ''}
+                onDone={(msg) => { setRenaming(false); setRenamed(msg); }} onCancel={() => setRenaming(false)} />
+            ) : (
+              <div className="flex items-center gap-2">
+                <h2 className="font-display text-xl">{student.full_name}</h2>
+                {(profile?.role === 'owner' || profile?.role === 'branch_manager') && (
+                  <button type="button" className="btn-ghost px-2 py-0.5 text-xs" onClick={() => { setRenamed(null); setRenaming(true); }}
+                    aria-label="עריכת שם התלמידה">✎ עריכת שם</button>
+                )}
+              </div>
+            )}
             <p className="mt-0.5 text-sm text-soft">
               {student.branch_name}
               {student.grade ? ` · כיתה ${student.grade}` : ''}
             </p>
+            {renamed && <p className="mt-1 text-xs text-ok" role="status">{renamed}</p>}
           </div>
           <div className="flex items-center gap-2">
             <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[status]}`}>
@@ -253,6 +270,16 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             )}
           </Section>
 
+          {(nameHistory.data ?? []).length > 0 && (
+            <Section title="שינויי שם">
+              <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית השם">
+                {(nameHistory.data ?? []).map((h, i) => (
+                  <li key={i}>{formatDateTime(h.changed_at)} · {h.changed_by}: מ-„{h.from_name}” ל-„{h.to_name}”</li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
           {student.notes && (
             <Section title="הערות">
               <p className="whitespace-pre-wrap text-sm">{student.notes}</p>
@@ -285,5 +312,46 @@ function Row({ label, value, ltr }: { label: string; value: string | null; ltr?:
       <dt className="text-soft">{label}:</dt>
       <dd {...(ltr ? { dir: 'ltr' as const } : {})}>{value ?? '—'}</dd>
     </div>
+  );
+}
+
+/**
+ * עריכת השם בכרטיס: שם פרטי ושם משפחה. השמירה במסד (rpc_rename_student) — שם גם הבדיקות
+ * (אותיות בלבד, אין כפילות בסניף) וההרשאה. הודעה אחרי השמירה: מה התעדכן.
+ */
+function RenameForm({ id, fullName, onDone, onCancel }: { id: string; fullName: string; onDone: (msg: string) => void; onCancel: () => void }) {
+  const [first, setFirst] = useState(fullName.split(' ')[0] ?? '');
+  const [last, setLast] = useState(fullName.split(' ').slice(1).join(' '));
+  const rename = useRenameStudent();
+  const f = first.trim(), l = last.trim();
+  const local = !f ? 'יש למלא שם פרטי' : !NAME_RE.test(f) || (l && !NAME_RE.test(l)) ? 'אותיות בלבד' : null;
+  const same = `${f} ${l}`.trim() === fullName.trim();
+  return (
+    <form className="space-y-2" onSubmit={(e) => {
+      e.preventDefault();
+      if (local || same) return;
+      rename.mutate({ id, first: f, last: l }, {
+        onSuccess: (r) => {
+          const msgs = r.reminders + r.emails;
+          onDone(`✓ השם עודכן מ-„${r.from}” ל-„${r.full_name}” בכל המסכים${msgs ? `, וגם ב-${msgs} הודעות שעוד לא יצאו` : ''}.`);
+        },
+      });
+    }}>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block text-xs">שם פרטי
+          <input className="field mt-0.5" value={first} onChange={(e) => setFirst(e.target.value)} autoFocus />
+        </label>
+        <label className="block text-xs">שם משפחה
+          <input className="field mt-0.5" value={last} onChange={(e) => setLast(e.target.value)} />
+        </label>
+      </div>
+      {(local || rename.error != null) && <p className="text-xs text-bad" role="alert">{local ?? humanError(rename.error)}</p>}
+      <div className="flex gap-2">
+        <button type="submit" className="btn-primary px-3 py-1 text-xs" disabled={Boolean(local) || same || rename.isPending}>
+          {rename.isPending ? 'שומרת…' : 'שמירה'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={rename.isPending} onClick={onCancel}>ביטול</button>
+      </div>
+    </form>
   );
 }
