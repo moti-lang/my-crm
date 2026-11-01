@@ -21,7 +21,12 @@ insert into reminders (kind, student_id, branch_id, to_phone, body, scheduled_at
 set local role authenticated;
 select set_config('request.jwt.claims', t_claims('owner'::user_role), true);
 select t_income_snapshot() as snap_before \gset
-select assert_true((select sum(income_students) from v_pnl_monthly where month = '2026-07-01') >= 2000, 'הצילום כולל את התשלומים של התלמידה (לא בדיקה ריקה)');
+-- (התשלומים ב-seed יחסיים להיום — החודשים זזים. לא חודש קבוע: נפל ב-1/11 כשיולי יצא מהטווח.)
+select assert_true((select count(*) = 3 and sum(p.amount) = 2000
+                           and bool_and((select coalesce(sum(m.income_students), 0) from v_pnl_monthly m
+                                          where m.month::date = date_trunc('month', p.paid_on)::date) >= p.amount)
+                    from payments p where p.student_id = :SHIRA and p.deleted_at is null),
+                   'הצילום כולל את התשלומים של התלמידה (לא בדיקה ריקה)');
 
 select rpc_delete_student(:SHIRA);
 select assert_true(t_income_snapshot() = :'snap_before', '★ דוח ההכנסות (חודשי + סניפים) זהה לפני ואחרי מחיקת התלמידה');
