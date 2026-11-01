@@ -54,7 +54,11 @@ select assert_true((select (e ->> 'installments')::int = 9 and (e ->> 'amount'):
 select rpc_standing_order_created(t_so_link('רות'), true, 777, 5551, null);
 select assert_eq(jsonb_array_length(rpc_standing_orders_to_setup()), 0, 'נוצרה — לא נוצרת שוב');
 select assert_true((select status = 'active' and installments = 9 and installments_total = 10 and consent_text like 'אני מאשרת%' from standing_orders), 'ההוראה פעילה, עם הנוסח שאושר');
-select assert_eq(jsonb_array_length(rpc_standing_orders_to_check()), 1, 'rpc_standing_orders_to_check: ההוראה בבדיקה');
+select assert_eq(jsonb_array_length(rpc_standing_orders_to_check()), 0, '★ מכסה: הוראה שנוצרה עכשיו לא נבדקת באותה ריצה (SUMIT בדיוק אישרה — קריאה מבוזבזת)');
+select assert_true((select last_checked_at is not null from standing_orders), '...היצירה נרשמת כבדיקה');
+-- יום לפני מועד החיוב (ולפחות 20 שעות אחרי היצירה) — נבדקת.
+update standing_orders set last_checked_at = now() - interval '21 hours', next_billing = current_date + 1;
+select assert_eq(jsonb_array_length(rpc_standing_orders_to_check()), 1, 'rpc_standing_orders_to_check: יום לפני מועד החיוב — בבדיקה');
 
 -- חיוב חודשי תקין → תשלום ויתרה.
 select rpc_record_standing_charge((select id from standing_orders), 9001, 110, now(), true, null);
@@ -80,6 +84,29 @@ select assert_eq((select count(*) from system_alerts where kind = 'standing_orde
 select rpc_standing_order_status((select id from standing_orders), 3, null, current_date);
 select assert_eq((select count(*) from system_alerts where kind = 'standing_order_failed'), 2, 'אותו מצב שוב — בלי התראה כפולה');
 select assert_true(f_standing_status(13) = 'cancelled' and f_standing_status(9) = 'completed' and f_standing_status(0) = 'active', 'f_standing_status: מיפוי הקודים');
+rollback;
+
+\echo '★ מכסה: הרבה הוראות שנוצרות בבת אחת (כמו ב-1/11) — קריאה אחת לכל אחת, לא שתיים:'
+begin;
+create temp table so_sim (n int) on commit drop;
+update students set payment_track = '{"method": "standing_order", "installments": 10, "installment_amount": 110}'::jsonb
+ where id = 'dddddddd-0000-0000-0000-000000000001';
+do $$
+declare i int; v_link uuid; v_creates int := 0; v_checks int;
+begin
+  for i in 1..20 loop
+    insert into payment_links (token, external_identifier, student_id, branch_id, amount, status, paid_at, standing_consent_text, standing_consented_at, standing_date_start)
+    values (repeat('s', 60) || lpad(i::text, 4, '0'), 'sim-' || i, 'dddddddd-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000001', 210, 'paid', now(),
+            'אישור', now(), current_date + 7)
+    returning id into v_link;
+    perform rpc_standing_order_created(v_link, true, 900 + i, 7000 + i, null);
+    v_creates := v_creates + 1;
+  end loop;
+  -- אותה ריצה של הסנכרון: אחרי היצירה, מה נבדק?
+  v_checks := jsonb_array_length(rpc_standing_orders_to_check());
+  insert into so_sim values (v_creates + v_checks);
+end $$;
+select assert_eq((select n from so_sim), 20, '★ 20 הוראות חדשות = 20 קריאות ל-SUMIT (יצירה בלבד), לא 40');
 rollback;
 
 \echo 'יצירה שנכשלה:'
@@ -114,6 +141,7 @@ reset role;
 select rpc_standing_order_cancelled((select id from standing_orders), (select t_user('owner'::user_role)));
 select assert_true((select status = 'cancelled' and cancelled_at is not null and cancelled_by is not null and next_billing is null from standing_orders), 'אחרי SUMIT — נעצרה, עם מי ומתי');
 -- ★ אחרי העצירה: ממשיכים לבדוק מול SUMIT. אישור ביטול (1) — שקט; עדיין פעילה שם — התראה קריטית.
+update standing_orders set last_checked_at = now() - interval '21 hours';   -- למחרת
 select assert_eq(jsonb_array_length(rpc_standing_orders_to_check()), 1, 'הוראה שנעצרה ממשיכה להיבדק מול SUMIT');
 select assert_true((rpc_standing_order_status((select id from standing_orders), 1, null, null) ->> 'confirmed_in_sumit')::boolean, 'SUMIT מאשרת: בוטלה (1)');
 select assert_eq((select count(*) from system_alerts where kind = 'standing_order_cancel_mismatch'), 0, 'אישור — בלי התראה');

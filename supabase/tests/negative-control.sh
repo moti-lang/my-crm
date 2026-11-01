@@ -1339,6 +1339,11 @@ expect_fail_code "★ הרשמה: יום החיוב לא נשלח" \
   'sed -i "s/billing_day: askDay ? form.billing_day : .., enroll_token: token/billing_day: \x27\x27, enroll_token: token/" "$F"' \
   "node supabase/tests/billing-day-ui.test.mjs"
 
+expect_fail_code "★ מכסה: הוראה שנוצרה עכשיו נבדקת מיד באותה ריצה (קריאה כפולה ל-SUMIT)" \
+  "$DIR/../migrations/0042_no_check_after_create.sql" \
+  'sed -i "s/          case when p_ok then now() end)/          null)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה
