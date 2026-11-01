@@ -1209,7 +1209,7 @@ expect_fail_code "הוראת קבע: חיוב שנדחה בלי התראה" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
 expect_fail_code "הוראת קבע: הנוסח שאושר לא נשמר" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0044_pay_page_billing_day.sql" \
   'sed -i "s/  update payment_links set standing_consent_text = c ->> .text., standing_consented_at = now(),/  update payment_links set standing_consented_at = now(),/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
@@ -1290,12 +1290,12 @@ expect_fail_code "★ הרשמה: יום חיוב 29 (או זבל) מתקבל" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
 expect_fail_code "★ הרשמה: התאריכים בנוסח לא לפי היום שנבחר" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0044_pay_page_billing_day.sql" \
   'sed -i "s/    v_dates := f_standing_dates_on_day(coalesce(p_on, f_today_il()), v_day, v_n);/    v_dates := f_standing_dates(coalesce(p_on, current_date), v_n);/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
 expect_fail_code "★ הרשמה: התאריך שאושר לא נשמר (ההוראה נוצרת בתאריך אחר)" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0044_pay_page_billing_day.sql" \
   'sed -i "s/         standing_date_start = (c -> .dates. ->> 0)::date/         standing_date_start = null/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
@@ -1389,6 +1389,37 @@ expect_fail_code "★ עריכת שם: היסטוריית השם לא מוצגת
   "$DIR/../../src/components/StudentDrawer.tsx" \
   'sed -i "s/          {(nameHistory.data ?? \[\]).length > 0 \&\& (/          {false \&\& (/" "$F"' \
   "node supabase/tests/student-rename-ui.test.mjs"
+
+# ─── יום החיוב בדף התשלום (0044) ───
+expect_fail_code "★ דף התשלום: האישור מתעלם מהיום שנבחר בדף" \
+  "$DIR/../migrations/0044_pay_page_billing_day.sql" \
+  'sed -i "s/  c := f_standing_consent(l.id, null, p_day);/  c := f_standing_consent(l.id);/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ דף התשלום: היום שנבחר לא נשמר במסלול (ההוראה תיווצר ביום אחר)" \
+  "$DIR/../migrations/0044_pay_page_billing_day.sql" \
+  'sed -i "s/    update students set payment_track = payment_track || jsonb_build_object(.billing_day., p_day) where id = l.student_id;/    perform 1;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "דף התשלום: יום 31 מתקבל באישור" \
+  "$DIR/../migrations/0044_pay_page_billing_day.sql" \
+  'sed -i "s/  if p_day is not null and (p_day < 1 or p_day > 28) then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
+
+expect_fail_code "★ דף התשלום: החלפת יום לא מבטלת את הסימון (אישור על נוסח אחר)" \
+  "$DIR/../../src/pages/Pay.tsx" \
+  'sed -i "s/    setDay(v); setAgree(false);/    setDay(v);/" "$F"' \
+  "node supabase/tests/billing-day-ui.test.mjs"
+
+expect_fail_code "★ דף התשלום: היום שנבחר לא נשלח עם האישור" \
+  "$DIR/../../src/pages/Pay.tsx" \
+  'sed -i "s/&consent=1&day=\${encodeURIComponent(day)}/\&consent=1/" "$F"' \
+  "node supabase/tests/billing-day-ui.test.mjs"
+
+expect_fail_code "★ דף התשלום: אפשר לאשר לפני שנבחר יום (נוסח בלי התאריכים האמיתיים)" \
+  "$DIR/../../src/pages/Pay.tsx" \
+  'sed -i "s/  const dayReady = !standingNeedsDay || (day !== .. \&\& /  const dayReady = true || (day !== \x27\x27 \&\& /" "$F"' \
+  "node supabase/tests/billing-day-ui.test.mjs"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash

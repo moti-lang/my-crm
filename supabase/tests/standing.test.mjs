@@ -182,13 +182,16 @@ console.log('\nהקוד סביב:');
 {
   const checkout = codeOf('supabase/functions/sumit-checkout/index.ts');
   const iConsent = checkout.indexOf('rpc_standing_consent_required'), iPage = checkout.indexOf('createPaymentPage(');
-  check('★ checkout: אישור הוראת הקבע נבדק ונשמר לפני דף התשלום', iConsent > 0 && iPage > iConsent && /if \(needsConsent\) \{\s*if \(new URL\(req\.url\)\.searchParams\.get\('consent'\) !== '1'\)/.test(checkout) && /rpc_standing_consent', \{ p_token: token \}/.test(checkout));
+  check('★ checkout: אישור הוראת הקבע נבדק ונשמר לפני דף התשלום', iConsent > 0 && iPage > iConsent && /if \(needsConsent\) \{\s*if \(new URL\(req\.url\)\.searchParams\.get\('consent'\) !== '1'\)/.test(checkout) && /rpc_standing_consent', \{ p_token: token, p_day: day \}/.test(checkout));
+  check('★ checkout: יום החיוב מהדף — רק 1–2 ספרות; השרת בודק 1–28 ומסרב עם הסבר', /const day = dayParam && \/\^\\d\{1,2\}\$\/\.test\(dayParam\) \? Number\(dayParam\) : null;/.test(checkout)
+        && /if \(!c\?\.ok\) return json\(\{ ok: false, error: c\?\.error/.test(checkout));
   const cancel = codeOf('supabase/functions/standing-order-cancel/index.ts');
   const iReq = cancel.indexOf('rpc_standing_order_cancel_request'), iSumit = cancel.indexOf('.cancel('), iMark = cancel.indexOf('rpc_standing_order_cancelled');
   check('★ עצירה: הרשאה במסד → ביטול ב-SUMIT → רק אז סימון אצלנו', iReq > 0 && iSumit > iReq && iMark > iSumit && /if \(!r\.ok\)/.test(cancel));
   check('עצירה: ההרשאה נבדקת בהרשאות המשתמשת, לא ב-service_role', /userClient\(authorization\)\.rpc\('rpc_standing_order_cancel_request'/.test(cancel));
   const pay = codeOf('src/pages/Pay.tsx');
-  check('★ /pay: התיבה לא מסומנת מראש, והכפתור חסום עד הסימון', /const \[agree, setAgree\] = useState\(false\);/.test(pay) && /!info\.standing\.consented && !agree/.test(pay));
+  check('★ /pay: יום אחר מבטל את הסימון (נוסח אחר = אישור מחדש), והיום נשלח עם האישור', /setDay\(v\); setAgree\(false\);/.test(pay) && /&consent=1&day=\$\{encodeURIComponent\(day\)\}/.test(pay));
+  check('★ /pay: התיבה לא מסומנת מראש, והכפתור חסום עד הסימון', /const \[agree, setAgree\] = useState\(false\);/.test(pay) && /!info\.standing\.consented && \(!agree \|\| !dayReady\)/.test(pay));
   const resched = codeOf('supabase/functions/standing-order-reschedule/index.ts');
   check('שינוי יום חיוב: הפונקציה מריצה את הזרימה המשותפת, עם הרשאות המשתמשת', /rescheduleStanding\(userClient\(authorization\), adminClient\(\), standingProvider\(\), body, by\)/.test(resched));
   const cron = codeOf('supabase/functions/cron-sumit-sync/index.ts');

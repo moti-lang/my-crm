@@ -169,7 +169,8 @@ select assert_no_table_privilege('anon', '{standing_orders,standing_order_charge
 select assert_no_execute('authenticated', 'rpc_record_standing_charge(uuid, bigint, numeric, timestamp with time zone, boolean, text)');
 select assert_no_execute('authenticated', 'rpc_standing_order_created(uuid, boolean, bigint, bigint, text)');
 select assert_no_execute('authenticated', 'rpc_standing_order_cancelled(uuid, uuid)');
-select assert_no_execute('anon', 'rpc_standing_consent(text)');
+select assert_no_execute('anon', 'rpc_standing_consent(text, integer)');
+select assert_no_execute('authenticated', 'rpc_standing_consent(text, integer)');
 rollback;
 
 update settings set value = 'false'::jsonb where key = 'standing_orders_enabled';

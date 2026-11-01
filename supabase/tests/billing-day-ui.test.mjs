@@ -161,7 +161,24 @@ try {
   try {
     const enrollCalls = [];
     // הפונקציה enroll מעבירה את הגוף כמו שהוא ל-rpc_enroll (עם ה-IP).
-    const enrollFns = { enroll: async (body) => { enrollCalls.push(body); return (await service.rpc('rpc_enroll', { p: body, p_ip: '10.9.9.9' })).data; } };
+    const checkoutCalls = [];
+    const enrollFns = {
+      enroll: async (body) => { enrollCalls.push(body); return (await service.rpc('rpc_enroll', { p: body, p_ip: '10.9.9.9' })).data; },
+      // sumit-checkout: אותו סדר כמו בפונקציה — האם נדרש אישור, היום מהדף (1–2 ספרות), שמירת האישור במסד.
+      // נעצרים לפני יצירת דף ב-SUMIT.
+      'sumit-checkout': async (_body, q) => {
+        checkoutCalls.push(Object.fromEntries(q));
+        const tok = q.get('token');
+        const { data: needs } = await service.rpc('rpc_standing_consent_required', { p_token: tok });
+        if (needs) {
+          if (q.get('consent') !== '1') return { ok: false, error: 'יש לאשר את הוראת הקבע לפני התשלום' };
+          const dp = q.get('day');
+          const { data: c } = await service.rpc('rpc_standing_consent', { p_token: tok, p_day: dp && /^\d{1,2}$/.test(dp) ? Number(dp) : null });
+          if (!c?.ok) return { ok: false, error: c?.error ?? 'x' };
+        }
+        return { ok: false, error: 'בדיקה: נעצרים לפני דף SUMIT' };
+      },
+    };
     const { page, log } = await ui.newPage(null, { functions: enrollFns });
     const token = sql(`select enroll_token from branches where id = '${BEITAR}'`);
     const trackLabel = sql(`select t ->> 'label' from jsonb_array_elements(f_plan_check((select plan from branches where id = '${BEITAR}')) -> 'tracks') t where t ->> 'key' = 'so10'`);
@@ -201,6 +218,44 @@ try {
     check(`★ ...והתאריכים בפועל: ${dates[0]} עד ${dates[8]}`, text.endsWith(`בתאריכים הבאים: ${dates.join(', ')}`), text);
     check('★ התיבה לא מסומנת, והתשלום חסום עד הסימון', !(await consent.locator('input[type=checkbox]').isChecked())
           && await page.getByRole('button', { name: 'לתשלום בכרטיס אשראי' }).isDisabled());
+
+    console.log('\nיום החיוב בדף התשלום (לפני דף האשראי של SUMIT):');
+    const payDay = page.getByLabel('יום החיוב בחודש');
+    check('★ בדף התשלום — בחירת יום, עם היום שנבחר בהרשמה מראש', (await payDay.inputValue()) === '20' && (await payDay.locator('option').count()) === 29);
+    await consent.locator('input[type=checkbox]').check();
+    await payDay.selectOption('9');
+    const consent9 = page.locator('label', { hasText: 'ב-9 בכל חודש' });
+    await consent9.waitFor({ timeout: 8000 });
+    const dates9 = Array.from({ length: 9 }, (_, i) => { const m = monthPlus(T, i + 1); return dmy(iso(m.y, m.m, 9)); });
+    const text9 = (await consent9.textContent())?.trim() ?? '';
+    check(`★ ההורה מחליפה ל-9 — הנוסח מתעדכן: ${dates9[0]} עד ${dates9[8]}`, text9.endsWith(`ב-9 בכל חודש, בתאריכים הבאים: ${dates9.join(', ')}`), text9);
+    check('★ יום אחר = נוסח אחר: הסימון בוטל, והתשלום חסום עד שמאשרים מחדש', !(await consent9.locator('input[type=checkbox]').isChecked())
+          && await page.getByRole('button', { name: 'לתשלום בכרטיס אשראי' }).isDisabled());
+    check('★ התצוגה לא שמרה כלום במסד', sql(`select coalesce(payment_track ->> 'billing_day', '') || '|' || (l.standing_consented_at is null)
+                                             from students s join payment_links l on l.student_id = s.id where l.token = '${payToken}'`) === '20|true');
+    await consent9.locator('input[type=checkbox]').check();
+    await page.getByRole('button', { name: 'לתשלום בכרטיס אשראי' }).click();
+    await page.waitForTimeout(1500);
+    check('★ "לתשלום" שולח את האישור עם היום שנבחר', checkoutCalls.length === 1 && checkoutCalls[0].consent === '1' && checkoutCalls[0].day === '9', JSON.stringify(checkoutCalls));
+    const first9 = (() => { const m = monthPlus(T, 1); return iso(m.y, m.m, 9); })();
+    check('★ במסד: היום (9), התאריך הראשון והנוסח עם היום — ההוראה תיווצר בו',
+      sql(`select (s.payment_track ->> 'billing_day') || '|' || l.standing_date_start || '|' || (l.standing_consent_text like '%ב-9 בכל חודש%')
+           from students s join payment_links l on l.student_id = s.id where l.token = '${payToken}'`) === `9|${first9}|true`);
+
+    // קישור בלי יום (קישור ידני / הרשמה ישנה): אין נוסח ואין תיבה עד שבוחרים.
+    const noDay = (await service.rpc('rpc_enroll', { p: { first_name: 'שני', last_name: ENROLL_LAST, grade: 'ד', school: 'בית יעקב', phone: '052-111-7799', email: 'shani@example.com',
+      enroll_token: token, terms_accepted: true, track: 'so10', whatsapp: 'yes', photo: 'yes', billing_day: '' }, p_ip: '10.9.9.9' })).data;
+    const noDayToken = /\/pay\/([0-9a-f]+)/.exec(noDay?.pay_url ?? '')?.[1];
+    await page.goto(`${ui.app}/pay/${noDayToken}`);
+    const sel2 = page.getByLabel('יום החיוב בחודש');
+    await sel2.waitFor({ timeout: 8000 });
+    check('★ קישור בלי יום — הבחירה ריקה, אין נוסח ואין תיבה, והתשלום חסום', (await sel2.inputValue()) === ''
+          && (await page.locator('input[type=checkbox]').count()) === 0
+          && (await page.getByText('אחרי שתבחרי יום יופיע כאן הנוסח לאישור').count()) === 1
+          && await page.getByRole('button', { name: 'לתשלום בכרטיס אשראי' }).isDisabled());
+    await sel2.selectOption('28');
+    await page.locator('label', { hasText: 'ב-28 בכל חודש' }).waitFor({ timeout: 8000 });
+    check('...בוחרת 28 — מופיעים הנוסח והתיבה (לא מסומנת)', !(await page.locator('label', { hasText: 'ב-28 בכל חודש' }).locator('input[type=checkbox]').isChecked()));
     check('בלי שגיאות דף ובלי שאילתות שבורות', log.pageErrors.length === 0 && log.badResponses.length === 0, [...log.pageErrors, ...log.badResponses].join('\n'));
     await page.close();
   } finally {

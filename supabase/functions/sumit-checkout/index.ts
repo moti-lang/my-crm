@@ -42,8 +42,12 @@ async function handle(req: Request): Promise<Response> {
       if (new URL(req.url).searchParams.get('consent') !== '1') {
         return json({ ok: false, consent_required: true, error: 'יש לאשר את הוראת הקבע לפני התשלום' }, 409);
       }
-      const { data: c, error: sErr } = await db.rpc('rpc_standing_consent', { p_token: token });
-      if (sErr || !c?.ok) throw new Error(sErr?.message ?? 'שמירת האישור נכשלה');
+      // יום החיוב שההורה בחרה בדף (1–28). נשמר עם האישור — ההוראה תיווצר בו.
+      const dayParam = new URL(req.url).searchParams.get('day');
+      const day = dayParam && /^\d{1,2}$/.test(dayParam) ? Number(dayParam) : null;
+      const { data: c, error: sErr } = await db.rpc('rpc_standing_consent', { p_token: token, p_day: day });
+      if (sErr) throw new Error(sErr.message);
+      if (!c?.ok) return json({ ok: false, error: c?.error ?? 'שמירת האישור נכשלה' }, 400);
     }
 
     // שער ההשקה — לפני כל פנייה ל-SUMIT (ראה checkoutOpenFor).

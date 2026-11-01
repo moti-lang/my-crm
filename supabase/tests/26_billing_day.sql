@@ -241,6 +241,47 @@ select t_bd_enroll('יעל', '');
 select assert_true(rpc_payment_link_public((select token from payment_links where id = t_bd_link('יעל'))) #>> '{standing,text}'
                    like 'אני מאשרת חיוב של 210 ש"ח היום, ו-9 חיובים חודשיים של 110 ש"ח בתאריכים הבאים: %', 'בלי בחירה — הנוסח כמו קודם');
 rollback;
+
+\echo 'יום החיוב בדף התשלום (/pay, לפני דף האשראי של SUMIT):'
+begin;
+-- הרשמה בלי יום (קישור ידני / הרשמה ישנה) — היום נבחר בדף התשלום.
+select t_bd_enroll('מיכל', '');
+select assert_true((rpc_payment_link_public((select token from payment_links where id = t_bd_link('מיכל'))) #>> '{standing,billing_day}') is null,
+                   'בלי יום — הדף יודע שעוד לא נבחר יום');
+select assert_true(rpc_payment_link_public((select token from payment_links where id = t_bd_link('מיכל')), 15) #>> '{standing,text}'
+                   like 'אני מאשרת חיוב של 210 ש"ח היום, ו-9 חיובים חודשיים של 110 ש"ח, ב-15 בכל חודש, בתאריכים הבאים: '
+                        || to_char(f_month_day((f_today_il() + interval '1 month')::date, 15), 'DD/MM/YYYY') || '%',
+                   '★ ההורה בוחרת 15 בדף — הנוסח מתעדכן ליום ולתאריכים בפועל');
+select assert_eq((rpc_payment_link_public((select token from payment_links where id = t_bd_link('מיכל')), 15) #>> '{standing,billing_day}')::bigint, 15, 'הדף יודע לאיזה יום הנוסח מחושב');
+select assert_true((select payment_track ? 'billing_day' = false and standing_consented_at is null
+                    from students s join payment_links l on l.student_id = s.id where l.id = t_bd_link('מיכל')), '★ התצוגה לא שומרת כלום (לא יום, לא אישור)');
+select assert_true(rpc_payment_link_public((select token from payment_links where id = t_bd_link('מיכל')), 29) #>> '{standing,billing_day}' is null, 'יום 29 בתצוגה — מתעלמים ממנו');
+-- האישור (sumit-checkout): יום לא תקין — נדחה, בלי שמירה.
+select assert_true(not (rpc_standing_consent((select token from payment_links where id = t_bd_link('מיכל')), 31) ->> 'ok')::boolean
+                   and rpc_standing_consent((select token from payment_links where id = t_bd_link('מיכל')), 31) ->> 'error' = 'יום החיוב: בין 1 ל-28 בחודש', '★ אישור עם יום 31 — נדחה');
+select assert_true((select standing_consented_at is null from payment_links where id = t_bd_link('מיכל')), '...ולא נשמר אישור');
+select rpc_standing_consent((select token from payment_links where id = t_bd_link('מיכל')), 15);
+select assert_true((select l.standing_consent_text like '%ב-15 בכל חודש%' and l.standing_date_start = f_month_day((f_today_il() + interval '1 month')::date, 15)
+                           and (s.payment_track ->> 'billing_day')::int = 15
+                    from payment_links l join students s on s.id = l.student_id where l.id = t_bd_link('מיכל')),
+                   '★ האישור שומר: הנוסח עם היום, התאריך הראשון, והיום במסלול של התלמידה');
+select assert_true(rpc_payment_link_public((select token from payment_links where id = t_bd_link('מיכל')), 3) #>> '{standing,text}' like '%ב-15 בכל חודש%'
+                   and (rpc_payment_link_public((select token from payment_links where id = t_bd_link('מיכל')), 3) #>> '{standing,consented}')::boolean,
+                   '★ אחרי האישור — מוצג מה שאושר, גם אם מבקשים יום אחר');
+-- בחרה 20 בהרשמה ומשנה בדף ל-5 — מה שבחרה בדף קובע.
+select t_bd_enroll('שקד', '20');
+select assert_eq((rpc_payment_link_public((select token from payment_links where id = t_bd_link('שקד'))) #>> '{standing,billing_day}')::bigint, 20, 'היום מההרשמה מוצג מראש');
+select rpc_standing_consent((select token from payment_links where id = t_bd_link('שקד')), 5);
+select assert_true((select l.standing_consent_text like '%ב-5 בכל חודש%' and (s.payment_track ->> 'billing_day')::int = 5
+                    from payment_links l join students s on s.id = l.student_id where l.id = t_bd_link('שקד')), '★ שינוי בדף (20 → 5) — נשמר היום שנבחר בדף');
+-- בלי יום מהדף (דף ישן במטמון) — היום מההרשמה, או כמו קודם.
+select t_bd_enroll('גאיה', '12');
+select rpc_standing_consent((select token from payment_links where id = t_bd_link('גאיה')));
+select assert_true((select standing_consent_text like '%ב-12 בכל חודש%' from payment_links where id = t_bd_link('גאיה')), 'אישור בלי יום מהדף — היום מההרשמה');
+rollback;
+select assert_no_execute('anon', 'rpc_standing_consent(text, integer)');
+select assert_true(has_function_privilege('anon', 'rpc_payment_link_public(text, integer)', 'execute'), 'דף התשלום (anon) — אותה פונקציה ציבורית, עם יום אופציונלי');
+
 update settings set value = 'false'::jsonb where key = 'standing_orders_enabled';
 
 drop function if exists t_bd_order(int, timestamptz, date, date, int, int, text, int);

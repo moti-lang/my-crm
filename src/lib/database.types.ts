@@ -2409,6 +2409,7 @@ export type Database = {
       rpc_payment_link_public: {
         Args: {
           p_token: string;
+          p_day?: number;
         };
         Returns: Json;
       };
@@ -2492,6 +2493,7 @@ export type Database = {
       rpc_standing_consent: {
         Args: {
           p_token: string;
+          p_day?: number;
         };
         Returns: Json;
       };
