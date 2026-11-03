@@ -19,6 +19,7 @@ const bundle = (src, name) => {
 const so = await import(bundle('supabase/functions/_shared/standing.ts', 'standing.mjs'));
 const { syncStandingOrders } = await import(bundle('supabase/functions/_shared/standing-sync.ts', 'standing-sync.mjs'));
 const { rescheduleStanding } = await import(bundle('supabase/functions/_shared/standing-reschedule.ts', 'standing-reschedule.mjs'));
+const { applyStudentDiscount } = await import(bundle('supabase/functions/_shared/student-discount.ts', 'student-discount.mjs'));
 
 let fails = 0;
 const check = (label, ok, detail = '') => { if (!ok) fails++; console.log(`  ${ok ? '✓' : '✗'} ${label}${ok || !detail ? '' : `\n      ${detail}`}`); };
@@ -122,6 +123,82 @@ console.log('\nשינוי יום חיוב — הזרימה (rescheduleStanding):
     const bad = await Promise.all([e.run({ id: 'x', day: 20, expected: '2026-12-20' }), e.run({ id: ID, day: 29, expected: '2026-12-20' }), e.run({ id: ID, day: 20 })]);
     check('קלט פגום (מזהה / יום 29 / בלי התאריך שהוצג) — 400, בלי שום קריאה', bad.every((r) => r.status === 400) && e.log.length === 0);
   }
+}
+
+console.log('\nהנחה לתלמידה — הזרימה (applyStudentDiscount):');
+{
+  const ST = '6471e835-d6d3-48ce-9798-3e10f5ac7c70', ORDER = 'b2a3c4d5-0000-4000-8000-000000000001';
+  const NONE = { ok: true, stage: 'none', discount_after: 200, amount: 200, lines: ['ההנחה: 200 ₪'], standing: null, links: [] };
+  const SO = { ok: true, stage: 'standing', discount_after: 140, amount: 140, lines: ['ההנחה: 140 ₪'], links: [],
+               standing: { id: ORDER, from_monthly: 100, to_monthly: 80, remaining: 7, cut: 20, next: '2026-12-05' } };
+  const item0 = { ID: 42, Status: 0, Date_NextBilling: '2026-12-05T00:00:00+02:00', Date_PreviousBilling: '2026-11-05T00:00:00+02:00', Date_Last: '2027-06-05T00:00:00+03:00', UnitPrice: 100 };
+  function env({ plans = [NONE], denied = null, observed = { remaining_ok: true, remaining: 7, sumit_remaining: 7 }, updateOk = true, verifyPrice = null, applyResult = null } = {}) {
+    const log = [], inserts = [];
+    let n = 0, price = 100;
+    const user = { rpc: async (fn, args) => { log.push(['user', fn, args]); return denied ? { data: null, error: { message: denied } } : { data: plans[Math.min(n++, plans.length - 1)], error: null }; } };
+    const admin = {
+      rpc: async (fn, args) => { log.push(['admin', fn, args]);
+        if (fn === 'rpc_standing_billing_observed') return { data: observed, error: null };
+        if (fn === 'rpc_discount_apply') return { data: applyResult ?? { ok: true }, error: null };
+        return { data: null, error: null }; },
+      from: (t) => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { sumit_customer_id: 777, sumit_recurring_id: 42 }, error: null }) }) }),
+                      insert: async (row) => { inserts.push([t, row]); return { error: null }; } }),
+    };
+    const sumit = {
+      list: async () => { log.push(['sumit', 'list']); return [{ ...item0, UnitPrice: price }]; },
+      update: async (i) => { log.push(['sumit', 'update', i]); if (updateOk) price = verifyPrice ?? i.unitPrice; return updateOk ? { ok: true } : { ok: false, error: 'נדחה' }; },
+      create: async () => ({ ok: false, error: 'x' }), cancel: async () => ({ ok: true }),
+    };
+    return { log, inserts, run: (input) => applyStudentDiscount(user, admin, sumit, { student: ST, kind: 'ils', value: 200, reason: 'אחות שנייה', expected: 200, ...input }, 'owner-1') };
+  }
+  const calls = (e) => e.log.map(([who, fn]) => `${who}:${fn}`);
+  {
+    const e = env(); const r = await e.run();
+    const ap = e.log.find(([, fn]) => fn === 'rpc_discount_apply')?.[2];
+    check('★ בלי הוראת קבע: תוכנית (בהרשאות המשתמשת) → שמירה במסד, בלי שום קריאה ל-SUMIT', r.status === 200 && JSON.stringify(calls(e)) === '["user:rpc_discount_preview","admin:rpc_discount_apply"]', JSON.stringify(calls(e)));
+    check('★ נשמרת ההנחה שהבעלים ראתה, עם הסיבה ועם מי', ap?.p_expected === 200 && ap?.p_reason === 'אחות שנייה' && ap?.p_by === 'owner-1' && ap?.p_to_monthly === null);
+  }
+  {
+    const e = env(); const r = await e.run({ expected: 150 });
+    check('★ התוכנית שונה ממה שהבעלים ראתה — לא נשמר, חוזרת התוכנית החדשה', r.status === 409 && r.body.changed === true && !calls(e).includes('admin:rpc_discount_apply'));
+  }
+  {
+    const e = env({ denied: 'רק הבעלים יכולה לתת הנחה' }); const r = await e.run();
+    check('★ לא בעלים — 403, בלי שמירה ובלי SUMIT', r.status === 403 && !e.log.some(([who, fn]) => who === 'sumit' || fn === 'rpc_discount_apply'));
+  }
+  {
+    const e = env(); const r = await e.run({ reason: '  ' });
+    check('בלי סיבה — 400, בלי שום קריאה', r.status === 400 && e.log.length === 0);
+  }
+  {
+    const e = env({ plans: [SO, SO] }); const r = await e.run({ value: 140, expected: 140 });
+    check('★ הוראת קבע: תוכנית → בדיקה ב-SUMIT → קליטה → תוכנית שוב → עדכון → אימות → רק אז שמירה',
+      r.status === 200 && JSON.stringify(calls(e)) === '["user:rpc_discount_preview","sumit:list","admin:rpc_standing_billing_observed","user:rpc_discount_preview","sumit:update","sumit:list","admin:rpc_discount_apply"]', JSON.stringify(calls(e)));
+    const up = e.log.find(([, fn]) => fn === 'update')?.[2];
+    check('★ ל-SUMIT: סכום חדש, ואותו תאריך ואותו מספר חיובים', up?.unitPrice === 80 && up?.nextDate === '2026-12-05' && up?.remaining === 7);
+    check('נשמר עם הסכום החודשי ש-SUMIT קיבלה', e.log.find(([, fn]) => fn === 'rpc_discount_apply')?.[2]?.p_to_monthly === 80);
+  }
+  {
+    const e = env({ plans: [SO, SO], verifyPrice: 100 }); const r = await e.run({ value: 140, expected: 140 });
+    check('★ SUMIT לא מאשרת את הסכום החדש — לא נשמר אצלנו, והתראה קריטית', r.status === 502 && !calls(e).includes('admin:rpc_discount_apply')
+          && e.inserts.some(([t, row]) => t === 'system_alerts' && row.kind === 'standing_order_discount_mismatch' && row.severity === 'critical'));
+  }
+  {
+    const e = env({ plans: [SO, SO], observed: { remaining_ok: false, remaining: 7, sumit_remaining: 6 } }); const r = await e.run({ value: 140, expected: 140 });
+    check('★ כמה נותרו לפי SUMIT ≠ לפי המערכת — לא נוגעים', r.status === 409 && !calls(e).includes('sumit:update') && !calls(e).includes('admin:rpc_discount_apply'));
+  }
+  {
+    const e = env({ plans: [SO, { ...SO, standing: { ...SO.standing, to_monthly: 82 } }] }); const r = await e.run({ value: 140, expected: 140 });
+    check('המצב ב-SUMIT השתנה בינתיים — לא מעדכנים, חוזרת התוכנית החדשה', r.status === 409 && r.body.changed === true && !calls(e).includes('sumit:update'));
+  }
+  {
+    const e = env({ plans: [SO, SO], updateOk: false }); const r = await e.run({ value: 140, expected: 140 });
+    check('★ SUMIT סירבה — לא נשמר אצלנו', r.status === 502 && !calls(e).includes('admin:rpc_discount_apply'));
+  }
+  check('גוף העדכון ל-SUMIT: UnitPrice רק כשמשנים סכום', so.recurringUpdateBody({ customerId: 1, recurringId: 2, nextDate: '2026-12-05', remaining: 7, unitPrice: 80 }).UnitPrice === 80
+        && !('UnitPrice' in so.recurringUpdateBody({ customerId: 1, recurringId: 2, nextDate: '2026-12-05', remaining: 7 })));
+  const fnCode = codeOf('supabase/functions/student-discount/index.ts');
+  check('הפונקציה student-discount מריצה את הזרימה המשותפת, עם הרשאות המשתמשת', /applyStudentDiscount\(userClient\(authorization\), adminClient\(\), standingProvider\(\), body, by\)/.test(fnCode));
 }
 
 console.log('\nהסנכרון:');

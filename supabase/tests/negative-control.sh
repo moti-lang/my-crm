@@ -1421,6 +1421,72 @@ expect_fail_code "★ דף התשלום: אפשר לאשר לפני שנבחר �
   'sed -i "s/  const dayReady = !standingNeedsDay || (day !== .. \&\& /  const dayReady = true || (day !== \x27\x27 \&\& /" "$F"' \
   "node supabase/tests/billing-day-ui.test.mjs"
 
+# ─── הנחה לתלמידה (0045) ───
+expect_fail_code "★ הנחה: לא רק הבעלים" \
+  "$DIR/../migrations/0045_student_discount.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לתת הנחה./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
+
+expect_fail_code "★ הנחה: שינוי הנחה לא נרשם ביומן" \
+  "$DIR/../migrations/0045_student_discount.sql" \
+  'sed -i "s/create trigger students_discount_audit after update of discount, discount_reason on students/create trigger students_discount_audit after update of notes on students/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
+
+expect_fail_code "★ הנחה: הקטנת הנחה (העלאת סכום) בהוראת קבע פעילה מתקבלת" \
+  "$DIR/../migrations/0045_student_discount.sql" \
+  'sed -i "s/^    if v_delta < 0 then\$/    if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
+
+expect_fail_code "★ הנחה: בהוראת קבע נשמרת ההנחה שביקשו ולא מה שמתחלק בפועל" \
+  "$DIR/../migrations/0045_student_discount.sql" \
+  'sed -i "s/    v_after := s.discount + v_cut \* v_remaining;/    v_after := p_amount;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
+
+expect_fail_code "★ הנחה: סכום הקישור השתנה ואישור הוראת הקבע הישן נשאר" \
+  "$DIR/../migrations/0045_student_discount.sql" \
+  'sed -i "s/             standing_consent_text = null, standing_consented_at = null, standing_date_start = null/             standing_date_start = standing_date_start/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
+
+expect_fail_code "★ הנחה: דף SUMIT הישן (בסכום הקודם) נשאר בקישור" \
+  "$DIR/../migrations/0045_student_discount.sql" \
+  'sed -i "s/      update payment_links set amount = (lk ->> .to.)::numeric, sumit_page_url = null, sumit_redirect_id = null,/      update payment_links set amount = (lk ->> \x27to\x27)::numeric,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
+
+expect_fail_code "הנחה: נשמרת בלי סיבה" \
+  "$DIR/../migrations/0045_student_discount.sql" \
+  'sed -i "s/  if v_reason = .. then return jsonb_build_object(.ok., false, .error., .יש לכתוב סיבה להנחה.); end if;/  if false then return null; end if;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
+
+expect_fail_code "★ הנחה: נשמרת הנחה אחרת ממה שהבעלים ראתה" \
+  "$DIR/../migrations/0045_student_discount.sql" \
+  'sed -i "s/^  if (plan ->> .discount_after.)::numeric is distinct from p_expected\$/  if false/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
+
+expect_fail_code "★ הנחה בהוראת קבע: לא מאמתים מול SUMIT שהסכום עודכן" \
+  "$DIR/../../supabase/functions/_shared/student-discount.ts" \
+  'sed -i "s/^  if (!ok) {\$/  if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ הנחה בהוראת קבע: מעדכנים ב-SUMIT בלי לוודא כמה חיובים נותרו" \
+  "$DIR/../../supabase/functions/_shared/student-discount.ts" \
+  'sed -i "s/  if (o.remaining_ok !== true) {/  if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "הנחה: בפונקציה לא בודקים שהתוכנית היא מה שהבעלים ראתה" \
+  "$DIR/../../supabase/functions/_shared/student-discount.ts" \
+  'sed -i "s/  if (first.plan.discount_after !== expected) {/  if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ הנחה: גם מנהלת סניף ורואת חשבון רואות את הכפתור" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/            {profile?.role === .owner. \&\& student.id \&\& (discounting/            {student.id \&\& (discounting/" "$F"' \
+  "node supabase/tests/student-discount-ui.test.mjs"
+
+expect_fail_code "★ הנחה: אפשר לשמור בלי סיבה" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/disabled={!ready || !reason.trim() || save.isPending}/disabled={!ready || save.isPending}/" "$F"' \
+  "node supabase/tests/student-discount-ui.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useListParams, useScrollMemory } from '@/hooks/listState';
-import { EVENT_LABEL, STANDING_LABEL, STANDING_TONE, useStandingEvents, useStandingOrders, type StandingEvent } from '@/hooks/standing';
+import { EVENT_LABEL, STANDING_LABEL, STANDING_TONE, eventChange, useStandingEvents, useStandingOrders, type StandingEvent } from '@/hooks/standing';
 import { StandingOrderPanel } from '@/components/StandingOrderPanel';
 import { formatDate, formatDateTime, formatILS } from '@/lib/format';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
@@ -69,7 +69,7 @@ function StandingJournal({ rows, loading }: { rows: StandingEvent[]; loading: bo
         <table className="w-full min-w-[40rem] text-sm">
           <thead className="border-b border-rule text-right text-soft"><tr>
             <th className="px-3 py-2 font-medium">מתי</th><th className="px-3 py-2 font-medium">תלמידה</th><th className="px-3 py-2 font-medium">מי</th>
-            <th className="px-3 py-2 font-medium">מה</th><th className="px-3 py-2 font-medium">מתאריך</th><th className="px-3 py-2 font-medium">לתאריך</th>
+            <th className="px-3 py-2 font-medium">מה</th><th className="px-3 py-2 font-medium">מ-</th><th className="px-3 py-2 font-medium">ל-</th>
           </tr></thead>
           <tbody>{rows.map((e) => (
             <tr key={e.id} className="border-b border-rule last:border-0">
@@ -77,8 +77,8 @@ function StandingJournal({ rows, loading }: { rows: StandingEvent[]; loading: bo
               <td className="px-3 py-2">{e.full_name}<span className="block text-xs text-soft">{e.branch_name}</span></td>
               <td className="px-3 py-2">{e.actor_label}</td>
               <td className="px-3 py-2">{EVENT_LABEL[e.kind ?? ''] ?? e.kind}{e.to_day ? ` · ל-${e.to_day} בחודש` : ''}</td>
-              <td className="px-3 py-2 tabular-nums">{formatDate(e.from_date)}</td>
-              <td className="px-3 py-2 tabular-nums">{formatDate(e.to_date)}</td>
+              <td className="px-3 py-2 tabular-nums">{eventChange(e, formatDate, formatILS)[0]}</td>
+              <td className="px-3 py-2 tabular-nums">{eventChange(e, formatDate, formatILS)[1]}</td>
             </tr>
           ))}</tbody>
         </table>

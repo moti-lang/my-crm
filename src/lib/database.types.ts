@@ -1387,6 +1387,8 @@ export type Database = {
           actor: string | null;
           actor_label: string;
           created_at: string;
+          from_amount: number | null;
+          to_amount: number | null;
         };
         Insert: {
           id?: string;
@@ -1400,6 +1402,8 @@ export type Database = {
           actor?: string | null;
           actor_label: string;
           created_at?: string;
+          from_amount?: number | null;
+          to_amount?: number | null;
         };
         Update: {
           id?: string;
@@ -1413,6 +1417,8 @@ export type Database = {
           actor?: string | null;
           actor_label?: string;
           created_at?: string;
+          from_amount?: number | null;
+          to_amount?: number | null;
         };
         Relationships: [
           {
@@ -2094,6 +2100,8 @@ export type Database = {
           remaining: number | null;
           actor_label: string | null;
           created_at: string | null;
+          from_amount: number | null;
+          to_amount: number | null;
         };
         Relationships: [];
       };
@@ -2313,6 +2321,25 @@ export type Database = {
       rpc_deleted_students: {
         Args: Record<PropertyKey, never>;
         Returns: unknown[];
+      };
+      rpc_discount_apply: {
+        Args: {
+          p_student: string;
+          p_amount: number;
+          p_reason: string;
+          p_by: string;
+          p_expected: number;
+          p_to_monthly?: number;
+        };
+        Returns: Json;
+      };
+      rpc_discount_preview: {
+        Args: {
+          p_student: string;
+          p_kind: string;
+          p_value: number;
+        };
+        Returns: Json;
       };
       rpc_email_claim: {
         Args: {
@@ -2567,6 +2594,12 @@ export type Database = {
           p_day: number;
         };
         Returns: Json;
+      };
+      rpc_student_discount_history: {
+        Args: {
+          p_student: string;
+        };
+        Returns: unknown[];
       };
       rpc_student_name_history: {
         Args: {

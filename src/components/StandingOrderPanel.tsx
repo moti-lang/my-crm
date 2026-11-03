@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 import {
-  EVENT_LABEL, STANDING_LABEL, STANDING_TONE, RescheduleChanged, useCancelStanding, useReschedulePreview, useRescheduleStanding,
+  EVENT_LABEL, STANDING_LABEL, STANDING_TONE, RescheduleChanged, eventChange, useCancelStanding, useReschedulePreview, useRescheduleStanding,
   useStandingEvents, type StandingOrder,
 } from '@/hooks/standing';
 import { formatDate, formatDateTime, formatILS } from '@/lib/format';
@@ -44,7 +44,7 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
       {(events.data ?? []).length > 0 && (
         <ul className="mt-2 space-y-0.5 border-t border-rule pt-1 text-xs text-soft" aria-label="יומן ההוראה">
           {(events.data ?? []).map((e) => (
-            <li key={e.id}>{formatDateTime(e.created_at)} · {e.actor_label} ({EVENT_LABEL[e.kind ?? ''] ?? e.kind}): מ-{formatDate(e.from_date)} ל-{formatDate(e.to_date)}</li>
+            <li key={e.id}>{formatDateTime(e.created_at)} · {e.actor_label} ({EVENT_LABEL[e.kind ?? ''] ?? e.kind}): מ-{eventChange(e, formatDate, formatILS)[0]} ל-{eventChange(e, formatDate, formatILS)[1]}</li>
           ))}
         </ul>
       )}

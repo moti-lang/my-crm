@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
+import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory,
+  useDiscountPreview, useApplyDiscount, useStudentDiscountHistory, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
 import { StandingOrderPanel } from '@/components/StandingOrderPanel';
 import { useStandingOrders } from '@/hooks/standing';
@@ -41,9 +42,12 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const deleteStudent = useDeleteStudent();
   const cancelEnrollment = useCancelEnrollment();
   const nameHistory = useStudentNameHistory(student?.id ?? null);
+  const discountHistory = useStudentDiscountHistory(student?.id ?? null);
+  const [discounting, setDiscounting] = useState(false);
+  const [discounted, setDiscounted] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renamed, setRenamed] = useState<string | null>(null);
-  useEffect(() => { setRenaming(false); setRenamed(null); }, [student?.id]);
+  useEffect(() => { setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); }, [student?.id]);
 
   if (!student) return null;
 
@@ -156,11 +160,16 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
               </div>
             )}
             {Number(student.discount ?? 0) > 0 && (
-              <p className="mt-2 text-xs text-soft">
+              <p className="mt-2 text-xs text-soft" data-testid="student-discount">
                 הנחה {formatILS(student.discount)}
                 {student.discount_reason ? ` · ${student.discount_reason}` : ''}
               </p>
             )}
+            {discounted && <p className="mt-1 text-xs text-ok" role="status">{discounted}</p>}
+            {profile?.role === 'owner' && student.id && (discounting
+              ? <DiscountForm studentId={student.id} current={Number(student.discount ?? 0)} currentReason={student.discount_reason ?? ''}
+                  onDone={(msg) => { setDiscounting(false); setDiscounted(msg); }} onCancel={() => setDiscounting(false)} />
+              : <button type="button" className="btn-ghost mt-2 w-full" onClick={() => { setDiscounted(null); setDiscounting(true); }}>✎ הנחה</button>)}
 
             {adding && student.id ? (
               <div className="mt-3">
@@ -270,6 +279,16 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             )}
           </Section>
 
+          {(discountHistory.data ?? []).length > 0 && (
+            <Section title="היסטוריית הנחות">
+              <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית ההנחות">
+                {(discountHistory.data ?? []).map((h, i) => (
+                  <li key={i}>{formatDateTime(h.changed_at)} · {h.changed_by}: {formatILS(h.from_amount)} ← {formatILS(h.to_amount)}{h.reason ? ` · ${h.reason}` : ''}</li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
           {(nameHistory.data ?? []).length > 0 && (
             <Section title="שינויי שם">
               <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית השם">
@@ -353,5 +372,65 @@ function RenameForm({ id, fullName, onDone, onCancel }: { id: string; fullName: 
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={rename.isPending} onClick={onCancel}>ביטול</button>
       </div>
     </form>
+  );
+}
+
+/**
+ * הנחה (הבעלים): בשקלים או באחוזים משכר הלימוד, וסיבה. המסד מחשב מה ישתנה — חוב, קישור פתוח,
+ * הוראת קבע — ומציג לפני השמירה. בהוראת קבע פעילה הסכום מתעדכן ב-SUMIT לפני שנשמר אצלנו.
+ */
+function DiscountForm({ studentId, current, currentReason, onDone, onCancel }:
+  { studentId: string; current: number; currentReason: string; onDone: (msg: string) => void; onCancel: () => void }) {
+  const [kind, setKind] = useState<'ils' | 'percent'>('ils');
+  const [raw, setRaw] = useState(current > 0 ? String(current) : '');
+  const [reason, setReason] = useState(currentReason);
+  const [value, setValue] = useState<number | null>(current > 0 ? current : null);
+  // החישוב מהמסד — רק אחרי הפסקה קצרה בהקלדה.
+  useEffect(() => {
+    const t = window.setTimeout(() => { const n = Number(raw); setValue(raw.trim() !== '' && Number.isFinite(n) ? n : null); }, 350);
+    return () => window.clearTimeout(t);
+  }, [raw]);
+  const preview = useDiscountPreview(studentId, kind, value);
+  const save = useApplyDiscount();
+  const plan = preview.data;
+  const ready = Boolean(plan?.ok) && !preview.isFetching && raw.trim() !== '' && Number(raw) === value;
+  return (
+    <div className="mt-2 space-y-2 rounded-field border border-rule p-3 text-sm" data-testid="discount-form">
+      <div className="flex items-end gap-2">
+        <label className="block flex-1 text-xs">הנחה
+          <input className="field mt-0.5" inputMode="numeric" value={raw} onChange={(e) => { save.reset(); setRaw(e.target.value); }} aria-label="סכום ההנחה" />
+        </label>
+        <div className="flex overflow-hidden rounded-btn border border-rule text-xs" role="group" aria-label="סוג ההנחה">
+          {(['ils', 'percent'] as const).map((k) => (
+            <button key={k} type="button" aria-pressed={kind === k} className={`px-3 py-2 ${kind === k ? 'bg-plum text-white' : ''}`}
+              onClick={() => { save.reset(); setKind(k); }}>{k === 'ils' ? '₪' : '%'}</button>
+          ))}
+        </div>
+      </div>
+      <label className="block text-xs">סיבה (חובה)
+        <input className="field mt-0.5" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="למשל: אחות שנייה" aria-label="סיבת ההנחה" />
+      </label>
+      {raw.trim() !== '' && preview.isFetching && <p className="text-xs text-soft">מחשבת…</p>}
+      {preview.error != null && <p className="text-xs text-bad" role="alert">{humanError(preview.error)}</p>}
+      {plan && !plan.ok && <p className="text-xs text-bad" role="alert">{plan.error}</p>}
+      {plan?.ok && (
+        <ul className="space-y-0.5 text-xs" data-testid="discount-plan">
+          {plan.lines.map((l, i) => <li key={i} className={i === 0 ? 'font-medium' : ''}>{l}</li>)}
+          {plan.stage === 'standing' && <li className="text-soft">הסכום החודשי יתעדכן ב-SUMIT לפני שההנחה נשמרת.</li>}
+        </ul>
+      )}
+      {save.error != null && <p className="text-xs text-bad" role="alert">{humanError(save.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={!ready || !reason.trim() || save.isPending}
+          onClick={() => {
+            if (!plan?.ok || value === null) return;
+            save.mutate({ student: studentId, kind, value, reason: reason.trim(), expected: plan.discount_after },
+              { onSuccess: (p) => onDone(`✓ ההנחה נשמרה: ${p.lines[0] ?? ''}`) });
+          }}>
+          {save.isPending ? 'שומרת…' : 'שמירת ההנחה'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>ביטול</button>
+      </div>
+    </div>
   );
 }

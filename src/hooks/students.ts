@@ -163,3 +163,54 @@ export function useStudentNameHistory(studentId: string | null) {
     },
   });
 }
+
+/** התוכנית של הנחה (מהמסד, לפני שמירה): מה ישתנה — חוב, קישור פתוח, הוראת קבע. */
+export type DiscountPlan =
+  | { ok: true; stage: 'standing' | 'link' | 'none'; amount: number; discount_before: number; discount_after: number;
+      balance_after: number; lines: string[]; standing: { to_monthly: number; from_monthly: number; remaining: number } | null }
+  | { ok: false; error: string };
+
+export function useDiscountPreview(studentId: string | null, kind: 'ils' | 'percent', value: number | null) {
+  return useQuery({
+    queryKey: ['discount-preview', studentId, kind, value],
+    enabled: Boolean(studentId) && value !== null && Number.isFinite(value),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_discount_preview', { p_student: studentId as string, p_kind: kind, p_value: value as number });
+      if (error) throw new Error(error.message);
+      return data as unknown as DiscountPlan;
+    },
+  });
+}
+
+/**
+ * שמירת ההנחה — דרך הפונקציה student-discount: בהוראת קבע פעילה הסכום החודשי משתנה ב-SUMIT קודם.
+ * expected = ההנחה שהבעלים ראתה; אם המצב השתנה — לא נשמר, וחוזרת התוכנית החדשה.
+ */
+export function useApplyDiscount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { student: string; kind: 'ils' | 'percent'; value: number; reason: string; expected: number }) => {
+      const { data, error } = await supabase.functions.invoke('student-discount', { body: input });
+      let r = data as { ok?: boolean; error?: string; plan?: DiscountPlan } | null;
+      if (error && 'context' in error) {
+        try { r = (await (error as { context: Response }).context.json()) as typeof r; } catch { /* ignore */ }
+      }
+      if (!r?.ok) throw new Error(r?.error ?? error?.message ?? 'השמירה נכשלה');
+      return r.plan as Extract<DiscountPlan, { ok: true }>;
+    },
+    onSettled: () => qc.invalidateQueries(),
+  });
+}
+
+/** היסטוריית ההנחה בכרטיס: מתי, מי, מכמה לכמה, ולמה. */
+export function useStudentDiscountHistory(studentId: string | null) {
+  return useQuery({
+    queryKey: ['student-discount-history', studentId],
+    enabled: Boolean(studentId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_student_discount_history', { p_student: studentId as string });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as { changed_at: string; changed_by: string; from_amount: number; to_amount: number; reason: string | null }[];
+    },
+  });
+}

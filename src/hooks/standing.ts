@@ -48,7 +48,12 @@ export function useCancelStanding() {
 }
 
 export type StandingEvent = Views<'v_standing_order_events'>;
-export const EVENT_LABEL: Record<string, string> = { reschedule: 'שינוי יום חיוב', sumit_change: 'שונה ב-SUMIT' };
+export const EVENT_LABEL: Record<string, string> = { reschedule: 'שינוי יום חיוב', sumit_change: 'שונה ב-SUMIT', amount_change: 'שינוי סכום (הנחה)' };
+/** "מאיזה לאיזה" ביומן: תאריכים — או סכומים, בשינוי סכום. */
+export function eventChange(e: { kind: string | null; from_date: string | null; to_date: string | null; from_amount?: number | null; to_amount?: number | null },
+                            fmtDate: (d: string | null) => string, fmtMoney: (n: number | null | undefined) => string): [string, string] {
+  return e.kind === 'amount_change' ? [fmtMoney(e.from_amount), fmtMoney(e.to_amount)] : [fmtDate(e.from_date), fmtDate(e.to_date)];
+}
 
 /** יומן הוראות הקבע: מי שינה, מתי, מאיזה תאריך לאיזה. orderId — של הוראה אחת. */
 export function useStandingEvents(orderId?: string | null) {

@@ -69,14 +69,15 @@ create table if not exists auth.identities (
   unique (provider_id, provider)
 );
 
+-- כמו ב-Supabase: claims ריק (למשל אחרי set_config מקומי שהתבטל) = אין משתמשת, לא שגיאה.
 create or replace function auth.uid() returns uuid
 language sql stable as $$
-  select nullif(current_setting('request.jwt.claims', true)::json ->> 'sub','')::uuid
+  select nullif(nullif(current_setting('request.jwt.claims', true), '')::json ->> 'sub', '')::uuid
 $$;
 
 create or replace function auth.role() returns text
 language sql stable as $$
-  select coalesce(current_setting('request.jwt.claims', true)::json ->> 'role','anon')
+  select coalesce(nullif(current_setting('request.jwt.claims', true), '')::json ->> 'role', 'anon')
 $$;
 
 do $$ begin

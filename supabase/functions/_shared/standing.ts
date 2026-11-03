@@ -27,8 +27,9 @@ export type CreateStandingResult =
   | { ok: true; recurringId: number; immediatePayment: SumitPayment | null; dryRun: boolean }
   | { ok: false; error: string; dryRun: boolean };
 /** Date_Last — מועד החיוב האחרון בהוראה (ממנו: כמה חיובים נותרו לפי SUMIT). */
-export type StandingItem = { ID: number; Status: number | null; Date_NextBilling: string | null; Date_PreviousBilling: string | null; Date_Last?: string | null };
-export type UpdateStandingInput = { customerId: number; recurringId: number; nextDate: string; remaining: number };   // nextDate: YYYY-MM-DD
+export type StandingItem = { ID: number; Status: number | null; Date_NextBilling: string | null; Date_PreviousBilling: string | null; Date_Last?: string | null; UnitPrice?: number | null };
+/** nextDate: YYYY-MM-DD. unitPrice — סכום חדש לכל חיוב (הנחה); בלעדיו הסכום לא נשלח ולא משתנה. */
+export type UpdateStandingInput = { customerId: number; recurringId: number; nextDate: string; remaining: number; unitPrice?: number };
 export type StandingProvider = {
   create(input: CreateStandingInput): Promise<CreateStandingResult>;
   list(customerId: number): Promise<StandingItem[]>;
@@ -58,7 +59,9 @@ export function recurringChargeBody(i: CreateStandingInput) {
  * הסכום לא נשלח — לא משתנה.
  */
 export function recurringUpdateBody(i: UpdateStandingInput) {
-  return { Customer: { ID: i.customerId }, RecurringCustomerItemID: i.recurringId, NextPaymentDate: i.nextDate, Recurrence: i.remaining };
+  const body: Record<string, unknown> = { Customer: { ID: i.customerId }, RecurringCustomerItemID: i.recurringId, NextPaymentDate: i.nextDate, Recurrence: i.remaining };
+  if (i.unitPrice !== undefined) body.UnitPrice = i.unitPrice;
+  return body;
 }
 
 /** YYYY-MM-DD + n חודשים (יום עד 28 — בלי גלישה לחודש הבא). */
@@ -71,18 +74,18 @@ export function addMonths(date: string, n: number): string {
 
 // ─────────── הרצה יבשה ───────────
 class DryRunStanding implements StandingProvider {
-  static created = new Map<number, { customerId: number; status: number; next: string; last: string }>();
+  static created = new Map<number, { customerId: number; status: number; next: string; last: string; price: number }>();
   static nextId = 9_000_000;
   create(input: CreateStandingInput): Promise<CreateStandingResult> {
     if (input.customerId === 0) return Promise.resolve({ ok: false, error: 'אין כרטיס שמור ללקוחה (מוקלט)', dryRun: true });
     const id = DryRunStanding.nextId++;
-    DryRunStanding.created.set(id, { customerId: input.customerId, status: 0, next: input.dateStart, last: addMonths(input.dateStart, input.installments - 1) });
+    DryRunStanding.created.set(id, { customerId: input.customerId, status: 0, next: input.dateStart, last: addMonths(input.dateStart, input.installments - 1), price: input.amount });
     console.log(`[SUMIT_DRY_RUN] הוראת קבע ${id}: ${input.installments} × ${input.amount} ₪ מ-${input.dateStart}`);
     return Promise.resolve({ ok: true, recurringId: id, immediatePayment: null, dryRun: true });
   }
   list(customerId: number): Promise<StandingItem[]> {
     return Promise.resolve([...DryRunStanding.created.entries()].filter(([, v]) => v.customerId === customerId)
-      .map(([id, v]) => ({ ID: id, Status: v.status, Date_NextBilling: v.next, Date_PreviousBilling: null, Date_Last: v.last })));
+      .map(([id, v]) => ({ ID: id, Status: v.status, Date_NextBilling: v.next, Date_PreviousBilling: null, Date_Last: v.last, UnitPrice: v.price })));
   }
   cancel(_customerId: number, recurringId: number): Promise<{ ok: true } | { ok: false; error: string }> {
     const r = DryRunStanding.created.get(recurringId);
@@ -93,6 +96,7 @@ class DryRunStanding implements StandingProvider {
     const r = DryRunStanding.created.get(input.recurringId);
     if (!r || r.customerId !== input.customerId) return Promise.resolve({ ok: false, error: 'ההוראה לא נמצאה (מוקלט)' });
     r.next = input.nextDate; r.last = addMonths(input.nextDate, input.remaining - 1);
+    if (input.unitPrice !== undefined) r.price = input.unitPrice;
     console.log(`[SUMIT_DRY_RUN] הוראת קבע ${input.recurringId}: החיוב הבא ${input.nextDate}, ${input.remaining} נותרו`);
     return Promise.resolve({ ok: true });
   }
