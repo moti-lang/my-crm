@@ -63,7 +63,7 @@ export function Enroll() {
               <p className="text-center font-display text-3xl tabular-nums">{formatILS(result.amount)}</p>
               <a href={result.pay_url} className="btn-primary block w-full text-center text-base">לתשלום בכרטיס אשראי</a>
               <p className="text-center text-xs text-soft">
-                {form.whatsapp === 'no' ? 'שמרי את הקישור: הוא תקף 7 ימים.' : 'הקישור נשלח אלייך גם בוואטסאפ, ותקף 7 ימים.'} ההרשמה תאושר סופית אחרי התשלום.
+                {/* ★ לא מבטיחים וואטסאפ: שליחת וואטסאפ מהמערכת עוד לא מופעלת (0047). */}שמרי את הקישור: הוא תקף 7 ימים. ההרשמה תאושר סופית אחרי התשלום.
               </p>
             </>
           )}

@@ -139,6 +139,42 @@ select assert_true(t_rn_error(format('select rpc_create_payment_link(%L, 9999999
 select assert_true(t_rn_error(format('select rpc_create_payment_link(%L)', (select id from t_d))) is null, 'בלי סכום — כל החוב, כמו קודם');
 rollback;
 
+\echo 'הוואטסאפ — המסך אומר את האמת (0047):'
+begin;
+select t_rn_enroll('מיכל'), t_rn_enroll('אביגיל');
+select assert_true(not f_wa_sending_active(), 'אין משימה ששולחת את התור (אין pg_cron כאן) — לא פעיל');
+select assert_true(t_rn_renew('מיכל') ->> 'whatsapp' = 'off', '★ אין שליחת וואטסאפ מהמערכת — "off" (לא "נשלח")');
+update students set whatsapp_opt_in = false where id = t_rn_student('אביגיל');
+select assert_true(t_rn_renew('אביגיל') ->> 'whatsapp' = 'opted_out', '★ ההורה לא מקבלת וואטסאפ — "opted_out"');
+select assert_true((select r.status = 'cancelled' from reminders r join payment_links l on l.reminder_id = r.id where l.student_id = t_rn_student('אביגיל') and l.status = 'pending'), '...וההודעה של הקישור החדש אכן בוטלה');
+-- כמו בענן: pg_cron עם משימה ששולחת את תור התזכורות.
+create schema if not exists cron;
+create table if not exists cron.job (jobid serial primary key, jobname text, schedule text, command text, active boolean default true);
+insert into cron.job (jobname, schedule, command, active)
+values ('teichtal-email-queue', '* * * * *', 'select net.http_post(url := ''https://x.supabase.co/functions/v1/cron-email'')', true),
+       ('teichtal-reminders', '*/5 * * * *', 'select net.http_post(url := ''https://x.supabase.co/functions/v1/cron-reminders'')', false);
+select assert_true(not f_wa_sending_active(), 'משימה של מייל, ומשימת תזכורות כבויה — עדיין לא פעיל');
+update cron.job set active = true where jobname = 'teichtal-reminders';
+select assert_true(f_wa_sending_active(), 'משימת תזכורות פעילה — פעיל');
+select assert_true(t_rn_renew('מיכל') ->> 'whatsapp' = 'queued', '★ יש שליחה — "queued"');
+select assert_true(f_link_whatsapp_state((select reminder_id from payment_links where student_id = t_rn_student('אביגיל') and status = 'pending')) = 'opted_out',
+                   'f_link_whatsapp_state: לא מקבלת וואטסאפ — גם כשיש שליחה');
+rollback;
+begin;
+create temp table t_w as
+  select s.id from students s
+  where s.branch_id = :BEITAR and s.status = 'active' and s.deleted_at is null and s.parent_phone is not null
+    and (s.tuition_total - s.discount) - coalesce((select sum(amount) from payments p where p.student_id = s.id and p.deleted_at is null), 0) > 150
+  order by s.id limit 1;
+grant select on t_w to authenticated;
+select set_config('request.jwt.claims', t_claims('owner'), true);
+set local role authenticated;
+select assert_true(rpc_create_payment_link((select id from t_w), 100) ->> 'whatsapp' = 'off', '★ גם קישור תשלום רגיל מחזיר את מצב הוואטסאפ');
+reset role;
+rollback;
+select assert_no_execute('authenticated', 'f_wa_sending_active()');
+select assert_no_execute('authenticated', 'f_link_whatsapp_state(uuid)');
+
 update settings set value = 'false'::jsonb where key = 'standing_orders_enabled';
 drop function t_rn_enroll(text, text, text); drop function t_rn_renew(text, user_role); drop function t_rn_error(text, user_role);
 drop function t_rn_live(text); drop function t_rn_student(text);

@@ -197,7 +197,8 @@ export function useUpdateSplitMethod() {
 }
 
 // ─────────── קישורי תשלום (SUMIT) ───────────
-export type PaymentLinkResult = { id: string; token: string; url: string; amount: number; expires_at: string };
+/** whatsapp: האם ההודעה באמת יוצאת (queued), או שהקישור צריך להישלח ידנית (off / opted_out). */
+export type PaymentLinkResult = { id: string; token: string; url: string; amount: number; expires_at: string; whatsapp?: 'queued' | 'off' | 'opted_out' };
 
 /** יוצר קישור תשלום נעול לתלמידה ולסכום (ברירת מחדל: היתרה), ושולח בוואטסאפ דרך תור התזכורות. */
 export function useCreatePaymentLink() {

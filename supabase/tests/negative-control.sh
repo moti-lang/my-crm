@@ -1487,19 +1487,19 @@ expect_fail_code "★ הנחה: אפשר לשמור בלי סיבה" \
   'sed -i "s/disabled={!ready || !reason.trim() || save.isPending}/disabled={!ready || save.isPending}/" "$F"' \
   "node supabase/tests/student-discount-ui.test.mjs"
 
-# ─── קישור הרשמה חדש וסכום חלקי (0046) ───
+# ─── קישור הרשמה חדש וסכום חלקי (0046; הפונקציות מוגדרות מחדש ב-0047) ───
 expect_fail_code "★ קישור הרשמה חדש: נוצר כקישור חוב (בלי הוראת קבע ובלי השלמת ההרשמה)" \
-  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  "$DIR/../migrations/0047_link_whatsapp_state.sql" \
   'sed -i "s/  values (v_id, v_token, .tl-. || v_id, s.id, s.branch_id, v_amount, .enrollment., auth.uid());/  values (v_id, v_token, \x27tl-\x27 || v_id, s.id, s.branch_id, v_amount, \x27debt\x27, auth.uid());/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "★ קישור תשלום רגיל לתלמידה שממתינה לחיוב הראשון — מתקבל" \
-  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  "$DIR/../migrations/0047_link_whatsapp_state.sql" \
   'sed -i "s/^  if f_enrollment_unpaid(v_student) then\$/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "★ קישור הרשמה חדש: לא רק הבעלים ומנהלת הסניף" \
-  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  "$DIR/../migrations/0047_link_whatsapp_state.sql" \
   'sed -i "/function rpc_renew_enrollment_link/,/^end/ s/^  if auth_role() is distinct from .owner.\$/  if false and auth_role() is distinct from \x27owner\x27/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
@@ -1509,17 +1509,17 @@ expect_fail_code "קישור הרשמה חדש: גם במסלול מזומן" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "★ קישור הרשמה חדש: הקישור הקודם נשאר חי" \
-  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  "$DIR/../migrations/0047_link_whatsapp_state.sql" \
   'sed -i "s/^  update payment_links set status = .cancelled. where student_id = s.id and status in (.pending., .opened.);\$/  perform 1;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "קישור הרשמה חדש: לא נרשם ביומן" \
-  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  "$DIR/../migrations/0047_link_whatsapp_state.sql" \
   'sed -i "s/.renew_enrollment_link., .students., s.id,/\x27x_renew\x27, \x27students\x27, s.id,/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "★ סכום חלקי: פחות מ-1 ₪ מתקבל" \
-  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  "$DIR/../migrations/0047_link_whatsapp_state.sql" \
   'sed -i "s/^  if v_amount < 1 then raise exception/  if false then raise exception/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
@@ -1537,6 +1537,32 @@ expect_fail_code "★ סכום חלקי: אפשר לשלוח סכום לא תק�
   "$DIR/../../src/components/PaymentLinkButton.tsx" \
   'sed -i "s/disabled={Boolean(invalid) || create.isPending || !hasPhone}/disabled={create.isPending || !hasPhone}/" "$F"' \
   "node supabase/tests/payment-link-ui.test.mjs"
+
+# ─── הוואטסאפ: המסך אומר את האמת (0047) ───
+expect_fail_code "★ וואטסאפ: \"נשלח\" גם כשאין שליחה מהמערכת" \
+  "$DIR/../migrations/0047_link_whatsapp_state.sql" \
+  'sed -i "s/^    when not f_wa_sending_active() then .off.\$/    when false then \x27off\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
+
+expect_fail_code "★ וואטסאפ: \"נשלח\" גם להורה שלא מקבלת וואטסאפ" \
+  "$DIR/../migrations/0047_link_whatsapp_state.sql" \
+  'sed -i "s/^    when (select status from reminders where id = p_reminder) = .cancelled. then .opted_out.\$/    when false then \x27opted_out\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
+
+expect_fail_code "★ וואטסאפ: המסך כותב \"נשלח\" תמיד" \
+  "$DIR/../../src/components/LinkResult.tsx" \
+  'sed -i "s/  if (whatsapp === .queued.) return/  if (true) return/" "$F"' \
+  "node supabase/tests/payment-link-ui.test.mjs"
+
+expect_fail_code "וואטסאפ: \"העתקת קישור\" מעתיקה משהו אחר" \
+  "$DIR/../../src/components/LinkResult.tsx" \
+  'sed -i "s/onClick={() => void copyText(url).then(setCopied)}/onClick={() => void copyText(window.location.href).then(setCopied)}/" "$F"' \
+  "node supabase/tests/payment-link-ui.test.mjs"
+
+expect_fail_code "★ הרשמה: מסך הסיום מבטיח שהקישור נשלח בוואטסאפ" \
+  "$DIR/../../src/pages/Enroll.tsx" \
+  'sed -i "s/שמרי את הקישור: הוא תקף 7 ימים\. ההרשמה/הקישור נשלח אלייך גם בוואטסאפ, ותקף 7 ימים. ההרשמה/" "$F"' \
+  "node supabase/tests/enrollment.test.mjs"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash

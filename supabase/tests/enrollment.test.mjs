@@ -81,6 +81,8 @@ console.log('\nהטופס שומר פוקוס:');
   const inside = page.slice(start, page.indexOf('\n}\n', start));
   check('★ אף רכיב לא מוגדר בתוך Enroll (אחרת הפוקוס נופל אחרי כל אות)', !/const [A-Z]\w* = \(/.test(inside) && !/function [A-Z]\w*\(/.test(inside));
   check('Field מוגדר ברמת המודול', /\nfunction Field\(/.test(page));
+  // ★ שליחת וואטסאפ מהמערכת עוד לא מופעלת (0047) — מסך הסיום לא מבטיח שהקישור נשלח.
+  check('★ מסך הסיום לא מבטיח "נשלח אלייך בוואטסאפ"', !/נשלח אלייך/.test(page) && /שמרי את הקישור: הוא תקף 7 ימים\./.test(page));
 }
 
 console.log('\nהסיכום היומי:');
