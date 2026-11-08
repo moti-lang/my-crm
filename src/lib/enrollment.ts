@@ -120,3 +120,21 @@ export function checkPlan(p: PlanInput): { ok: boolean; message: string; tracks:
   const tracks = defs.map((d) => computeTrack(d, total, fee));
   return { ok: true, message: `✓ כל מסלול מסתכם ל-${total} ₪ (${fee} דמי רישום + ${total - fee} שכר לימוד)`, tracks };
 }
+
+/**
+ * ממתינה לחיוב הראשון בכרטיס — כמו f_enrollment_unpaid במסד: "ממתינה", מסלול שאינו מזומן ואינו
+ * תשלום חיצוני. לה שולחים "קישור הרשמה חדש" (ולא קישור תשלום רגיל, שלא משלים את ההרשמה ולא יוצר
+ * הוראת קבע). המסד הוא שקובע; כאן רק איזה כפתור להציג.
+ */
+export function awaitsFirstCharge(status: string | null | undefined, method: string | null | undefined, external: boolean | null | undefined): boolean {
+  return status === 'pending' && !external && Boolean(method) && method !== 'cash';
+}
+
+/** סכום לקישור תשלום חלקי: מספר, לפחות 1 ₪, לא יותר מהחוב. כמו ב-rpc_create_payment_link. */
+export function linkAmountError(raw: string, balance: number): string | null {
+  const n = Number(raw);
+  if (!raw.trim() || !Number.isFinite(n)) return 'יש לכתוב סכום';
+  if (n < 1) return 'לפחות 1 ₪';
+  if (n > balance) return 'יותר מהחוב הפתוח';
+  return null;
+}

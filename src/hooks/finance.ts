@@ -213,6 +213,28 @@ export function useCreatePaymentLink() {
   });
 }
 
+export type RenewLinkResult = PaymentLinkResult & { standing: boolean; track: string | null; cancelled: number };
+
+/**
+ * קישור הרשמה חדש — לתלמידה שממתינה לחיוב הראשון (הכרטיס לא עבר / הקישור פג). כמו בהרשמה:
+ * אותו מסלול וסכום, ובהוראת קבע — בחירת יום ואישור בדף. הקודם מתבטל. הכללים במסד (rpc_renew_enrollment_link).
+ */
+export function useRenewEnrollmentLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (studentId: string) => {
+      const { data, error } = await supabase.rpc('rpc_renew_enrollment_link', { p_student: studentId });
+      if (error) throw new Error(error.message);
+      return data as unknown as RenewLinkResult;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['payment-links'] });
+      void qc.invalidateQueries({ queryKey: ['reminders'] });
+      void qc.invalidateQueries({ queryKey: ['enrolled-unpaid'] });
+    },
+  });
+}
+
 export function useCancelPaymentLink() {
   const qc = useQueryClient();
   return useMutation({

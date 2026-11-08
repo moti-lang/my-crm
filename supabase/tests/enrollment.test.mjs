@@ -55,6 +55,13 @@ check('★ בלי אישור תקנון — נחסם', e.validateEnroll({ ...goo
   check('asksBillingDay: רק הוראת קבע עם חיובים חודשיים', e.asksBillingDay(SO) && !e.asksBillingDay({ method: 'standing_order', installments: 1 }) && !e.asksBillingDay({ method: 'card_once', installments: 1 }) && !e.asksBillingDay(null));
   check('הבחירה: 1 עד 28 בלבד', e.BILLING_DAYS.length === 28 && e.BILLING_DAYS[0] === 1 && e.BILLING_DAYS[27] === 28);
 }
+console.log('\nאיזה קישור לשלוח, וסכום חלקי:');
+check('★ ממתינה בהוראת קבע / בכרטיס — "קישור הרשמה חדש"', e.awaitsFirstCharge('pending', 'standing_order', false) && e.awaitsFirstCharge('pending', 'card_once', false));
+check('★ פעילה / מזומן / תשלום חיצוני / בלי מסלול — קישור תשלום רגיל', !e.awaitsFirstCharge('active', 'standing_order', false)
+      && !e.awaitsFirstCharge('pending', 'cash', false) && !e.awaitsFirstCharge('pending', 'standing_order', true) && !e.awaitsFirstCharge('pending', null, false));
+check('★ סכום: 1 עד החוב — תקין', e.linkAmountError('100', 2000) === null && e.linkAmountError('1', 2000) === null && e.linkAmountError('2000', 2000) === null);
+check('★ סכום: 0 / שלילי / מעל החוב / ריק / טקסט — הסבר', e.linkAmountError('0', 2000) === 'לפחות 1 ₪' && e.linkAmountError('-5', 2000) === 'לפחות 1 ₪'
+      && e.linkAmountError('2001', 2000) === 'יותר מהחוב הפתוח' && e.linkAmountError('', 2000) === 'יש לכתוב סכום' && e.linkAmountError('abc', 2000) === 'יש לכתוב סכום');
 check('★ שם עם תווים זרים — נחסם', e.validateEnroll({ ...good, first_name: '<b>x</b>' }).first_name !== undefined && e.validateEnroll({ ...good, first_name: 'רבקה1' }).first_name !== undefined);
 check("שם עם גרש ומקף — תקין", Object.keys(e.validateEnroll({ ...good, last_name: "כ״ץ-או'ברייאן" })).length === 0);
 check('טלפון קווי/קצר — נחסם; נייד מנורמל', e.validateEnroll({ ...good, phone: '03-1234567' }).phone !== undefined && e.normalizePhone('052-111-2233') === '972521112233');

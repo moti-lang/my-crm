@@ -65,7 +65,9 @@ grant select on t_tok to anon;
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select assert_true((rpc_payment_link_public((select token from t_tok)) ->> 'ok')::boolean, 'anon פותחת את הדף עם הטוקן');
-select assert_true(rpc_payment_link_public((select token from t_tok))::text !~ '(972|parent_phone|balance|tuition|address|email|_id)', '★ הדף חושף רק שם פרטי, סניף, סכום ומצב — לא טלפון, לא מזהים');
+-- expires_at נבדק לחוד: בשברי השנייה שלו יכול להופיע "972" במקרה (נפל כך פעם, 8/11).
+select assert_true((rpc_payment_link_public((select token from t_tok)) - 'expires_at')::text !~ '(972|parent_phone|balance|tuition|address|email|_id)'
+                   and (rpc_payment_link_public((select token from t_tok)) ->> 'expires_at')::timestamptz > now(), '★ הדף חושף רק שם פרטי, סניף, סכום, מצב ותוקף — לא טלפון, לא מזהים');
 select assert_true((rpc_payment_link_public('0000000000000000000000000000000000000000000000000000000000000000') ->> 'ok')::boolean = false, 'טוקן שגוי — לא נמצא, בלי רמז');
 select assert_no_table_privilege('anon', '{payment_links}');
 reset role;

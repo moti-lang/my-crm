@@ -5,9 +5,10 @@ import { StudentTags } from '@/components/StudentTags';
 import { StandingOrderPanel } from '@/components/StandingOrderPanel';
 import { useStandingOrders } from '@/hooks/standing';
 import { formatILS, formatDate, formatDateTime, formatPhone } from '@/lib/format';
-import { NAME_RE } from '@/lib/enrollment';
+import { NAME_RE, awaitsFirstCharge } from '@/lib/enrollment';
 import { PaymentForm } from '@/components/PaymentForm';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
+import { RenewEnrollmentLinkButton } from '@/components/RenewEnrollmentLinkButton';
 import { useInstallmentProgress, useCancelEnrollment } from '@/hooks/enrollment';
 import { useAuth } from '@/auth/AuthProvider';
 import { humanError } from '@/lib/errors';
@@ -60,6 +61,10 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const progress = due > 0 ? Math.min(100, Math.round((paid / due) * 100)) : 0;
   // עמודות של view מדווחות תמיד כ-nullable, גם כשהעמודה שמתחת NOT NULL.
   const status = student.status ?? 'active';
+  // ממתינה לחיוב הראשון בכרטיס → "קישור הרשמה חדש" (לא קישור תשלום רגיל).
+  const flag = student.id ? flags.data?.get(student.id) : undefined;
+  const track = flag?.payment_track ?? null;
+  const firstCharge = awaitsFirstCharge(status, track?.method, flag?.external_payment);
 
   return (
     <>
@@ -185,7 +190,9 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
                 <button type="button" className="btn-ghost mt-3 w-full" onClick={() => setAdding(true)}>
                   + רישום תשלום
                 </button>
-                {student.id && <PaymentLinkButton studentId={student.id} balance={balance} hasPhone={Boolean(student.parent_phone)} />}
+                {student.id && (firstCharge
+                  ? <RenewEnrollmentLinkButton studentId={student.id} standing={track?.method === 'standing_order'} hasPhone={Boolean(student.parent_phone)} />
+                  : <PaymentLinkButton studentId={student.id} balance={balance} hasPhone={Boolean(student.parent_phone)} />)}
               </>
             )}
 

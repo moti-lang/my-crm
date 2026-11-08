@@ -1487,6 +1487,57 @@ expect_fail_code "★ הנחה: אפשר לשמור בלי סיבה" \
   'sed -i "s/disabled={!ready || !reason.trim() || save.isPending}/disabled={!ready || save.isPending}/" "$F"' \
   "node supabase/tests/student-discount-ui.test.mjs"
 
+# ─── קישור הרשמה חדש וסכום חלקי (0046) ───
+expect_fail_code "★ קישור הרשמה חדש: נוצר כקישור חוב (בלי הוראת קבע ובלי השלמת ההרשמה)" \
+  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  'sed -i "s/  values (v_id, v_token, .tl-. || v_id, s.id, s.branch_id, v_amount, .enrollment., auth.uid());/  values (v_id, v_token, \x27tl-\x27 || v_id, s.id, s.branch_id, v_amount, \x27debt\x27, auth.uid());/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
+
+expect_fail_code "★ קישור תשלום רגיל לתלמידה שממתינה לחיוב הראשון — מתקבל" \
+  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  'sed -i "s/^  if f_enrollment_unpaid(v_student) then\$/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
+
+expect_fail_code "★ קישור הרשמה חדש: לא רק הבעלים ומנהלת הסניף" \
+  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  'sed -i "/function rpc_renew_enrollment_link/,/^end/ s/^  if auth_role() is distinct from .owner.\$/  if false and auth_role() is distinct from \x27owner\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
+
+expect_fail_code "קישור הרשמה חדש: גם במסלול מזומן" \
+  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  'sed -i "s/     and s.payment_track is not null and coalesce(s.payment_track ->> .method., .cash.) <> .cash./     and s.payment_track is not null/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
+
+expect_fail_code "★ קישור הרשמה חדש: הקישור הקודם נשאר חי" \
+  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  'sed -i "s/^  update payment_links set status = .cancelled. where student_id = s.id and status in (.pending., .opened.);\$/  perform 1;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
+
+expect_fail_code "קישור הרשמה חדש: לא נרשם ביומן" \
+  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  'sed -i "s/.renew_enrollment_link., .students., s.id,/\x27x_renew\x27, \x27students\x27, s.id,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
+
+expect_fail_code "★ סכום חלקי: פחות מ-1 ₪ מתקבל" \
+  "$DIR/../migrations/0046_renew_enrollment_link.sql" \
+  'sed -i "s/^  if v_amount < 1 then raise exception/  if false then raise exception/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
+
+expect_fail_code "★ גבייה: \"נרשמו ולא שילמו\" שולח קישור תשלום רגיל" \
+  "$DIR/../../src/pages/Collection.tsx" \
+  'sed -i "s/<RenewEnrollmentLinkButton studentId={e.student_id}/<PaymentLinkButton balance={Number(e.first_charge ?? 0)} studentId={e.student_id}/" "$F"' \
+  "node supabase/tests/payment-link-ui.test.mjs"
+
+expect_fail_code "★ כרטיס: לתלמידה שממתינה לחיוב הראשון — קישור תשלום רגיל" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/{student.id \&\& (firstCharge/{student.id \&\& (false/" "$F"' \
+  "node supabase/tests/payment-link-ui.test.mjs"
+
+expect_fail_code "★ סכום חלקי: אפשר לשלוח סכום לא תקין מהמסך" \
+  "$DIR/../../src/components/PaymentLinkButton.tsx" \
+  'sed -i "s/disabled={Boolean(invalid) || create.isPending || !hasPhone}/disabled={create.isPending || !hasPhone}/" "$F"' \
+  "node supabase/tests/payment-link-ui.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

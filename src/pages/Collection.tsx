@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useListParams, useScrollMemory } from '@/hooks/listState';
 import { useDebtors, useTemplates, useCreateReminders, useReconciliation, useCancelPaymentLink } from '@/hooks/finance';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
+import { RenewEnrollmentLinkButton } from '@/components/RenewEnrollmentLinkButton';
 import { useEnrolledUnpaid } from '@/hooks/enrollment';
 import { useStudentFlags } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
@@ -240,12 +241,12 @@ function EnrolledUnpaid({ branchId }: { branchId: string }) {
               <td className="px-3 py-2 tabular-nums"><span className={`rounded-full px-2 py-0.5 text-xs ${days > 3 ? 'bg-warn/20 text-warn font-medium' : 'bg-shade text-soft'}`}>{days}</span></td>
               <td className="px-3 py-2 tabular-nums">{e.track_method === 'cash' ? 'מזומן' : formatILS(e.first_charge)}</td>
               <td className="px-3 py-2 text-xs text-soft">{e.track_method === 'cash' ? '—' : LINK_STATUS[e.link_status ?? ''] ?? e.link_status ?? '—'}</td>
-              <td className="px-3 py-2">{e.student_id && e.track_method !== 'cash' && <PaymentLinkButton studentId={e.student_id} balance={Number(e.first_charge ?? 0)} hasPhone={Boolean(e.parent_phone)} compact />}</td>
+              <td className="px-3 py-2">{e.student_id && e.track_method !== 'cash' && <RenewEnrollmentLinkButton studentId={e.student_id} standing={e.track_method === 'standing_order'} hasPhone={Boolean(e.parent_phone)} compact />}</td>
             </tr>
           );
         })}</tbody>
       </table>
-      <p className="px-3 py-2 text-xs text-soft">"קישור תשלום" שולח מחדש את הקישור לחיוב הראשון. מעל 3 ימים מסומן; אותן תלמידות מופיעות גם בסיכום היומי בוואטסאפ.</p>
+      <p className="px-3 py-2 text-xs text-soft">"קישור הרשמה חדש" — כשהכרטיס לא עבר או שהקישור פג: קישור חדש לחיוב הראשון, כמו בהרשמה (בהוראת קבע ההורה בוחרת יום ומאשרת, וההוראה נוצרת אחרי התשלום). הקודם מתבטל. מעל 3 ימים מסומן; אותן תלמידות מופיעות גם בסיכום היומי בוואטסאפ.</p>
     </div>
   );
 }

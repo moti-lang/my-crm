@@ -2495,6 +2495,12 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_renew_enrollment_link: {
+        Args: {
+          p_student: string;
+        };
+        Returns: Json;
+      };
       rpc_restore_student: {
         Args: {
           p_student: string;
