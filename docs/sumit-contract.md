@@ -132,8 +132,12 @@
 - **ניסיון חיוב חוזר בהוראה שהושבתה (3)** — `POST /billing/payments/charge/` עם `Customer.ID` ו-`Items`,
   בלי `PaymentMethod` ("use the customer payment method" — הכרטיס השמור). `Data.Payment`: `ID`,
   `ValidPayment`, `StatusDescription` (למשל `סירוב (קוד 004)`). ההוראה המושבתת לא חוזרת לפעולה —
-  נוצרת הוראה חדשה לחיובים שנותרו (`recurring/charge`, מאומת). ★ **`payments/charge` טרם אומת מול
-  חיוב אמיתי** (0048); תשובה לא צפויה — לא נרשמת, ונשלחת התראה קריטית.
+  נוצרת הוראה חדשה לחיובים שנותרו (`recurring/charge`, מאומת). **אומת** (ארגון הייצור, לקוחת הבדיקה
+  של הבעלים, 1 ₪, 08/11/2026): `Status: 0`, `Data.Payment` עם `ID`, `ValidPayment: true`, `Status: "000"`,
+  `StatusDescription: "מאושר (קוד 000)"`, `Amount`, `Date` (שעון ישראל), `CustomerID` = הלקוחה,
+  `DocumentID: 0` בתשובה המיידית (הקבלה נוצרת אחר כך). שדות נוספים: `AuthNumber`, `Currency`,
+  `PaymentMethod`, `RecurringCustomerItemIDs`, `FirstPaymentAmount`, `NonFirstPaymentAmount`, `ExternalIdentifier`.
+  תשובה בלי `Payment` / חיבור שנפל — "לא ברור אם חויב": התראה קריטית וחסימה ל-24 שעות.
 - **חיובים:** `payments/list` לפי תאריכים, מסוננים אצלנו לפי `CustomerID` וסכום.
 - **אין ב-API:** התרעה מראש על כרטיס שפג תוקפו; קביעת מדיניות ניסיונות חוזרים
   (`updatesettings` לא כולל זאת); אירוע/webhook לחיוב שנכשל.

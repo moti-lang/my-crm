@@ -13,7 +13,7 @@
  *        זזו לתאריך החדש, הסכום והסטטוס לא השתנו, Data ריק.
  *   POST /billing/payments/charge/           — חיוב חוזר אחד (הוראה שהושבתה): Customer + Items, בלי
  *        PaymentMethod = "use the customer payment method" (הכרטיס השמור). Data.Payment — ValidPayment,
- *        StatusDescription. ★ לא אומת עדיין מול חיוב אמיתי.
+ *        StatusDescription. אומת מול חיוב אמיתי (1 ₪, לקוחת הבדיקה, 08/11/2026): "מאושר (קוד 000)".
  *   POST /billing/payments/list/             — החיובים (כולל שנדחו), לפי תאריכים;
  *        מסננים לפי CustomerID אצלנו (המסנן בצד SUMIT לא עובד — אומת).
  * ★ לא אומת מול חיוב אמיתי: ש-Date_Start עתידי לא מחייב מיד. אם בכל זאת
