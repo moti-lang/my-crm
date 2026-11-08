@@ -31,6 +31,8 @@ export const EXPECTED = {
   'standing-order-reschedule': 'requireUserJwt',
   // הנחה לתלמידה: הבעלים מהמסך; ההרשאה נבדקת במסד.
   'student-discount': 'requireUserJwt',
+  // ניסיון חיוב חוזר בהוראת קבע: הבעלים מהמסך; ההרשאה נבדקת במסד.
+  'standing-order-retry': 'requireUserJwt',
   // וואטסאפ: השרת החדש מוסר פרטים עם טוקן הקמה; מסך ההגדרות (בעלים) רואה מצב ו-QR.
   'wa-provision': 'requireProvisionToken', 'wa-admin': 'requireUserJwt', 'wa-command-test': 'requireUserJwt', 'email-send': 'requireUserJwt', 'email-webhook': 'requireResendSignature',
 };
@@ -57,7 +59,7 @@ for (const d of dirs) {
 const rem = codeOf(join(ROOT, 'cron-reminders/index.ts'));
 check('★ cron-reminders קורא ל-wa-send עם CRON_SECRET', /requireEnv\('CRON_SECRET'\)/.test(rem) && !/SUPABASE_SERVICE_ROLE_KEY/.test(rem));
 // CORS: כל פונקציה שהדפדפן קורא (verify_jwt=false + נקראת מ-src) עונה ל-OPTIONS.
-for (const d of ['enroll', 'sumit-checkout', 'standing-order-cancel', 'standing-order-reschedule', 'student-discount', 'ai-answer']) {
+for (const d of ['enroll', 'sumit-checkout', 'standing-order-cancel', 'standing-order-reschedule', 'student-discount', 'standing-order-retry', 'ai-answer']) {
   const src = codeOf(join(ROOT, d, 'index.ts'));
   check(`★ ${d}: עונה ל-preflight (OPTIONS) ומחזירה כותרות CORS — אחרת הדפדפן לא שולח את ה-POST`, /const pre = preflight\(req\);\s*if \(pre\) return pre;/.test(src) && /withCors\(req, await handle\(req\)\)/.test(src));
 }

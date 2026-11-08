@@ -94,6 +94,9 @@ verify_jwt = true           # הבעלים מהמסך; ההרשאה נבדקת �
 [functions.student-discount]
 verify_jwt = true           # הבעלים מהמסך; ההרשאה נבדקת במסד (rpc_discount_preview)
 
+[functions.standing-order-retry]
+verify_jwt = true           # הבעלים מהמסך; ההרשאה נבדקת במסד (rpc_standing_retry_preview)
+
 [functions.wa-provision]
 verify_jwt = false          # שרת הוואטסאפ החדש, בלי JWT. טוקן הקמה חד-פעמי + אימות שהשרת עונה במפתח
 

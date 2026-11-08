@@ -20,6 +20,7 @@ const so = await import(bundle('supabase/functions/_shared/standing.ts', 'standi
 const { syncStandingOrders } = await import(bundle('supabase/functions/_shared/standing-sync.ts', 'standing-sync.mjs'));
 const { rescheduleStanding } = await import(bundle('supabase/functions/_shared/standing-reschedule.ts', 'standing-reschedule.mjs'));
 const { applyStudentDiscount } = await import(bundle('supabase/functions/_shared/student-discount.ts', 'student-discount.mjs'));
+const { retryStanding } = await import(bundle('supabase/functions/_shared/standing-retry.ts', 'standing-retry.mjs'));
 
 let fails = 0;
 const check = (label, ok, detail = '') => { if (!ok) fails++; console.log(`  ${ok ? '✓' : '✗'} ${label}${ok || !detail ? '' : `\n      ${detail}`}`); };
@@ -199,6 +200,110 @@ console.log('\nהנחה לתלמידה — הזרימה (applyStudentDiscount):'
         && !('UnitPrice' in so.recurringUpdateBody({ customerId: 1, recurringId: 2, nextDate: '2026-12-05', remaining: 7 })));
   const fnCode = codeOf('supabase/functions/student-discount/index.ts');
   check('הפונקציה student-discount מריצה את הזרימה המשותפת, עם הרשאות המשתמשת', /applyStudentDiscount\(userClient\(authorization\), adminClient\(\), standingProvider\(\), body, by\)/.test(fnCode));
+}
+
+console.log('\nניסיון חיוב חוזר — הזרימה (retryStanding):');
+{
+  const ID = 'c3a4b5c6-0000-4000-8000-000000000001';
+  const CHARGE = { ok: true, stage: 'charge', amount: 137, missed: '2026-11-06', remaining_after: 6, next: '2026-12-06', final: '2027-05-06', day: 6, lines: ['x'] };
+  const RENEW = { ...CHARGE, stage: 'renew' };
+  const disabled = { ID: 42, Status: 3, Date_NextBilling: '2026-11-06T00:00:00+02:00', Date_PreviousBilling: null, Date_Last: '2027-05-06T00:00:00+03:00' };
+  function env({ plans = [CHARGE, RENEW], denied = null, item = disabled, charge = { ok: true, payment: { ID: 9001, Amount: 137, Date: '2026-11-08T10:00:00+02:00', ValidPayment: true, StatusDescription: ' (קוד 000)' } },
+                 charged = { ok: true, valid: true, remaining: 6 }, create = { ok: true, recurringId: 77, immediatePayment: null }, renewed = { ok: true } } = {}) {
+    const log = [], inserts = [];
+    let n = 0;
+    const user = { rpc: async (fn, args) => { log.push(['user', fn, args]); return denied ? { data: null, error: { message: denied } } : { data: plans[Math.min(n++, plans.length - 1)], error: null }; } };
+    const admin = {
+      rpc: async (fn, args) => { log.push(['admin', fn, args]);
+        if (fn === 'rpc_standing_retry_charged') return { data: { ...charged, valid: args.p_valid && charged.valid }, error: null };
+        if (fn === 'rpc_standing_retry_renewed') return { data: renewed, error: null };
+        return { data: null, error: null }; },
+      from: (t) => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { sumit_customer_id: 777, sumit_recurring_id: 42, amount: 137,
+                        students: { full_name: 'תמר וינשטוק' }, branches: { name: 'ביתר' } }, error: null }) }) }),
+                      insert: async (row) => { inserts.push([t, row]); return { error: null }; } }),
+    };
+    const sumit = {
+      list: async () => { log.push(['sumit', 'list']); return item ? [item] : []; },
+      chargeOnce: async (i) => { log.push(['sumit', 'chargeOnce', i]); return charge; },
+      create: async (i) => { log.push(['sumit', 'create', i]); return create; },
+      update: async () => ({ ok: true }), cancel: async () => ({ ok: true }),
+    };
+    return { log, inserts, run: (input) => retryStanding(user, admin, sumit, { id: ID, stage: 'charge', next: '2026-12-06', ...input }, 'owner-1') };
+  }
+  const calls = (e) => e.log.map(([who, fn]) => `${who}:${fn}`);
+  {
+    const e = env(); const r = await e.run();
+    check('★ עבר: תוכנית → SUMIT (מצב ההוראה) → חיוב אחד → נרשם → תוכנית שוב → הוראה חדשה → נרשמה',
+      r.status === 200 && r.body.charged === 137 && r.body.renewed === true && JSON.stringify(calls(e)) ===
+      '["user:rpc_standing_retry_preview","sumit:list","sumit:chargeOnce","admin:rpc_standing_retry_charged","user:rpc_standing_retry_preview","sumit:create","admin:rpc_standing_retry_renewed"]', JSON.stringify(calls(e)));
+    const ch = e.log.find(([, fn]) => fn === 'chargeOnce')?.[2];
+    check('★ החיוב: הסכום מהתוכנית, ללקוחה שלנו — בלי פרטי כרטיס', ch?.amount === 137 && ch?.customerId === 777 && Object.keys(ch).sort().join() === 'amount,customerId,description,itemName');
+    const rec = e.log.find(([, fn]) => fn === 'rpc_standing_retry_charged')?.[2];
+    check('★ נרשם מה ש-SUMIT החזירה: מזהה, סכום, עבר, הסיבה, ומי', rec?.p_sumit_payment_id === 9001 && rec?.p_amount === 137 && rec?.p_valid === true && rec?.p_by === 'owner-1');
+    const cr = e.log.find(([, fn]) => fn === 'create')?.[2];
+    check('★ ההוראה החדשה: החיובים שנותרו (6), מ-06/12, אותו סכום', cr?.installments === 6 && cr?.dateStart === '2026-12-06' && cr?.amount === 137 && cr?.customerId === 777);
+    const rn = e.log.find(([, fn]) => fn === 'rpc_standing_retry_renewed')?.[2];
+    check('נרשם המזהה החדש מ-SUMIT', rn?.p_recurring_id === 77 && rn?.p_next === '2026-12-06' && rn?.p_remaining === 6);
+  }
+  {
+    const e = env({ charge: { ok: true, payment: { ID: 9002, Amount: 137, Date: '2026-11-08T10:00:00+02:00', ValidPayment: false, StatusDescription: ' סירוב (קוד 004)' } } });
+    const r = await e.run();
+    check('★ נדחה: נרשם (עם הסיבה), ההוראה לא מחודשת, והבעלים רואה את הסיבה', r.status === 409 && r.body.declined === true && r.body.error.includes('סירוב (קוד 004)')
+          && calls(e).includes('admin:rpc_standing_retry_charged') && !calls(e).includes('sumit:create'));
+  }
+  {
+    const e = env({ charge: { ok: false, error: 'SUMIT: אין אמצעי תשלום ללקוח' } }); const r = await e.run();
+    check('★ SUMIT לא ביצעה (שגיאה) — "לא חויב כלום", בלי רישום ובלי חידוש', r.status === 502 && r.body.error.includes('לא חויב כלום')
+          && !calls(e).includes('admin:rpc_standing_retry_charged') && !calls(e).includes('sumit:create'));
+  }
+  {
+    const e = env({ charge: { ok: false, error: 'fetch failed', uncertain: true } }); const r = await e.run();
+    check('★ לא ידוע אם חויב (החיבור נפל) — לא "לא חויב", התראה קריטית, בלי רישום ובלי חידוש', r.status === 502 && r.body.uncertain === true
+          && r.body.error.includes('לא ברור אם החיוב בוצע') && !r.body.error.includes('לא חויב כלום') && !calls(e).includes('admin:rpc_standing_retry_charged')
+          && !calls(e).includes('sumit:create') && e.inserts.some(([t, row]) => t === 'system_alerts' && row.kind === 'standing_retry_uncertain' && row.severity === 'critical'));
+    check('★ ...ונרשם במסד שלא ברור (ניסיון נוסף ייחסם)', e.log.some(([who, fn, a]) => who === 'admin' && fn === 'rpc_standing_retry_uncertain' && a.p_id === ID && a.p_error === 'fetch failed'));
+  }
+  {
+    const e = env({ item: { ...disabled, Status: 14 } }); const r = await e.run();
+    check('★ לפי SUMIT ההוראה בניסיון חוזר משלה (14) — לא מחייבים במקביל', r.status === 409 && !calls(e).includes('sumit:chargeOnce'));
+  }
+  {
+    const e = env({ item: null }); const r = await e.run();
+    check('ההוראה לא נמצאה אצל הלקוחה ב-SUMIT — לא מחייבים', r.status === 502 && !calls(e).includes('sumit:chargeOnce'));
+  }
+  {
+    const e = env({ create: { ok: false, error: 'SUMIT: שגיאה' } }); const r = await e.run();
+    check('★ החיוב עבר אבל החידוש נכשל: נשאר רשום, התראה קריטית, וההודעה אומרת "בלי חיוב נוסף"', r.status === 502 && r.body.charged === 137
+          && r.body.error.includes('בלי חיוב נוסף') && !calls(e).includes('admin:rpc_standing_retry_renewed')
+          && e.inserts.some(([t, row]) => t === 'system_alerts' && row.kind === 'standing_renew_failed' && row.severity === 'critical'));
+  }
+  {
+    const e = env({ plans: [RENEW, RENEW] }); const r = await e.run({ stage: 'renew' });
+    check('★ "חידוש" (אחרי חיוב שעבר): רק הוראה חדשה — בלי חיוב ובלי בדיקת מצב', r.status === 200 && r.body.charged === 0 && r.body.renewed === true
+          && JSON.stringify(calls(e)) === '["user:rpc_standing_retry_preview","user:rpc_standing_retry_preview","sumit:create","admin:rpc_standing_retry_renewed"]', JSON.stringify(calls(e)));
+  }
+  {
+    const e = env(); const r = await e.run({ stage: 'renew' });
+    check('★ הבעלים ראתה "חידוש" אבל עכשיו זה "חיוב" (או להפך) — לא נוגעים', r.status === 409 && r.body.changed === true && e.log.every(([who]) => who === 'user'));
+  }
+  {
+    const e = env(); const r = await e.run({ next: '2026-12-07' });
+    check('התאריך הבא שונה ממה שהבעלים ראתה — לא נוגעים', r.status === 409 && r.body.changed === true && !calls(e).includes('sumit:chargeOnce'));
+  }
+  {
+    const e = env({ denied: 'רק הבעלים יכולה לנסות חיוב חוזר' }); const r = await e.run();
+    check('★ לא בעלים — 403, בלי SUMIT', r.status === 403 && !e.log.some(([who]) => who === 'sumit'));
+  }
+  {
+    const e = env({ charged: { ok: true, valid: true, remaining: 0 } }); const r = await e.run();
+    check('החיוב האחרון עבר — הסתיים, בלי הוראה חדשה', r.status === 200 && r.body.completed === true && !calls(e).includes('sumit:create'));
+  }
+  check('גוף החיוב ל-SUMIT: הלקוחה והפריט — בלי PaymentMethod (הכרטיס השמור)', (() => {
+    const b = so.chargeOnceBody({ customerId: 777, amount: 137, itemName: 'x', description: 'y' });
+    return b.Customer.ID === 777 && b.Items[0].UnitPrice === 137 && !('PaymentMethod' in b) && !('SingleUseToken' in b) && b.VATIncluded === true;
+  })());
+  const fnCode = codeOf('supabase/functions/standing-order-retry/index.ts');
+  check('הפונקציה standing-order-retry מריצה את הזרימה המשותפת, עם הרשאות המשתמשת', /retryStanding\(userClient\(authorization\), adminClient\(\), standingProvider\(\), body, by\)/.test(fnCode));
 }
 
 console.log('\nהסנכרון:');

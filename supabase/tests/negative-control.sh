@@ -1564,6 +1564,87 @@ expect_fail_code "★ הרשמה: מסך הסיום מבטיח שהקישור נ
   'sed -i "s/שמרי את הקישור: הוא תקף 7 ימים\. ההרשמה/הקישור נשלח אלייך גם בוואטסאפ, ותקף 7 ימים. ההרשמה/" "$F"' \
   "node supabase/tests/enrollment.test.mjs"
 
+# ─── ניסיון חיוב חוזר בהוראת קבע (0048) ───
+expect_fail_code "★ חיוב חוזר: גם להוראה פעילה" \
+  "$DIR/../migrations/0048_standing_retry.sql" \
+  'sed -i "s/^  if not o.needs_renewal and o.status <> .failed. then\$/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
+
+expect_fail_code "★ חיוב חוזר: לא רק הבעלים" \
+  "$DIR/../migrations/0048_standing_retry.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לנסות חיוב חוזר./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
+
+expect_fail_code "★ חיוב חוזר: אחרי חיוב שעבר — שוב \"חיוב\" (כפול) ולא \"חידוש\"" \
+  "$DIR/../migrations/0048_standing_retry.sql" \
+  'sed -i "s/  v_stage := case when o.needs_renewal then .renew. else .charge. end;/  v_stage := \x27charge\x27;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
+
+expect_fail_code "★ חיוב חוזר: החידוש לפי התאריך הישן מהסנכרון (חיוב שני באותו חודש)" \
+  "$DIR/../migrations/0048_standing_retry.sql" \
+  'sed -i "s/    v_last := greatest(o.last_billing, v_paid, v_charged);/    v_last := o.last_billing;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
+
+expect_fail_code "★ חיוב חוזר: נדחה — ובכל זאת נרשם תשלום" \
+  "$DIR/../migrations/0048_standing_retry.sql" \
+  'sed -i "s/^  if p_valid then\$/  if true then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
+
+expect_fail_code "חיוב חוזר: אותו תשלום נרשם פעמיים" \
+  "$DIR/../migrations/0048_standing_retry.sql" \
+  'sed -i "s/^  if exists (select 1 from standing_order_charges where sumit_payment_id = p_sumit_payment_id) then\$/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
+
+expect_fail_code "★ חיוב חוזר: חידוש בלי שחיוב עבר" \
+  "$DIR/../migrations/0048_standing_retry.sql" \
+  'sed -i "s/  if not o.needs_renewal then return jsonb_build_object(.ok., false, .error., .אין מה לחדש/  if false then return jsonb_build_object(\x27ok\x27, false, \x27error\x27, \x27אין מה לחדש/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
+
+expect_fail_code "★ חיוב חוזר: במקביל לניסיון של SUMIT עצמה" \
+  "$DIR/../../supabase/functions/_shared/standing-retry.ts" \
+  'sed -i "s/    if (Number(item.Status) !== DISABLED_AFTER_FAILURE) {/    if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ חיוב חוזר: לא בודקים שהשלב והתאריך הם מה שהבעלים ראתה" \
+  "$DIR/../../supabase/functions/_shared/standing-retry.ts" \
+  'sed -i "s/  if (first.plan.stage !== stage || first.plan.next !== expectedNext) {/  if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ חיוב חוזר: נדחה — ובכל זאת מחדשים את ההוראה" \
+  "$DIR/../../supabase/functions/_shared/standing-retry.ts" \
+  'sed -i "s/    if (p.ValidPayment !== true) {/    if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "חיוב חוזר: החידוש נכשל אחרי חיוב — בלי התראה" \
+  "$DIR/../../supabase/functions/_shared/standing-retry.ts" \
+  'sed -i "s/kind: .standing_renew_failed./kind: \x27x\x27/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ חיוב חוזר: פרטי תשלום נשלחים ל-SUMIT (ולא הכרטיס השמור)" \
+  "$DIR/../../supabase/functions/_shared/standing.ts" \
+  'sed -i "s/^    DocumentDescription: i.description,\$/    DocumentDescription: i.description, PaymentMethod: {},/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ חיוב חוזר: גם מנהלת סניף רואה את הכפתור" \
+  "$DIR/../../src/components/StandingOrderPanel.tsx" \
+  'sed -i "s/      {owner \&\& order.status === .failed. \&\& order.id \&\& (retrying/      {order.status === \x27failed\x27 \&\& order.id \&\& (retrying/" "$F"' \
+  "node supabase/tests/standing-retry-ui.test.mjs"
+
+expect_fail_code "★ חיוב חוזר: חיוב אמיתי בלי אישור" \
+  "$DIR/../../src/components/StandingOrderPanel.tsx" \
+  'sed -i "s/if (plan.stage === .charge. \&\& !window.confirm(/if (false \&\& !window.confirm(/" "$F"' \
+  "node supabase/tests/standing-retry-ui.test.mjs"
+
+expect_fail_code "★ חיוב חוזר: החיבור נפל — והמסך אומר \"לא חויב\" (מזמין חיוב כפול)" \
+  "$DIR/../../supabase/functions/_shared/standing-retry.ts" \
+  'sed -i "s/      if (r.uncertain) {/      if (false) {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ חיוב חוזר: אחרי \"לא ברור אם חויב\" — אפשר לחייב שוב מיד" \
+  "$DIR/../migrations/0048_standing_retry.sql" \
+  'sed -i "s/^  if v_stage = .charge. and o.retry_uncertain_at > now() - interval .24 hours. then\$/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

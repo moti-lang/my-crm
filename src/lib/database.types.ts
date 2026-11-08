@@ -2102,6 +2102,7 @@ export type Database = {
           created_at: string | null;
           from_amount: number | null;
           to_amount: number | null;
+          note: string | null;
         };
         Relationships: [];
       };
@@ -2492,6 +2493,12 @@ export type Database = {
           p_id: string;
           p_first: string;
           p_last: string;
+        };
+        Returns: Json;
+      };
+      rpc_standing_retry_preview: {
+        Args: {
+          p_id: string;
         };
         Returns: Json;
       };

@@ -11,6 +11,9 @@
  *   POST /billing/recurring/update/          — שינוי יום חיוב: NextPaymentDate + Recurrence (= מספר
  *        החיובים שנותרו). אומת מול SUMIT (29/10/2026, הוראת הבדיקה): Date_NextBilling ו-Date_Last
  *        זזו לתאריך החדש, הסכום והסטטוס לא השתנו, Data ריק.
+ *   POST /billing/payments/charge/           — חיוב חוזר אחד (הוראה שהושבתה): Customer + Items, בלי
+ *        PaymentMethod = "use the customer payment method" (הכרטיס השמור). Data.Payment — ValidPayment,
+ *        StatusDescription. ★ לא אומת עדיין מול חיוב אמיתי.
  *   POST /billing/payments/list/             — החיובים (כולל שנדחו), לפי תאריכים;
  *        מסננים לפי CustomerID אצלנו (המסנן בצד SUMIT לא עובד — אומת).
  * ★ לא אומת מול חיוב אמיתי: ש-Date_Start עתידי לא מחייב מיד. אם בכל זאת
@@ -30,8 +33,15 @@ export type CreateStandingResult =
 export type StandingItem = { ID: number; Status: number | null; Date_NextBilling: string | null; Date_PreviousBilling: string | null; Date_Last?: string | null; UnitPrice?: number | null };
 /** nextDate: YYYY-MM-DD. unitPrice — סכום חדש לכל חיוב (הנחה); בלעדיו הסכום לא נשלח ולא משתנה. */
 export type UpdateStandingInput = { customerId: number; recurringId: number; nextDate: string; remaining: number; unitPrice?: number };
+/** חיוב אחד על הכרטיס השמור של הלקוחה (ניסיון חוזר). ok: SUMIT ענתה — Payment.ValidPayment אומר אם עבר. */
+export type ChargeOnceInput = { customerId: number; amount: number; itemName: string; description: string };
+/** uncertain: לא ידוע אם חויב (החיבור נפל אחרי השליחה / תשובה לא מובנת). בלי uncertain — SUMIT סירבה במפורש. */
+export type ChargeOnceResult =
+  | { ok: true; payment: SumitPayment & { StatusDescription?: string | null }; dryRun: boolean }
+  | { ok: false; error: string; uncertain?: boolean; dryRun: boolean };
 export type StandingProvider = {
   create(input: CreateStandingInput): Promise<CreateStandingResult>;
+  chargeOnce(input: ChargeOnceInput): Promise<ChargeOnceResult>;
   list(customerId: number): Promise<StandingItem[]>;
   cancel(customerId: number, recurringId: number): Promise<{ ok: true } | { ok: false; error: string }>;
   update(input: UpdateStandingInput): Promise<{ ok: true } | { ok: false; error: string }>;
@@ -50,6 +60,16 @@ export function recurringChargeBody(i: CreateStandingInput) {
     }],
     VATIncluded: true,
     // הכרטיס השמור של הלקוחה: PaymentMethod לא נשלח בכלל. פרטי כרטיס לא עוברים דרכנו.
+  };
+}
+
+/** חיוב אחד: בלי PaymentMethod — SUMIT מחייבת את אמצעי התשלום השמור של הלקוחה. פרטי כרטיס לא עוברים דרכנו. */
+export function chargeOnceBody(i: ChargeOnceInput) {
+  return {
+    Customer: { ID: i.customerId },
+    Items: [{ Item: { Name: i.itemName }, Quantity: 1, UnitPrice: i.amount, Currency: 0, Description: i.description }],
+    VATIncluded: true,
+    DocumentDescription: i.description,
   };
 }
 
@@ -82,6 +102,11 @@ class DryRunStanding implements StandingProvider {
     DryRunStanding.created.set(id, { customerId: input.customerId, status: 0, next: input.dateStart, last: addMonths(input.dateStart, input.installments - 1), price: input.amount });
     console.log(`[SUMIT_DRY_RUN] הוראת קבע ${id}: ${input.installments} × ${input.amount} ₪ מ-${input.dateStart}`);
     return Promise.resolve({ ok: true, recurringId: id, immediatePayment: null, dryRun: true });
+  }
+  chargeOnce(input: ChargeOnceInput): Promise<ChargeOnceResult> {
+    console.log(`[SUMIT_DRY_RUN] חיוב חוזר ללקוחה ${input.customerId}: ${input.amount} ₪`);
+    return Promise.resolve({ ok: true, dryRun: true, payment: { ID: -Date.now(), CustomerID: input.customerId, Date: new Date().toISOString(),
+      ValidPayment: true, Status: '000', StatusDescription: 'הרצה יבשה', Amount: input.amount, ExternalIdentifier: null, DocumentID: null } });
   }
   list(customerId: number): Promise<StandingItem[]> {
     return Promise.resolve([...DryRunStanding.created.entries()].filter(([, v]) => v.customerId === customerId)
@@ -126,6 +151,20 @@ class RealStanding implements StandingProvider {
       const p = data.Payment && Number(data.Payment.Amount) > 0 ? data.Payment : null;
       return { ok: true, recurringId: Number(id), immediatePayment: p, dryRun: false };
     } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'שגיאה לא ידועה', dryRun: false }; }
+  }
+  async chargeOnce(input: ChargeOnceInput): Promise<ChargeOnceResult> {
+    try {
+      const r = await this.post('/billing/payments/charge/', chargeOnceBody(input));
+      const p = ((r.Data ?? {}) as { Payment?: (SumitPayment & { StatusDescription?: string | null }) | null }).Payment;
+      // ★ SUMIT ענתה "הצלחה" בלי פרטי תשלום — אולי חויב. לא מניחים שלא.
+      if (!p || !p.ID) return { ok: false, error: 'SUMIT לא החזירה פרטי תשלום', uncertain: true, dryRun: false };
+      return { ok: true, payment: p, dryRun: false };
+    } catch (e) {
+      // post() זורקת "SUMIT: …" רק כש-SUMIT ענתה וסירבה (Status ≠ 0) — אז ודאי שלא חויב. כל השאר
+      // (החיבור נפל, תשובה שאינה JSON) — הבקשה אולי הגיעה וחויבה.
+      const msg = e instanceof Error ? e.message : 'שגיאה לא ידועה';
+      return { ok: false, error: msg, uncertain: !msg.startsWith('SUMIT: '), dryRun: false };
+    }
   }
   async list(customerId: number): Promise<StandingItem[]> {
     const r = await this.post('/billing/recurring/listforcustomer/', { Customer: { ID: customerId }, IncludeInactive: true });

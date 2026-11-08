@@ -48,11 +48,17 @@ export function useCancelStanding() {
 }
 
 export type StandingEvent = Views<'v_standing_order_events'>;
-export const EVENT_LABEL: Record<string, string> = { reschedule: 'שינוי יום חיוב', sumit_change: 'שונה ב-SUMIT', amount_change: 'שינוי סכום (הנחה)' };
-/** "מאיזה לאיזה" ביומן: תאריכים — או סכומים, בשינוי סכום. */
-export function eventChange(e: { kind: string | null; from_date: string | null; to_date: string | null; from_amount?: number | null; to_amount?: number | null },
+export const EVENT_LABEL: Record<string, string> = { reschedule: 'שינוי יום חיוב', sumit_change: 'שונה ב-SUMIT', amount_change: 'שינוי סכום (הנחה)',
+  retry_charge: 'חיוב חוזר', retry_declined: 'חיוב חוזר נדחה', renewed: 'הוראה חודשה ב-SUMIT' };
+/** "מאיזה לאיזה" ביומן: תאריכים — או סכומים בשינוי סכום; בחיוב חוזר — איזה חיוב ומה קרה. */
+export function eventChange(e: { kind: string | null; from_date: string | null; to_date: string | null; from_amount?: number | null; to_amount?: number | null;
+                                 remaining?: number | null; note?: string | null },
                             fmtDate: (d: string | null) => string, fmtMoney: (n: number | null | undefined) => string): [string, string] {
-  return e.kind === 'amount_change' ? [fmtMoney(e.from_amount), fmtMoney(e.to_amount)] : [fmtDate(e.from_date), fmtDate(e.to_date)];
+  if (e.kind === 'amount_change') return [fmtMoney(e.from_amount), fmtMoney(e.to_amount)];
+  if (e.kind === 'retry_charge') return [`${fmtDate(e.from_date)} (נכשל)`, `${fmtMoney(e.to_amount)} — עבר`];
+  if (e.kind === 'retry_declined') return [`${fmtDate(e.from_date)} (נכשל)`, `נדחה${e.note ? `: ${e.note}` : ''}`];
+  if (e.kind === 'renewed') return ['הוראה שהושבתה', `${fmtDate(e.to_date)} · ${e.remaining ?? '—'} חיובים`];
+  return [fmtDate(e.from_date), fmtDate(e.to_date)];
 }
 
 /** יומן הוראות הקבע: מי שינה, מתי, מאיזה תאריך לאיזה. orderId — של הוראה אחת. */
@@ -114,6 +120,59 @@ export function useRescheduleStanding() {
       void qc.invalidateQueries({ queryKey: ['standing-orders'] });
       void qc.invalidateQueries({ queryKey: ['standing-events'] });
       void qc.invalidateQueries({ queryKey: ['standing-reschedule-preview'] });
+    },
+  });
+}
+
+// ─────────── ניסיון חיוב חוזר (הוראה שהושבתה אחרי חיוב שנכשל) ───────────
+/** התוכנית — מהמסד, לפני הלחיצה. stage: 'charge' (חיוב ואז חידוש) / 'renew' (החיוב כבר עבר — רק חידוש). */
+export type RetryPlan =
+  | { ok: true; stage: 'charge' | 'renew'; amount: number; missed: string | null; remaining_after: number; next: string | null;
+      final: string | null; day: number; lines: string[] }
+  | { ok: false; error: string };
+
+export function useRetryPreview(orderId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['standing-retry-preview', orderId],
+    enabled: Boolean(orderId && enabled),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_standing_retry_preview', { p_id: orderId as string });
+      if (error) throw new Error(error.message);
+      return data as unknown as RetryPlan;
+    },
+  });
+}
+
+export type RetryResult = { charged: number; renewed: boolean; completed: boolean; next: string | null; remaining: number };
+export class RetryChanged extends Error {
+  constructor(message: string, readonly plan: RetryPlan) { super(message); }
+}
+
+/**
+ * הלחיצה: חיוב על הכרטיס השמור ב-SUMIT ואז הוראה חדשה (או רק חידוש). stage ו-next — מה שהבעלים ראתה;
+ * אם המצב השתנה, לא נוגעים וחוזרת התוכנית החדשה (RetryChanged).
+ */
+export function useRetryStanding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; stage: 'charge' | 'renew'; next: string | null }) => {
+      const { data, error } = await supabase.functions.invoke('standing-order-retry', { body: input });
+      let r = data as ({ ok?: boolean; error?: string; changed?: boolean; plan?: RetryPlan } & Partial<RetryResult>) | null;
+      if (error && 'context' in error) {
+        try { r = (await (error as { context: Response }).context.json()) as typeof r; } catch { /* ignore */ }
+      }
+      if (!r?.ok) {
+        if (r?.changed && r.plan) throw new RetryChanged(r.error ?? 'המצב השתנה', r.plan);
+        throw new Error(r?.error ?? error?.message ?? 'החיוב החוזר נכשל');
+      }
+      return r as RetryResult;
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['standing-orders'] });
+      void qc.invalidateQueries({ queryKey: ['standing-events'] });
+      void qc.invalidateQueries({ queryKey: ['standing-retry-preview'] });
+      void qc.invalidateQueries({ queryKey: ['students'] });
+      void qc.invalidateQueries({ queryKey: ['payments'] });
     },
   });
 }
