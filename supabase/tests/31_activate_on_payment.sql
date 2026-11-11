@@ -76,6 +76,16 @@ select assert_true(exists (select 1 from jsonb_array_elements(rpc_standing_order
                    '★ ...והוראת הקבע מוכנה ליצירה כרגיל');
 rollback;
 
+\echo 'קישור ההרשמה שולם בסכום שונה (נמוך):'
+begin;
+create temp table t_s as select t_ap_enroll('אלה') as id;
+create temp table t_l as select id, external_identifier from payment_links where student_id = (select id from t_s) and purpose = 'enrollment';
+select rpc_record_sumit_payment((select external_identifier from t_l), 'P-AP3', 150, now(), 'D-AP3', 'external_identifier', '905', null);
+select assert_true((select status = 'mismatch' from payment_links where id = (select id from t_l)), 'הקישור — "שולם — סכום שונה"');
+select assert_true((select not f_first_charge_covered(s) from students s where s.id = (select id from t_s)), '150 < 210 — התשלום לבדו לא מכסה');
+select assert_true(t_ap_status((select id from t_s)) = 'active', '★ קישור ההרשמה שולם (גם בסכום שונה) — פעילה; ההפרש מתריע לבעלים');
+rollback;
+
 \echo 'קישור תשלום רגיל ששולם (חנה הן):'
 begin;
 create temp table t_s as select t_ap_enroll('חנה') as id;

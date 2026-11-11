@@ -98,6 +98,22 @@ export function useCancelEnrollment() {
   });
 }
 
+/**
+ * ביטול הרשמה חריג לתקנון (הבעלים) — גם אחרי חודש הניסיון. סיבה חובה; סכום ההחזר לפי החלטתה (0 עד מה
+ * ששולם). הכללים במסד (rpc_cancel_enrollment_override); את הכסף עצמו מחזירים ב-SUMIT.
+ */
+export function useCancelEnrollmentOverride() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { studentId: string; refund: number; reason: string }) => {
+      const { data, error } = await supabase.rpc('rpc_cancel_enrollment_override', { p_student: input.studentId, p_refund: input.refund, p_reason: input.reason });
+      if (error) throw new Error(error.message);
+      return data as unknown as { ok: boolean; refund: number; paid_before: number; from_sumit: boolean };
+    },
+    onSuccess: () => { void qc.invalidateQueries(); },
+  });
+}
+
 // ─────────── הגדרות ההרשמה (הבעלים עורכת, בלי קוד) ───────────
 export function useEnrollmentSettings() {
   return useQuery({

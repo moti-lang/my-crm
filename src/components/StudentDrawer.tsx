@@ -10,7 +10,7 @@ import { NAME_RE, awaitsFirstCharge } from '@/lib/enrollment';
 import { PaymentForm } from '@/components/PaymentForm';
 import { PaymentLinkButton } from '@/components/PaymentLinkButton';
 import { RenewEnrollmentLinkButton } from '@/components/RenewEnrollmentLinkButton';
-import { useInstallmentProgress, useCancelEnrollment } from '@/hooks/enrollment';
+import { useInstallmentProgress, useCancelEnrollment, useCancelEnrollmentOverride } from '@/hooks/enrollment';
 import { useAuth } from '@/auth/AuthProvider';
 import { humanError } from '@/lib/errors';
 import type { Views } from '@/lib/database.types';
@@ -52,7 +52,9 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const voidHistory = usePaymentVoidHistory(student?.id ?? null);
   const [voiding, setVoiding] = useState<string | null>(null);
   const [voided, setVoided] = useState<string | null>(null);
-  useEffect(() => { setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); setVoiding(null); setVoided(null); }, [student?.id]);
+  const [overriding, setOverriding] = useState(false);
+  const [overrideDone, setOverrideDone] = useState<string | null>(null);
+  useEffect(() => { setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); setVoiding(null); setVoided(null); setOverriding(false); setOverrideDone(null); cancelEnrollment.reset(); }, [student?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!student) return null;
 
@@ -144,6 +146,8 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
                 {student.refund_amount != null && Number(student.refund_amount) > 0 && (<><dt className="text-soft">החזר</dt><dd className="tabular-nums">{formatILS(student.refund_amount)}</dd></>)}
               </dl>
             )}
+            {cancelEnrollment.data && <p className="mt-2 text-xs text-ok" role="status">ההרשמה בוטלה. זיכוי {formatILS(cancelEnrollment.data.refund)}.</p>}
+            {overrideDone && <p className="mt-2 text-xs text-ok" role="status" data-testid="override-result">{overrideDone}</p>}
             {profile?.role === 'owner' && student.trial_started_on && !student.cancelled_at && student.id && (
               <div className="mt-2">
                 <button type="button" className="btn-ghost w-full text-bad" disabled={!inTrial || cancelEnrollment.isPending}
@@ -152,8 +156,11 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
                   {cancelEnrollment.isPending ? 'מבטלת…' : 'ביטול הרשמה'}
                 </button>
                 {!inTrial && <p className="mt-1 text-xs text-soft">חודש הניסיון הסתיים ב-{trialEnd ? formatDate(trialEnd.toISOString().slice(0, 10)) : ''}. לפי התקנון, אחרי חודש הניסיון לא ניתן לבטל.</p>}
+                {!inTrial && (overriding
+                  ? <CancelOverrideForm studentId={student.id} name={student.full_name ?? ''} paid={paid} onCancel={() => setOverriding(false)}
+                      onDone={(msg) => { setOverriding(false); setOverrideDone(msg); }} />
+                  : <button type="button" className="mt-1 text-xs text-bad underline" onClick={() => setOverriding(true)}>ביטול בכל זאת (חריג לתקנון)</button>)}
                 {cancelEnrollment.error != null && <p className="mt-1 text-xs text-bad" role="alert">{humanError(cancelEnrollment.error)}</p>}
-                {cancelEnrollment.data && <p className="mt-1 text-xs text-ok">ההרשמה בוטלה. זיכוי {formatILS(cancelEnrollment.data.refund)}.</p>}
               </div>
             )}
             {profile?.role === 'owner' && student.id && (
@@ -517,6 +524,48 @@ function VoidPaymentForm({ payment, onDone, onCancel }: { payment: { id: string;
             });
           }}>
           {save.isPending ? 'מבטלת…' : 'ביטול התשלום'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>חזרה</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ביטול הרשמה חריג לתקנון (הבעלים): אחרי חודש הניסיון. סכום ההחזר — החלטה של הבעלים (0 עד מה ששולם),
+ * סיבה חובה, ונרשם ביומן כחריג. את הכסף עצמו מחזירים ב-SUMIT.
+ */
+function CancelOverrideForm({ studentId, name, paid, onCancel, onDone }: { studentId: string; name: string; paid: number; onCancel: () => void; onDone: (msg: string) => void }) {
+  const [refund, setRefund] = useState('0');
+  const [reason, setReason] = useState('');
+  const save = useCancelEnrollmentOverride();
+  const n = Number(refund);
+  const invalid = !refund.trim() || !Number.isFinite(n) ? 'יש לכתוב סכום (אפשר 0)' : n < 0 ? 'לא שלילי' : n > paid ? `יותר ממה ששולם (${formatILS(paid)})` : null;
+  return (
+    <div className="mt-2 space-y-2 rounded-field border border-bad/40 p-2 text-xs" data-testid="cancel-override">
+      <p className="font-medium text-bad">ביטול הרשמה חריג לתקנון</p>
+      <p className="text-soft">לפי התקנון אחרי חודש הניסיון אין ביטול. זה חריג, ויירשם ביומן עם הסיבה. התלמידה תעבור ל"הפסיקה", וקישורים ותזכורות פתוחים יבוטלו.</p>
+      <label className="block">כמה להחזיר להורה (₪) — שולם {formatILS(paid)}
+        <input className="field mt-1 w-32 py-1 text-sm" type="number" inputMode="decimal" min={0} max={paid} step="any" dir="ltr"
+          aria-label="סכום ההחזר" value={refund} onChange={(e) => setRefund(e.target.value)} />
+      </label>
+      {invalid && refund !== '' && <p className="text-bad">{invalid}</p>}
+      <label className="block">סיבה
+        <input className="field mt-1 py-1 text-sm" aria-label="סיבת הביטול החריג" value={reason} onChange={(e) => setReason(e.target.value)} />
+      </label>
+      {save.error != null && <p className="text-bad" role="alert">{humanError(save.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary bg-bad px-3 py-1 text-xs" disabled={Boolean(invalid) || !reason.trim() || save.isPending}
+          onClick={() => {
+            if (invalid || !reason.trim()) return;
+            if (!window.confirm(`לבטל את ההרשמה של ${name} (חריג לתקנון)${n > 0 ? `, עם החזר של ${formatILS(n)}` : ', בלי החזר'}?`)) return;
+            // ★ אחרי הביטול הכרטיס מתרענן והקטע של "ביטול הרשמה" נעלם — ההודעה מוצגת מחוץ לו.
+            save.mutate({ studentId, refund: n, reason: reason.trim() }, {
+              onSuccess: (r) => onDone(`✓ ההרשמה בוטלה (חריג לתקנון). ${r.refund > 0 ? `נרשם החזר של ${formatILS(r.refund)}.` : 'בלי החזר.'}`
+                + (r.refund > 0 && r.from_sumit ? ' את הכסף עצמו מחזירים ב-SUMIT (זיכוי לעסקה).' : '')),
+            });
+          }}>
+          {save.isPending ? 'מבטלת…' : 'ביטול ההרשמה'}
         </button>
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>חזרה</button>
       </div>

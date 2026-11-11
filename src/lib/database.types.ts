@@ -2505,6 +2505,14 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_cancel_enrollment_override: {
+        Args: {
+          p_student: string;
+          p_refund: number;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       rpc_void_payment: {
         Args: {
           p_payment: string;

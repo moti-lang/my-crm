@@ -441,7 +441,7 @@ expect_fail_code "הרשמה: הסכום נלקח מהבקשה (הזרקה)" \
 expect_fail_code "הרשמה: תשלום נקלט ולא מפעיל את התלמידה" \
   "$DIR/../migrations/0023_enrollment.sql" \
   'sed -i "s/    update students set status = .active. where id = new.student_id and status = .pending. and cancelled_at is null;/    null;/" "$F"' \
-  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/31_activate_on_payment.sql"
 
 expect_fail_code "הרשמה: ביטול אפשרי גם אחרי חודש הניסיון" \
   "$DIR/../migrations/0026_branch_unit.sql" \
@@ -1721,6 +1721,47 @@ expect_fail_code "ביטול תשלום: בלי אישור" \
   "$DIR/../../src/components/StudentDrawer.tsx" \
   'sed -i "s/if (!window.confirm(kind === .refund./if (false \&\& !window.confirm(kind === \x27refund\x27/" "$F"' \
   "node supabase/tests/payment-void-ui.test.mjs"
+
+# ─── ביטול הרשמה חריג לתקנון (0051) ───
+expect_fail_code "★ ביטול חריג: לא רק הבעלים" \
+  "$DIR/../migrations/0051_cancel_enrollment_override.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לבטל הרשמה. using errcode = .42501.; end if;/  if false then raise exception \x27x\x27; end if;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/33_cancel_override.sql"
+
+expect_fail_code "★ ביטול חריג: בלי סיבה" \
+  "$DIR/../migrations/0051_cancel_enrollment_override.sql" \
+  'sed -i "s/  if v_reason is null then raise exception .יש לכתוב סיבה לביטול החריג.; end if;/  if false then raise exception \x27x\x27; end if;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/33_cancel_override.sql"
+
+expect_fail_code "★ ביטול חריג: החזר גדול ממה ששולם" \
+  "$DIR/../migrations/0051_cancel_enrollment_override.sql" \
+  'sed -i "s/^  if v_refund > v_paid then raise exception/  if false then raise exception/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/33_cancel_override.sql"
+
+expect_fail_code "★ ביטול חריג: למרות הוראת קבע פעילה (ממשיכה לחייב)" \
+  "$DIR/../migrations/0051_cancel_enrollment_override.sql" \
+  'sed -i "s/^  if exists (select 1 from standing_orders o where o.student_id = s.id and o.status in (.active., .retrying., .failed.)) then\$/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/33_cancel_override.sql"
+
+expect_fail_code "ביטול חריג: קישורים פתוחים נשארים" \
+  "$DIR/../migrations/0051_cancel_enrollment_override.sql" \
+  'sed -i "s/^  update payment_links set status = .cancelled. where student_id = s.id and status in (.pending., .opened.);\$/  perform 1;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/33_cancel_override.sql"
+
+expect_fail_code "★ ביטול חריג: אפשר בלי סיבה מהמסך" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/disabled={Boolean(invalid) || !reason.trim() || save.isPending}/disabled={Boolean(invalid) || save.isPending}/" "$F"' \
+  "node supabase/tests/cancel-override-ui.test.mjs"
+
+expect_fail_code "★ ביטול חריג: גם מנהלת סניף רואה" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/{profile?.role === .owner. \&\& student.trial_started_on \&\& !student.cancelled_at \&\& student.id \&\& (/{student.trial_started_on \&\& !student.cancelled_at \&\& student.id \&\& (/" "$F"' \
+  "node supabase/tests/cancel-override-ui.test.mjs"
+
+expect_fail_code "ביטול חריג: בלי אישור" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/if (!window.confirm(.לבטל את ההרשמה של/if (false \&\& !window.confirm(\x60לבטל את ההרשמה של/" "$F"' \
+  "node supabase/tests/cancel-override-ui.test.mjs"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
