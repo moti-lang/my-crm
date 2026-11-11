@@ -1044,6 +1044,9 @@ export type Database = {
           deleted_at: string | null;
           created_at: string;
           branch_id: string | null;
+          refund_of: string | null;
+          void_reason: string | null;
+          voided_by: string | null;
         };
         Insert: {
           id?: string;
@@ -1060,6 +1063,9 @@ export type Database = {
           deleted_at?: string | null;
           created_at?: string;
           branch_id?: string | null;
+          refund_of?: string | null;
+          void_reason?: string | null;
+          voided_by?: string | null;
         };
         Update: {
           id?: string;
@@ -1076,6 +1082,9 @@ export type Database = {
           deleted_at?: string | null;
           created_at?: string;
           branch_id?: string | null;
+          refund_of?: string | null;
+          void_reason?: string | null;
+          voided_by?: string | null;
         };
         Relationships: [
           {
@@ -2493,6 +2502,20 @@ export type Database = {
           p_id: string;
           p_first: string;
           p_last: string;
+        };
+        Returns: Json;
+      };
+      rpc_void_payment: {
+        Args: {
+          p_payment: string;
+          p_kind: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      rpc_payment_void_history: {
+        Args: {
+          p_student: string;
         };
         Returns: Json;
       };

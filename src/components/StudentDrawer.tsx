@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory,
-  useDiscountPreview, useApplyDiscount, useStudentDiscountHistory, STATUS_LABEL, STATUS_TONE } from '@/hooks/students';
+  useDiscountPreview, useApplyDiscount, useStudentDiscountHistory, usePaymentVoidHistory, useVoidPayment, STATUS_LABEL, STATUS_TONE,
+  type VoidKind } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
 import { StandingOrderPanel } from '@/components/StandingOrderPanel';
 import { useStandingOrders } from '@/hooks/standing';
@@ -48,7 +49,10 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const [discounted, setDiscounted] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renamed, setRenamed] = useState<string | null>(null);
-  useEffect(() => { setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); }, [student?.id]);
+  const voidHistory = usePaymentVoidHistory(student?.id ?? null);
+  const [voiding, setVoiding] = useState<string | null>(null);
+  const [voided, setVoided] = useState<string | null>(null);
+  useEffect(() => { setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); setVoiding(null); setVoided(null); }, [student?.id]);
 
   if (!student) return null;
 
@@ -201,15 +205,43 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             ) : (payments.data?.length ?? 0) === 0 ? (
               <p className="mt-3 text-sm text-soft">טרם נרשמו תשלומים.</p>
             ) : (
-              <ul className="mt-3 divide-y divide-rule border-t border-rule">
-                {(payments.data ?? []).map((p) => (
-                  <li key={p.id} className="flex items-center justify-between py-2 text-sm">
-                    <span>
-                      {formatDate(p.paid_on)}
-                      <span className="text-soft"> · {METHOD_LABEL[p.method] ?? p.method}</span>
-                      {p.covers_note && <span className="text-soft"> · {p.covers_note}</span>}
-                    </span>
-                    <span className="tabular-nums">{formatILS(p.amount)}</span>
+              <ul className="mt-3 divide-y divide-rule border-t border-rule" aria-label="תשלומים">
+                {(payments.data ?? []).map((p) => {
+                  const refund = p.source === 'refund';
+                  const refunded = (payments.data ?? []).some((r) => r.refund_of === p.id);
+                  const canVoid = profile?.role === 'owner' && !refund && !refunded && Number(p.amount) > 0;
+                  return (
+                    <li key={p.id} className="py-2 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>
+                          {formatDate(p.paid_on)}
+                          <span className="text-soft"> · {METHOD_LABEL[p.method] ?? p.method}</span>
+                          {refund && <span className="text-bad"> · החזר</span>}
+                          {refunded && <span className="text-soft"> · הוחזר</span>}
+                          {p.covers_note && <span className="text-soft"> · {p.covers_note}</span>}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <span className={`tabular-nums ${refund ? 'text-bad' : ''}`}>{formatILS(p.amount)}</span>
+                          {canVoid && voiding !== p.id && (
+                            <button type="button" className="text-xs text-bad hover:underline" onClick={() => { setVoided(null); setVoiding(p.id); }}>ביטול</button>
+                          )}
+                        </span>
+                      </div>
+                      {refund && p.void_reason && <p className="text-xs text-soft">{p.void_reason}</p>}
+                      {voiding === p.id && (
+                        <VoidPaymentForm payment={p} onDone={(msg) => { setVoiding(null); setVoided(msg); }} onCancel={() => setVoiding(null)} />
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {voided && <p className="mt-2 text-xs text-ok" role="status" data-testid="void-result">{voided}</p>}
+            {(voidHistory.data ?? []).length > 0 && (
+              <ul className="mt-2 space-y-0.5 border-t border-rule pt-1 text-xs text-soft" aria-label="תשלומים שבוטלו">
+                {(voidHistory.data ?? []).map((h) => (
+                  <li key={`${h.at}-${h.amount}`}>
+                    {formatDateTime(h.at)} · {h.by_name}: {h.kind === 'refund' ? 'הוחזר להורה' : 'בוטל (נרשם בטעות)'} — {formatILS(h.amount)} מ-{formatDate(h.paid_on)}{h.reason ? ` · ${h.reason}` : ''}
                   </li>
                 ))}
               </ul>
@@ -437,6 +469,56 @@ function DiscountForm({ studentId, current, currentReason, onDone, onCancel }:
           {save.isPending ? 'שומרת…' : 'שמירת ההנחה'}
         </button>
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>ביטול</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ביטול תשלום (בעלים): "נרשם בטעות" — נמחק מהחוב; "הוחזר להורה" — שורת החזר. סיבה חובה. את הכסף עצמו
+ * מחזירים ב-SUMIT — כאן נרשם מה שקרה, והחוב חוזר כאילו לא שולם.
+ */
+function VoidPaymentForm({ payment, onDone, onCancel }: { payment: { id: string; amount: number; paid_on: string; source: string | null }; onDone: (msg: string) => void; onCancel: () => void }) {
+  const [kind, setKind] = useState<VoidKind | null>(null);
+  const [reason, setReason] = useState('');
+  const save = useVoidPayment();
+  const amount = formatILS(payment.amount);
+  return (
+    <div className="mt-2 space-y-2 rounded-field border border-rule p-2" data-testid="void-form">
+      <fieldset className="space-y-1 text-xs">
+        <legend className="mb-1 font-medium">ביטול התשלום של {amount} מ-{formatDate(payment.paid_on)}</legend>
+        <label className="flex items-start gap-2">
+          <input type="radio" name={`void-${payment.id}`} checked={kind === 'mistake'} onChange={() => setKind('mistake')} />
+          <span><b>נרשם בטעות</b> — התשלום יימחק, והחוב יחזור כאילו לא שולם.</span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input type="radio" name={`void-${payment.id}`} checked={kind === 'refund'} onChange={() => setKind('refund')} />
+          <span><b>הוחזר להורה</b> — תירשם שורת החזר של {amount}; התשלום וההחזר יישארו בהיסטוריה.</span>
+        </label>
+      </fieldset>
+      <label className="block text-xs">סיבה
+        <input className="field mt-1 py-1 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="סיבת הביטול" />
+      </label>
+      {payment.source === 'sumit' && <p className="text-xs text-warn">התשלום הגיע מ-SUMIT: את הכסף עצמו מחזירים ב-SUMIT (זיכוי לעסקה). כאן רק נרשם.</p>}
+      {save.error != null && <p className="text-xs text-bad" role="alert">{humanError(save.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={!kind || !reason.trim() || save.isPending}
+          onClick={() => {
+            if (!kind || !reason.trim()) return;
+            if (!window.confirm(kind === 'refund' ? `לרשום החזר של ${amount}?` : `למחוק את התשלום של ${amount} (נרשם בטעות)?`)) return;
+            save.mutate({ paymentId: payment.id, kind, reason: reason.trim() }, {
+              onSuccess: (r) => onDone([
+                kind === 'refund' ? `✓ נרשם החזר של ${amount}.` : `✓ התשלום של ${amount} נמחק.`,
+                `החוב עכשיו ${formatILS(r.balance)}.`,
+                r.pending ? 'התלמידה חזרה ל"ממתינה" — אפשר לשלוח לה "קישור הרשמה חדש".' : '',
+                r.from_sumit ? 'את הכסף עצמו מחזירים ב-SUMIT.' : '',
+                r.standing_active ? '⚠ לתלמידה יש הוראת קבע פעילה ב-SUMIT — הביטול כאן לא עוצר אותה.' : '',
+              ].filter(Boolean).join(' ')),
+            });
+          }}>
+          {save.isPending ? 'מבטלת…' : 'ביטול התשלום'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>חזרה</button>
       </div>
     </div>
   );

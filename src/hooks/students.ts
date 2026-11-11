@@ -214,3 +214,39 @@ export function useStudentDiscountHistory(studentId: string | null) {
     },
   });
 }
+
+// ─────────── ביטול תשלום (בעלים): "נרשם בטעות" / "הוחזר להורה" ───────────
+export type VoidKind = 'mistake' | 'refund';
+export type VoidResult = { ok: true; kind: VoidKind; amount: number; refund_id: string | null; from_sumit: boolean; standing_active: boolean; pending: boolean; balance: number };
+
+/** הכללים במסד (rpc_void_payment): בעלים בלבד, סיבה חובה, החזר אחד לכל תשלום. */
+export function useVoidPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { paymentId: string; kind: VoidKind; reason: string }) => {
+      const { data, error } = await supabase.rpc('rpc_void_payment', { p_payment: input.paymentId, p_kind: input.kind, p_reason: input.reason });
+      if (error) throw new Error(error.message);
+      return data as unknown as VoidResult;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['payments'] });
+      void qc.invalidateQueries({ queryKey: ['students'] });
+      void qc.invalidateQueries({ queryKey: ['payment-void-history'] });
+      void qc.invalidateQueries({ queryKey: ['enrolled-unpaid'] });
+      void qc.invalidateQueries({ queryKey: ['student-flags'] });
+    },
+  });
+}
+
+export type VoidHistoryRow = { at: string; kind: VoidKind; amount: number; paid_on: string; reason: string | null; by_name: string | null };
+export function usePaymentVoidHistory(studentId: string | null) {
+  return useQuery({
+    queryKey: ['payment-void-history', studentId],
+    enabled: Boolean(studentId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_payment_void_history', { p_student: studentId as string });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as VoidHistoryRow[];
+    },
+  });
+}
