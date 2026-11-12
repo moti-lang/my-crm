@@ -111,8 +111,10 @@ expect_fail "הסרת האינדקס שמונע הודעות כפולות" \
 
 # 05 ולא 02: מאז 0020 הסכום הכולל נשמר גם בחור הזה (הנפילה לחלוקה שווה),
 # ורק ההשוואה לפי סניף בין התפקידים תופסת אותו.
+# מאז 0056 f_general_allocation נקראת רק מתוך private.v_general_allocation (SECURITY DEFINER), ולכן
+# החור הוא ששתיהן ירוצו בהרשאות הקורא.
 expect_fail "החזרת חלוקת ההוצאות להרשאות הקורא (מספר שגוי לרואת חשבון)" \
-  "alter function f_general_allocation(uuid) security invoker" 05_role_consistency_proof.sql
+  "alter function f_general_allocation(uuid) security invoker; alter function private.v_general_allocation() security invoker; grant execute on function f_general_allocation(uuid) to authenticated" 05_role_consistency_proof.sql
 
 expect_fail "החזרת הדוחות הכספיים לתלות ב-RLS של students" \
   "\\i $DIR/holes/invoker_financial_views.sql" \
@@ -1762,6 +1764,71 @@ expect_fail_code "ביטול חריג: בלי אישור" \
   "$DIR/../../src/components/StudentDrawer.tsx" \
   'sed -i "s/if (!window.confirm(.לבטל את ההרשמה של/if (false \&\& !window.confirm(\x60לבטל את ההרשמה של/" "$F"' \
   "node supabase/tests/cancel-override-ui.test.mjs"
+
+# ─── הקשחת אבטחה 11/2026 (0052–0057) ───
+expect_fail "★ החזרת שני ה-views שאפשר לכתוב דרכם (רצים כבעלים, ALL ל-authenticated)" \
+  "\\i $DIR/holes/updatable_definer_views.sql" \
+  "34_security_hardening.sql"
+
+expect_fail "UPDATE/DELETE ל-authenticated על view (גם כשהוא לא ניתן לעדכון)" \
+  "grant update, delete on v_students_accounting to authenticated" \
+  "34_security_hardening.sql"
+
+expect_fail "TRUNCATE ל-authenticated (עוקף RLS)" \
+  "grant truncate on students to authenticated" \
+  "34_security_hardening.sql"
+
+expect_fail "ברירת מחדל שמעניקה ALL ל-authenticated על טבלאות חדשות" \
+  "alter default privileges for role postgres in schema public grant all on tables to authenticated" \
+  "34_security_hardening.sql"
+
+expect_fail "★ סגירת סניף — בדיקת תפקיד שבה NULL עובר" \
+  "\\i $DIR/holes/close_branch_null_role.sql" \
+  "34_security_hardening.sql"
+
+expect_fail "★ שינוי שם — בדיקת תפקיד שבה NULL עובר, ו-my_branches() למושבתת" \
+  "\\i $DIR/holes/rename_student_null_role.sql" \
+  "34_security_hardening.sql"
+
+expect_fail "★ חלוקת ההוצאות שוב פתוחה לכל משתמשת מחוברת" \
+  "grant execute on function f_general_allocation(uuid) to authenticated" \
+  "34_security_hardening.sql"
+
+expect_fail "פונקציה בלי search_path קבוע" \
+  "alter function f_today_il() reset search_path" \
+  "34_security_hardening.sql"
+
+expect_fail "פונקציה ב-private פתוחה ל-anon" \
+  "grant usage on schema private to anon; grant execute on function private.v_debtors() to anon" \
+  "34_security_hardening.sql"
+
+expect_fail "פונקציה חדשה פתוחה ל-anon (מעבר לשש של הדפים הציבוריים)" \
+  "create function public.hole_count() returns bigint language sql security definer set search_path = public as 'select count(*) from students'; grant execute on function public.hole_count() to anon" \
+  "34_security_hardening.sql"
+
+expect_fail "wa_config בלי ה-policy המגבילה" \
+  "drop policy wa_config_server_only on wa_config" \
+  "34_security_hardening.sql"
+
+expect_fail_code "★ CSP: סקריפטים inline מותרים" \
+  "$DIR/../../netlify.toml" \
+  "sed -i \"s/script-src 'self';/script-src 'self' 'unsafe-inline';/\" \"\$F\"" \
+  "node supabase/tests/security-headers.test.mjs"
+
+expect_fail_code "★ CSP: חיבור לכל דומיין" \
+  "$DIR/../../netlify.toml" \
+  "sed -i \"s/connect-src 'self' /connect-src 'self' https: /\" \"\$F\"" \
+  "node supabase/tests/security-headers.test.mjs"
+
+expect_fail_code "★ CSP שחוסם את האפליקציה עצמה נתפס בבדיקות המסך" \
+  "$DIR/../../netlify.toml" \
+  "sed -i \"s/script-src 'self';/script-src 'none';/\" \"\$F\"" \
+  "node supabase/tests/payment-void-ui.test.mjs"
+
+expect_fail_code "השוואת סוד ה-cron חוזרת להיות לא בזמן קבוע" \
+  "$DIR/../../supabase/functions/_shared/guard.ts" \
+  "sed -i 's/if (!timingSafeEqualStr(auth, \`Bearer \${requireEnv(.CRON_SECRET.)}\`))/if (auth !== \`Bearer \${requireEnv(\"CRON_SECRET\")}\`)/' \"\$F\"" \
+  "node supabase/tests/function-guards.test.mjs"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash

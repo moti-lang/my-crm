@@ -97,6 +97,15 @@ grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to service_role;
 alter default privileges in schema public grant all on sequences to service_role;
 
+-- ★ כמו בסופבייס גם ל-anon ול-authenticated (pg_default_acl בפרויקט, נבדק 11/2026):
+-- כל טבלה, view ורצף חדשים מקבלים ALL, וכל פונקציה חדשה — EXECUTE. בלי זה ה-shim היה
+-- "בטוח" יותר מהענן: view שנוצר במיגרציה קיבל כאן SELECT בלבד, ובענן גם INSERT/UPDATE/DELETE —
+-- ו-view שרץ בהרשאות הבעלים ואפשר לכתוב דרכו עוקף את ה-RLS של הטבלה (0052).
+-- מ-0052 ברירות המחדל האלה נשללות — בענן ובכאן באותה מיגרציה.
+alter default privileges in schema public grant all on tables to anon, authenticated;
+alter default privileges in schema public grant all on sequences to anon, authenticated;
+alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
+
 -- קריטי לנאמנות ה-shim: בסופבייס אמיתי לתפקידים יש גישה לסכמת auth
 -- ולפונקציות שבה. בלי זה כל פוליסה שמשתמשת ב-auth.uid() ישירות נכשלת
 -- ב-"permission denied for schema auth" — כלומר בדיקות עוברות מהסיבה הלא נכונה.

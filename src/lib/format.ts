@@ -53,3 +53,11 @@ export function formatWeekdays(days: number[] | null | undefined): string {
   if (!days?.length) return '—';
   return days.map((d) => WEEKDAYS[d] ?? '?').join(', ');
 }
+
+/**
+ * קישור שמגיע מספק חיצוני (למשל קבלה מ-SUMIT) — רק https. כתובת אחרת (javascript:, data:)
+ * לא תוצג כקישור לחיץ: React לא מסנן href, וקישור כזה היה מריץ קוד באתר.
+ */
+export function safeHttpsUrl(url: string | null | undefined): string | null {
+  return typeof url === 'string' && /^https:\/\/[^\s]+$/i.test(url.trim()) ? url.trim() : null;
+}
