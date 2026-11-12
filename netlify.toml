@@ -14,13 +14,25 @@
   to = "/index.html"
   status = 200
 
+# ★ כותרות אבטחה (ביקורת 11/2026). ה-CSP מתיר רק את מה שהאפליקציה באמת טוענת:
+#   סקריפטים — מהאתר בלבד (אין סקריפט inline ואין eval בבילד);
+#   סגנונות — מהאתר + Google Fonts. 'unsafe-inline' לסגנונות בלבד: React מצייר style="…",
+#     וחלון ההדפסה/PDF כותב <style> משלו (export-core.ts);
+#   גופנים — fonts.gstatic.com; תמונות — data:/blob: (ה-QR של וואטסאפ, הייצוא);
+#   חיבורים — רק לפרויקט ה-Supabase של המערכת (REST, Auth, Edge Functions).
+# ההתחברות בגוגל היא ניווט (redirect), לא fetch — CSP לא חוסם אותה.
+# שינוי כאן: הבדיקות בדפדפן (supabase/tests/_ui.mjs) מגישות את האפליקציה עם אותו CSP,
+# וכל הפרה נרשמת כשגיאת דף — מסך שנשבר בגללו מפיל את הבדיקה.
 [[headers]]
   for = "/*"
   [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://kzoxlusbocxjinfxckhe.supabase.co wss://kzoxlusbocxjinfxckhe.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
 
 # נכסים עם hash בשם — אפשר לשמור לנצח
 [[headers]]

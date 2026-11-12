@@ -10,7 +10,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { createServer } from 'node:http';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createServer as netServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -23,6 +23,22 @@ const SB = 'http://crmtest.supabase.test';
 const JWT_SECRET = 'ui-test-secret-ui-test-secret-0123456789';
 const PG = { host: process.env.PGHOST ?? '/tmp', port: process.env.PGPORT ?? '5433', user: process.env.PGUSER ?? 'postgres', db: 'teichtal' };
 const PGRST_VERSION = 'v12.2.3';
+
+/**
+ * ★ ה-CSP של האתר בענן (netlify.toml), כפי שהוא — רק כתובת ה-Supabase מוחלפת בזו של הבדיקות
+ * (http), ובלי upgrade-insecure-requests (שהיה מעלה אותה ל-https). כל בדיקות המסך רצות תחתיו,
+ * וכל הפרה נרשמת כשגיאת דף: מסך שה-CSP שובר נופל כאן ולא אצל הניה.
+ */
+export function siteCsp() {
+  const toml = readFileSync(join(ROOT, 'netlify.toml'), 'utf8');
+  const m = toml.match(/Content-Security-Policy = "([^"]+)"/);
+  if (!m) throw new Error('אין Content-Security-Policy ב-netlify.toml');
+  return m[1]
+    .replace(/https:\/\/[a-z0-9]+\.supabase\.co/g, SB)
+    .replace(/wss:\/\/[a-z0-9]+\.supabase\.co/g, SB.replace(/^http/, 'ws'))
+    .replace(/;\s*upgrade-insecure-requests/, '');
+}
+const CSP = siteCsp();
 
 export function sql(query) {
   return execFileSync('psql', ['-h', PG.host, '-p', PG.port, '-U', PG.user, '-d', PG.db, '-At', '-v', 'ON_ERROR_STOP=1', '-c', query],
@@ -72,7 +88,7 @@ export async function startUi() {
     const path = decodeURIComponent((req.url ?? '/').split('?')[0]);
     let file = join(out, path);
     if (!file.startsWith(out) || !existsSync(file) || statSync(file).isDirectory()) file = join(out, 'index.html'); // SPA
-    res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
+    res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'content-security-policy': CSP });
     res.end(await readFile(file));
   });
   await new Promise((r) => site.listen(0, '127.0.0.1', r));
@@ -113,6 +129,7 @@ export async function startUi() {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const log = { pageErrors: [], badResponses: [] };
     page.on('pageerror', (e) => log.pageErrors.push(e.message));
+    page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) log.pageErrors.push(`CSP: ${m.text()}`); });
     const exp = Math.floor(Date.now() / 1000) + 3600;
     const user = userId && { id: userId, aud: 'authenticated', role: 'authenticated', email: 'ui@test.local', app_metadata: { provider: 'google' }, user_metadata: {}, created_at: new Date().toISOString() };
     const token = userId && signJwt({ sub: userId, role: 'authenticated', aud: 'authenticated', exp, email: user.email });

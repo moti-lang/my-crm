@@ -27,8 +27,16 @@ const deny = (status: number, error: string) =>
 
 export function requireCronSecret(req: Request): Response | null {
   const auth = req.headers.get('authorization') ?? '';
-  if (auth !== `Bearer ${requireEnv('CRON_SECRET')}`) return deny(401, 'unauthorized');
+  if (!timingSafeEqualStr(auth, `Bearer ${requireEnv('CRON_SECRET')}`)) return deny(401, 'unauthorized');
   return null;
+}
+
+/** השוואה בזמן קבוע (סינכרונית): אורך שונה = שקר מיד (האורך אינו סוד), אחרת XOR על כל התווים. */
+export function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length || a.length === 0) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 export function requireUserJwt(req: Request): Response | null {
