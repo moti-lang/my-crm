@@ -310,8 +310,8 @@ expect_fail_code "אימות השחזור סופר שורות בלבד (שם ת�
   'sed -i "s/const got = (await ex.run(/const got = want.size ? [...want.keys()] : (await ex.run(/" "$F"' \
   "./scripts/restore-drill.sh >/dev/null && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal_drill -qc \"update students set full_name = full_name || \x27 X\x27 where id = (select id from students limit 1)\" && PGURL=postgresql://\${PGUSER:-postgres}@localhost:\${PGPORT:-5433}/teichtal_drill?host=\${PGHOST:-/tmp} node scripts/restore-verify.mjs \$(ls backups/teichtal-*.json | sort | tail -1)"
 
-expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (greatest מוסר מ-0023, ההגדרה האחרונה)" \
-  "$DIR/../migrations/0033_student_delete.sql" \
+expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (greatest מוסר ההגדרה האחרונה: 0056)" \
+  "$DIR/../migrations/0056_views_security_invoker.sql" \
   'sed -i "s/sum(GREATEST(vb.balance, 0::numeric))/sum(vb.balance)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
@@ -350,13 +350,13 @@ expect_fail_code "0020: חלוקה לפי תלמידות בלי תלמידות �
   'sed -i "s/case when (select students from totals) > 0 then ab.students::numeric else 1::numeric end/ab.students::numeric/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
-expect_fail_code "0020: הרווחיות חוזרת להישען על הסניף הנוכחי של התלמידה (ההגדרה האחרונה ב-0023)" \
-  "$DIR/../migrations/0033_student_delete.sql" \
+expect_fail_code "0020: הרווחיות חוזרת להישען על הסניף הנוכחי של התלמידה (ההגדרה האחרונה: 0056)" \
+  "$DIR/../migrations/0056_views_security_invoker.sql" \
   'sed -i "s/WHERE p.branch_id = b.id AND p.deleted_at IS NULL) AS income_students/WHERE s.branch_id = b.id AND p.deleted_at IS NULL) AS income_students/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
 expect_fail_code "0020: סגירת סניף בלי לבדוק תלמידות פעילות" \
-  "$DIR/../migrations/0020_real_data_findings.sql" \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
   'sed -i "s/if v_open > 0 then/if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
@@ -811,12 +811,12 @@ expect_fail_code "כותרת הטופס חוזרת ל\"הרשמה לחוג\"" \
   "node supabase/tests/program-word.test.mjs"
 
 expect_fail_code "★ מחיקת תלמידה משנה את דוח ההכנסות החודשי (תשלומים של מחוקה יוצאים מהדוח)" \
-  "$DIR/../migrations/0033_student_delete.sql" \
+  "$DIR/../migrations/0056_views_security_invoker.sql" \
   'sed -i "s/          WHERE p.deleted_at IS NULL$/          WHERE p.deleted_at IS NULL AND s.deleted_at IS NULL/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
 
 expect_fail_code "★ מחיקת תלמידה משנה את ההכנסות לפי סניף" \
-  "$DIR/../migrations/0033_student_delete.sql" \
+  "$DIR/../migrations/0056_views_security_invoker.sql" \
   'sed -i "s/WHERE p.branch_id = b.id AND p.deleted_at IS NULL) AS income_students/WHERE p.branch_id = b.id AND p.deleted_at IS NULL AND s.deleted_at IS NULL) AS income_students/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
 
@@ -1007,7 +1007,7 @@ expect_fail_code "★ פקודות: מספר מורשה נשמר כמו שהוק
 
 expect_fail_code "פקודות: לבעלים אין הרשאה לנרמול — הוספה מהמסך נכשלת" \
   "$DIR/../migrations/0038_commands_screen.sql" \
-  'sed -i "/^grant execute on function f_normalize_phone(text) to authenticated, service_role;/d" "$F"' \
+  'sed -i "s/^grant execute on function f_normalize_phone(text) to authenticated, service_role;/revoke execute on function f_normalize_phone(text) from authenticated; grant execute on function f_normalize_phone(text) to service_role;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/23_commands_screen.sql"
 
 expect_fail_code "★ פקודות: ניסיון שנדחה בהרשאות לא נרשם ביומן" \
@@ -1353,27 +1353,27 @@ expect_fail_code "★ עריכת שם: שינוי שם לא נרשם ביומן"
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "★ עריכת שם: מנהלת סניף משנה שם של תלמידה מסניף אחר" \
-  "$DIR/../migrations/0043_student_rename.sql" \
-  'sed -i "s/  if not (v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches()))) then/  if not (v_role = \x27owner\x27 or v_role = \x27branch_manager\x27) then/" "$F"' \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
+  'sed -i "s/  if not coalesce(v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches())), false) then/  if not (v_role = \x27owner\x27 or v_role = \x27branch_manager\x27) then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "★ עריכת שם: כל משתמשת (גם רואת חשבון) משנה שם" \
-  "$DIR/../migrations/0043_student_rename.sql" \
-  'sed -i "s/  if not (v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches()))) then/  if false then/" "$F"' \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
+  'sed -i "s/  if not coalesce(v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches())), false) then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "עריכת שם: שם כפול בסניף מתקבל" \
-  "$DIR/../migrations/0043_student_rename.sql" \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
   'sed -i "s/  if exists (select 1 from students o where o.id <> s.id/  if false and exists (select 1 from students o where o.id <> s.id/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "★ עריכת שם: הודעה שכבר יצאה נכתבת מחדש (התיעוד משתנה)" \
-  "$DIR/../migrations/0043_student_rename.sql" \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
   'sed -i "s/     where student_id = s.id and status = .scheduled./     where student_id = s.id/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "★ עריכת שם: תזכורת שעוד לא יצאה נשארת עם השם הישן" \
-  "$DIR/../migrations/0043_student_rename.sql" \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
   'sed -i "s/     where student_id = s.id and status = .scheduled./     where student_id = s.id and status = \x27cancelled\x27/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
