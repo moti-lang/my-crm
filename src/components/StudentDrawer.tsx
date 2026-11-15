@@ -70,7 +70,8 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   // ממתינה לחיוב הראשון בכרטיס → "קישור הרשמה חדש" (לא קישור תשלום רגיל).
   const flag = student.id ? flags.data?.get(student.id) : undefined;
   const track = flag?.payment_track ?? null;
-  const firstCharge = awaitsFirstCharge(status, track?.method, flag?.external_payment);
+  const hasStandingOrder = (standing.data ?? []).some((o) => o.student_id === student.id);
+  const firstCharge = awaitsFirstCharge(status, track?.method, flag?.external_payment, { paid, hasStandingOrder });
 
   return (
     <>
@@ -202,7 +203,8 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
                   + רישום תשלום
                 </button>
                 {student.id && (firstCharge
-                  ? <RenewEnrollmentLinkButton studentId={student.id} standing={track?.method === 'standing_order'} hasPhone={Boolean(student.parent_phone)} />
+                  ? <RenewEnrollmentLinkButton studentId={student.id} standing={track?.method === 'standing_order'} hasPhone={Boolean(student.parent_phone)}
+                      note={status === 'active' ? `התלמידה במסלול ${track?.label ?? 'הוראת קבע'} ועוד לא שילמה. הקישור: התשלום הראשון ובחירת יום חיוב, והשאר בהוראת קבע — לא חיוב אחד על כל הסכום.` : undefined} />
                   : <PaymentLinkButton studentId={student.id} balance={balance} hasPhone={Boolean(student.parent_phone)} />)}
               </>
             )}

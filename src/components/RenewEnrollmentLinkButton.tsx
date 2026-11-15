@@ -8,8 +8,8 @@ import { LinkResult } from '@/components/LinkResult';
  * "קישור הרשמה חדש" — לתלמידה שממתינה לחיוב הראשון (הכרטיס לא עבר / הקישור פג). כמו בהרשמה:
  * אותו מסלול וסכום; בהוראת קבע ההורה בוחרת יום ומאשרת, וההוראה נוצרת אחרי התשלום. הקודם מתבטל.
  */
-export function RenewEnrollmentLinkButton({ studentId, hasPhone, standing, compact = false }:
-  { studentId: string; hasPhone: boolean; standing: boolean; compact?: boolean }) {
+export function RenewEnrollmentLinkButton({ studentId, hasPhone, standing, compact = false, note }:
+  { studentId: string; hasPhone: boolean; standing: boolean; compact?: boolean; note?: string }) {
   const { profile } = useAuth();
   const renew = useRenewEnrollmentLink();
   const [result, setResult] = useState<{ url: string; amount: number; whatsapp: RenewLinkResult['whatsapp'] } | null>(null);
@@ -32,6 +32,7 @@ export function RenewEnrollmentLinkButton({ studentId, hasPhone, standing, compa
         title={hasPhone ? 'קישור חדש לחיוב הראשון, כמו בהרשמה' : 'אין טלפון של הורה'} onClick={() => void send()}>
         {renew.isPending ? 'יוצרת…' : '🔁 קישור הרשמה חדש'}
       </button>
+      {note && !result && <span className="mt-1 block text-xs text-soft" data-testid="renew-note">{note}</span>}
       {result && <LinkResult url={result.url} amount={result.amount} whatsapp={result.whatsapp} />}
       {error && <span className="text-xs text-bad" role="alert">{error}</span>}
     </span>
