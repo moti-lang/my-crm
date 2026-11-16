@@ -1435,12 +1435,12 @@ expect_fail_code "★ הנחה: שינוי הנחה לא נרשם ביומן" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
 
 expect_fail_code "★ הנחה: הקטנת הנחה (העלאת סכום) בהוראת קבע פעילה מתקבלת" \
-  "$DIR/../migrations/0045_student_discount.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/^    if v_delta < 0 then\$/    if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
 
 expect_fail_code "★ הנחה: בהוראת קבע נשמרת ההנחה שביקשו ולא מה שמתחלק בפועל" \
-  "$DIR/../migrations/0045_student_discount.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/    v_after := s.discount + v_cut \* v_remaining;/    v_after := p_amount;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
 
@@ -1491,7 +1491,7 @@ expect_fail_code "★ הנחה: אפשר לשמור בלי סיבה" \
 
 # ─── קישור הרשמה חדש וסכום חלקי (0046; מוגדרות מחדש ב-0047 וב-0049) ───
 expect_fail_code "★ קישור הרשמה חדש: נוצר כקישור חוב (בלי הוראת קבע ובלי השלמת ההרשמה)" \
-  "$DIR/../migrations/0058_standing_link_for_active.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/  values (v_id, v_token, .tl-. || v_id, s.id, s.branch_id, v_amount, .enrollment., auth.uid());/  values (v_id, v_token, \x27tl-\x27 || v_id, s.id, s.branch_id, v_amount, \x27debt\x27, auth.uid());/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
@@ -1501,7 +1501,7 @@ expect_fail_code "★ קישור תשלום רגיל לתלמידה שממתינ
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "★ קישור הרשמה חדש: לא רק הבעלים ומנהלת הסניף" \
-  "$DIR/../migrations/0058_standing_link_for_active.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "/FUNCTION public.rpc_renew_enrollment_link/,/^end/ s/^  if auth_role() is distinct from .owner.\$/  if false and auth_role() is distinct from \x27owner\x27/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
@@ -1511,12 +1511,12 @@ expect_fail_code "קישור הרשמה חדש: גם במסלול מזומן" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "★ קישור הרשמה חדש: הקישור הקודם נשאר חי" \
-  "$DIR/../migrations/0058_standing_link_for_active.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/^  update payment_links set status = .cancelled. where student_id = s.id and status in (.pending., .opened.);\$/  perform 1;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "קישור הרשמה חדש: לא נרשם ביומן" \
-  "$DIR/../migrations/0058_standing_link_for_active.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/.renew_enrollment_link., .students., s.id,/\x27x_renew\x27, \x27students\x27, s.id,/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
@@ -1659,7 +1659,7 @@ expect_fail_code "★ רישום ידני שמכסה הכל — קישור הר�
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/31_activate_on_payment.sql"
 
 expect_fail_code "★ \"קישור הרשמה חדש\" למי שכבר שילמה את החיוב הראשון" \
-  "$DIR/../migrations/0058_standing_link_for_active.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/^  if f_first_charge_covered(s) then\$/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/31_activate_on_payment.sql"
 
@@ -1700,7 +1700,7 @@ expect_fail_code "★ ביטול תשלום: קישור הרשמה ששולם ב
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/32_payment_void.sql"
 
 expect_fail_code "★ קישור הרשמה חדש כשיש הוראת קבע ב-SUMIT (הוראה שנייה)" \
-  "$DIR/../migrations/0058_standing_link_for_active.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/^  if exists (select 1 from standing_orders o where o.student_id = s.id and o.status in (.active., .retrying., .failed.)) then\$/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/32_payment_void.sql"
 
@@ -1855,6 +1855,17 @@ expect_fail_code "המסך: בלי ההסבר שזה לא חיוב אחד על �
   "$DIR/../../src/components/StudentDrawer.tsx" \
   'sed -i "s/note={status === .active. ? /note={false ? /" "$F"' \
   "node supabase/tests/standing-link-active-ui.test.mjs"
+
+# ─── הנחה ומסלול (0059) ───
+expect_fail_code "★ הנחה בלי קישור פתוח — סכומי המסלול נשארים בלי ההנחה" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
+  'sed -i "s/^  if v_track is null and s.payment_track is not null and v_paid = 0 and/  if false and v_track is null and s.payment_track is not null and v_paid = 0 and/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/36_discount_track.sql"
+
+expect_fail_code "★ קישור הרשמה חדש — מהמסלול הישן, בלי ההנחה" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
+  'sed -i "s/^    s.payment_track := f_track_with_tuition(s.payment_track, s.tuition_total - s.discount, s.registration_fee);/    null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/36_discount_track.sql"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
