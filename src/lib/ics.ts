@@ -54,7 +54,9 @@ export function buildIcs(tasks: TaskForIcs[], opts: { appUrl: string; calName?: 
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${esc(opts.calName ?? "סבב — מעקבים")}`,
     `X-WR-TIMEZONE:${TZ}`,
-    "X-PUBLISHED-TTL:PT1H",
+    // רענון כל 15 דקות (iPhone: הגדרות → יומן → חשבונות → "שאיבה" כל 15 דקות)
+    "X-PUBLISHED-TTL:PT15M",
+    "REFRESH-INTERVAL;VALUE=DURATION:PT15M",
   ];
   for (const t of tasks) {
     const title = `${t.done ? "✓ " : ""}${t.isApproximate ? "≈ " : ""}${t.title}`;
@@ -88,16 +90,21 @@ export function buildIcs(tasks: TaskForIcs[], opts: { appUrl: string; calName?: 
     lines.push(`STATUS:${t.isApproximate ? "TENTATIVE" : "CONFIRMED"}`);
     // התראות: לא על יום חסום (שבת/חג/ערב/חול המועד), ולא כשזמן ההפעלה נופל על יום חסום
     if (!t.done && !blackoutReasonYmd(ymdIL(t.dueAt), settings)) {
-      let trigger: string | null = null;
+      const triggers: string[] = [];
       if (t.allDay) {
         // 08:00 בבוקר של אותו יום (שעון ישראל) — היום עצמו אינו חסום
-        trigger = `TRIGGER;VALUE=DATE-TIME:${utcStamp(fromZonedTime(`${ymdIL(t.dueAt)}T08:00:00`, TZ))}`;
+        triggers.push(`TRIGGER;VALUE=DATE-TIME:${utcStamp(fromZonedTime(`${ymdIL(t.dueAt)}T08:00:00`, TZ))}`);
       } else {
-        const mins = t.remindMinutesBefore ?? 30;
-        const at = new Date(t.dueAt.getTime() - mins * 60_000);
-        if (!blackoutReasonYmd(ymdIL(at), settings)) trigger = `TRIGGER:-PT${mins}M`;
+        // משימה עם שעה: תמיד מצפצף בשעה המדויקת
+        triggers.push("TRIGGER:PT0M");
+        // ואם הוגדרה גם "תזכורת לפני" — התראה נוספת, אלא אם היא נופלת על יום חסום
+        const mins = t.remindMinutesBefore ?? 0;
+        if (mins > 0) {
+          const at = new Date(t.dueAt.getTime() - mins * 60_000);
+          if (!blackoutReasonYmd(ymdIL(at), settings)) triggers.push(`TRIGGER:-PT${mins}M`);
+        }
       }
-      if (trigger) {
+      for (const trigger of triggers) {
         lines.push("BEGIN:VALARM");
         lines.push("ACTION:DISPLAY");
         lines.push(`DESCRIPTION:${esc(t.title)}`);

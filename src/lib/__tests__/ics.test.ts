@@ -52,13 +52,22 @@ describe("ICS — התראות (VALARM) וימים חסומים", () => {
     const ics = buildIcs([task({ dueAt: dateAtIL("2026-09-29") })], { appUrl: "https://x", settings: { blockCholHamoed: false } });
     expect(alarms(ics)).toBe(1);
   });
-  it("התראה שזמן ההפעלה שלה נופל על יום חסום מושמטת (פגישה ביום ראשון עם התראה יום לפני = שבת)", () => {
+  it("התראה מוקדמת שנופלת על יום חסום מושמטת, אבל ההתראה בשעה עצמה נשארת (פגישה ביום ראשון, תזכורת יום לפני = שבת)", () => {
     const sunday = task({ dueAt: dateAtIL("2026-10-18", "10:00"), allDay: false, remindMinutesBefore: 24 * 60 });
-    expect(alarms(buildIcs([sunday], { appUrl: "https://x" }))).toBe(0);
+    const icsSun = buildIcs([sunday], { appUrl: "https://x" });
+    expect(alarms(icsSun)).toBe(1);
+    expect(icsSun).toContain("TRIGGER:PT0M");
+    expect(icsSun).not.toContain("TRIGGER:-PT1440M");
     const sameDay = task({ dueAt: dateAtIL("2026-10-18", "10:00"), allDay: false, remindMinutesBefore: 30 });
     const ics = buildIcs([sameDay], { appUrl: "https://x" });
-    expect(alarms(ics)).toBe(1);
+    expect(alarms(ics)).toBe(2);
     expect(ics).toContain("TRIGGER:-PT30M");
+    expect(ics).toContain("TRIGGER:PT0M");
+  });
+  it("משימה עם שעה בלי תזכורת מוגדרת — מצפצפת בדיוק בשעה", () => {
+    const ics = buildIcs([task({ dueAt: dateAtIL("2026-10-20", "14:15"), allDay: false, remindMinutesBefore: null })], { appUrl: "https://x" });
+    expect(alarms(ics)).toBe(1);
+    expect(ics).toContain("TRIGGER:PT0M");
   });
   it("משימה שבוצעה — בלי התראה", () => {
     expect(alarms(buildIcs([task({ done: true, doneAt: new Date() })], { appUrl: "https://x" }))).toBe(0);
