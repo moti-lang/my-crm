@@ -2,16 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, Undo2 } from "lucide-react";
+import { Flame } from "lucide-react";
 import { api, errorMessage } from "@/lib/client/api";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
-/** כפתור "דחה" — מסמן את הליד כנדחה (אדום) או מבטל את הסימון */
-export function RejectToggle({ leadId, rejected, size = "sm", className }: { leadId: string; rejected: boolean; size?: "sm" | "md"; className?: string }) {
+/** כפתור "חם" — מסמן את הליד כחם (אדום, מופיע בלשונית "חם") או מחזיר לפושר */
+export function HotToggle({ leadId, hot, className }: { leadId: string; hot: boolean; className?: string }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [value, setValue] = useState(rejected);
+  const [value, setValue] = useState(hot);
   const [busy, setBusy] = useState(false);
 
   async function toggle(e: React.MouseEvent) {
@@ -23,7 +23,7 @@ export function RejectToggle({ leadId, rejected, size = "sm", className }: { lea
     setValue(next);
     setBusy(true);
     try {
-      await api(`/api/leads/${leadId}`, { method: "PATCH", body: { rejected: next } });
+      await api(`/api/leads/${leadId}`, { method: "PATCH", body: { heat: next ? "HOT" : "WARM" } });
       router.refresh();
     } catch (err) {
       setValue(!next);
@@ -40,14 +40,13 @@ export function RejectToggle({ leadId, rejected, size = "sm", className }: { lea
       aria-pressed={value}
       disabled={busy}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-1 rounded-full border font-medium transition-colors",
-        size === "sm" ? "min-h-9 px-3 text-sm" : "min-h-11 px-4",
+        "inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-full border px-3 text-sm font-medium transition-colors",
         value ? "border-danger bg-danger text-white" : "border-danger/40 text-danger hover:bg-danger/10",
         className,
       )}
     >
-      {value ? <Undo2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
-      {value ? "בטל דחייה" : "דחה"}
+      <Flame className="h-4 w-4" />
+      {value ? "חם ✓" : "חם"}
     </button>
   );
 }

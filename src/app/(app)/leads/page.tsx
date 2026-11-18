@@ -10,7 +10,7 @@ import { LinkButton } from "@/components/ui/button";
 import { HeatBadge, StatusBadge } from "@/components/ui/domain";
 import { LeadFilters } from "@/components/leads/lead-filters";
 import { LeadListItem } from "@/components/leads/lead-list-item";
-import { RejectToggle } from "@/components/leads/reject-toggle";
+import { HotToggle } from "@/components/leads/hot-toggle";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "לידים" };
@@ -64,7 +64,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   {leads.map((l) => {
                     const overdue = l.nextActionAt && l.nextActionAt < now;
                     return (
-                      <tr key={l.id} className={cn("border-t border-border", l.rejected ? "bg-danger/15 hover:bg-danger/20" : "hover:bg-muted/40")}>
+                      <tr key={l.id} className={cn("border-t border-border", l.heat === "HOT" ? "bg-danger/15 hover:bg-danger/20" : "hover:bg-muted/40")}>
                         <td className="px-3 py-2">
                           <Link href={`/leads/${l.id}`} className="font-semibold hover:underline">
                             {leadTitle(l)}
@@ -88,7 +88,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{agoLabel(l.lastTouchAt, now)}</td>
                         <td className="px-3 py-2">
-                          <RejectToggle leadId={l.id} rejected={l.rejected} />
+                          <HotToggle leadId={l.id} hot={l.heat === "HOT"} />
                         </td>
                       </tr>
                     );
