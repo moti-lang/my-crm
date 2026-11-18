@@ -14,7 +14,7 @@ export default async function HotLeadsPage() {
     <div>
       <PageTitle sub={`${leads.length} לידים`}>🔥 לידים חמים</PageTitle>
       {leads.length === 0 ? (
-        <EmptyState icon="🔥" title="אין כרגע לידים חמים" hint="מסמנים ליד כחם ברישום מגע (חם / פושר / קר)" action={<LinkButton href="/leads" size="sm">לכל הלידים</LinkButton>} />
+        <EmptyState icon="🔥" title="אין כרגע לידים חמים" hint="לוחצים על ״חם״ בליד כדי שיופיע כאן" action={<LinkButton href="/leads" size="sm">לכל הלידים</LinkButton>} />
       ) : (
         <div className="flex flex-col gap-2 md:grid md:grid-cols-2">
           {leads.map((l) => (

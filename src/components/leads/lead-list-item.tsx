@@ -4,7 +4,7 @@ import { agoLabel, relativeDayLabel } from "@/lib/dates";
 import { actionEmoji } from "@/lib/categories";
 import { leadTitle, truncate, cn } from "@/lib/utils";
 import { HeatBadge, NoPhoneTag, StatusBadge } from "@/components/ui/domain";
-import { RejectToggle } from "./reject-toggle";
+import { HotToggle } from "./hot-toggle";
 
 export function LeadListItem({ lead, now, showObservation }: { lead: LeadSummary; now: Date; showObservation?: boolean }) {
   const overdue = lead.nextActionAt && lead.nextActionAt < now;
@@ -13,7 +13,7 @@ export function LeadListItem({ lead, now, showObservation }: { lead: LeadSummary
       href={`/leads/${lead.id}`}
       className={cn(
         "block rounded-2xl border p-3 shadow-sm transition-colors",
-        lead.rejected ? "border-danger bg-danger/15 hover:bg-danger/20" : "border-border bg-card hover:bg-muted/40",
+        lead.heat === "HOT" ? "border-danger bg-danger/15 hover:bg-danger/20" : "border-border bg-card hover:bg-muted/40",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -44,7 +44,7 @@ export function LeadListItem({ lead, now, showObservation }: { lead: LeadSummary
         )}
         <span className="text-muted-foreground">מגע אחרון: {agoLabel(lead.lastTouchAt, now)}</span>
         {!lead.phone && <NoPhoneTag />}
-        <RejectToggle leadId={lead.id} rejected={lead.rejected} className="ms-auto" />
+        <HotToggle leadId={lead.id} hot={lead.heat === "HOT"} className="ms-auto" />
       </div>
       {showObservation && lead.observation && <div className="mt-2 text-sm">👁 {truncate(lead.observation, 120)}</div>}
     </Link>
