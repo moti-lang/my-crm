@@ -24,6 +24,7 @@ const leadBase = z.object({
     website: optText(300),
     status: z.enum(LEAD_STATUSES).optional(),
     heat: z.enum(HEATS).optional(),
+    rejected: z.boolean().optional(),
     nextActionAt: isoDate.nullable().optional(),
     nextActionType: z.enum(ACTION_TYPES).nullable().optional(),
     nextActionNote: optText(500),
