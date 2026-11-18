@@ -80,6 +80,8 @@ model Lead {
   status          LeadStatus @default(NEW)
   statusChangedAt DateTime   @default(now())
   heat            Heat       @default(WARM)
+  /// סומן "נדחה" — מוצג באדום ברשימה ובכרטיס
+  rejected        Boolean    @default(false)
 
   // המעקב הבא — הלב של המערכת
   nextActionAt            DateTime?

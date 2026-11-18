@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarDays, Footprints, Settings, Sun, Users } from "lucide-react";
+import { BarChart3, CalendarDays, Flame, Settings, Sun, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// סדר הטאבים (ב-RTL הראשון הוא הימני ביותר): לידים · היום · סבב · יומן · דוחות
+// סדר הטאבים (ב-RTL הראשון הוא הימני ביותר): לידים · היום · חם · יומן · דוחות
+// (סבב שטח נשאר נגיש מכפתור "סבב שטח" במסך היום)
 const ITEMS = [
   { href: "/leads", label: "לידים", icon: Users },
   { href: "/", label: "היום", icon: Sun },
-  { href: "/route", label: "סבב", icon: Footprints },
+  { href: "/hot", label: "חם", icon: Flame },
   { href: "/calendar", label: "יומן", icon: CalendarDays },
   { href: "/reports", label: "דוחות", icon: BarChart3 },
 ];

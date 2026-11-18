@@ -21,6 +21,7 @@ export const leadSummarySelect = {
   contactRole: true,
   phone: true,
   heat: true,
+  rejected: true,
   status: true,
   nextActionAt: true,
   nextActionType: true,

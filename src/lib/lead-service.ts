@@ -50,6 +50,7 @@ function buildLeadData(input: Partial<LeadInput>, existing?: Lead | null): Prism
   if (has("lng")) data.lng = input.lng ?? null;
   if (has("status")) data.status = input.status;
   if (has("heat")) data.heat = input.heat;
+  if (has("rejected")) data.rejected = input.rejected ?? false;
   if (has("nextActionIsApproximate")) data.nextActionIsApproximate = input.nextActionIsApproximate ?? false;
   if (has("nextActionType")) data.nextActionType = input.nextActionType ?? null;
   if (has("nextActionAt")) {

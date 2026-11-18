@@ -10,6 +10,7 @@ import { LinkButton } from "@/components/ui/button";
 import { HeatBadge, StatusBadge } from "@/components/ui/domain";
 import { LeadFilters } from "@/components/leads/lead-filters";
 import { LeadListItem } from "@/components/leads/lead-list-item";
+import { RejectToggle } from "@/components/leads/reject-toggle";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "לידים" };
@@ -52,7 +53,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               <table className="w-full text-sm">
                 <thead className="bg-muted text-start text-muted-foreground">
                   <tr>
-                    {["עסק", "אזור", "תחום", "איש קשר", "טלפון", "סטטוס", "חום", "מעקב הבא", "מגע אחרון"].map((h) => (
+                    {["עסק", "אזור", "תחום", "איש קשר", "טלפון", "סטטוס", "חום", "מעקב הבא", "מגע אחרון", ""].map((h) => (
                       <th key={h} className="px-3 py-2 text-start font-medium">
                         {h}
                       </th>
@@ -63,7 +64,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   {leads.map((l) => {
                     const overdue = l.nextActionAt && l.nextActionAt < now;
                     return (
-                      <tr key={l.id} className="border-t border-border hover:bg-muted/40">
+                      <tr key={l.id} className={cn("border-t border-border", l.rejected ? "bg-danger/15 hover:bg-danger/20" : "hover:bg-muted/40")}>
                         <td className="px-3 py-2">
                           <Link href={`/leads/${l.id}`} className="font-semibold hover:underline">
                             {leadTitle(l)}
@@ -86,6 +87,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                           {l.nextActionAt ? `${actionEmoji(l.nextActionType)} ${relativeDayLabel(l.nextActionAt, now)}` : "—"}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{agoLabel(l.lastTouchAt, now)}</td>
+                        <td className="px-3 py-2">
+                          <RejectToggle leadId={l.id} rejected={l.rejected} />
+                        </td>
                       </tr>
                     );
                   })}

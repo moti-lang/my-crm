@@ -18,6 +18,7 @@ import { LeadCardActions, DeleteLeadButton, DeletePhotoButton, PhotoUploader } f
 import { TaskList } from "@/components/tasks/task-list";
 import type { TaskWithLead } from "@/lib/leads";
 import { InlineText } from "./inline-field";
+import { RejectToggle } from "../reject-toggle";
 import { SaveIndicator } from "./save-indicator";
 import { TouchTimeline } from "./touch-timeline";
 import { LocationPanel } from "./location-panel";
@@ -94,12 +95,13 @@ export function LeadCard({ lead, openTasks, now, hebrewNext }: { lead: LeadFull;
     <div className="flex flex-col gap-4">
       <SaveIndicator state={autosave.state} onRetry={autosave.retry} />
 
-      {/* כותרת */}
-      <div>
-        <div className="flex items-center justify-between">
+      {/* כותרת — באדום כשהליד נדחה */}
+      <div className={cn(lead.rejected && "rounded-2xl border border-danger bg-danger/15 p-3")}>
+        <div className="flex items-center justify-between gap-2">
           <Link href="/leads" className="text-sm text-muted-foreground hover:underline">
             ← כל הלידים
           </Link>
+          <RejectToggle leadId={lead.id} rejected={lead.rejected} className="ms-auto" />
           <div className="relative">
             <button type="button" onClick={() => setMenuOpen((v) => !v)} className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-muted" aria-label="עוד פעולות" aria-expanded={menuOpen}>
               <MoreHorizontal className="h-5 w-5" />
