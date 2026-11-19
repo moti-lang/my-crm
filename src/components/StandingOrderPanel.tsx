@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 import {
-  EVENT_LABEL, STANDING_LABEL, STANDING_TONE, RescheduleChanged, RetryChanged, eventChange, useCancelStanding, useReschedulePreview, useRescheduleStanding,
+  EVENT_LABEL, STANDING_LABEL, STANDING_TONE, RescheduleChanged, RetryChanged, eventChange, lastRetryText, useCancelStanding, useReschedulePreview, useRescheduleStanding,
   useRetryPreview, useRetryStanding, useStandingEvents, type StandingOrder,
 } from '@/hooks/standing';
 import { formatDate, formatDateTime, formatILS } from '@/lib/format';
@@ -29,6 +29,10 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
         {live && order.billing_day ? ` · כל ${order.billing_day} לחודש` : ''}
       </p>
       {order.last_error && <p className="text-xs text-bad">{order.last_error}</p>}
+      {(() => {
+        const last = lastRetryText(events.data ?? [], formatDateTime, formatILS);
+        return last && <p className={`text-xs ${last.tone === 'ok' ? 'text-ok' : last.tone === 'bad' ? 'text-bad' : 'text-warn'}`} data-testid="last-retry">{last.text}</p>;
+      })()}
       {saved && <p className="text-xs text-ok" role="status">✓ נשמר ב-SUMIT: {saved}</p>}
       {cancel.error != null && <p className="text-xs text-bad" role="alert">{humanError(cancel.error)}</p>}
       {owner && order.status === 'active' && order.id && (rescheduling
@@ -61,7 +65,7 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
 /** שינוי תאריך / סכום: "מ-X ל-Y". חיוב חוזר וחידוש: "על מה · מה קרה". */
 function eventText(e: Parameters<typeof eventChange>[0]): string {
   const [from, to] = eventChange(e, formatDate, formatILS);
-  return ['retry_charge', 'retry_declined', 'renewed'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
+  return ['retry_charge', 'retry_declined', 'renewed', 'retry_refused'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
 }
 
 const DAYS = Array.from({ length: 28 }, (_, i) => i + 1);

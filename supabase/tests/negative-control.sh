@@ -1867,6 +1867,27 @@ expect_fail_code "★ קישור הרשמה חדש — מהמסלול הישן, 
   'sed -i "s/^    s.payment_track := f_track_with_tuition(s.payment_track, s.tuition_total - s.discount, s.registration_fee);/    null;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/36_discount_track.sql"
 
+# ─── חיוב חוזר שלא בוצע (0060) ───
+expect_fail_code "★ חיוב חוזר שלא בוצע — המצב מ-SUMIT לא נקלט (המסך נשאר \"הושבתה\")" \
+  "$DIR/../../supabase/functions/_shared/standing-retry.ts" \
+  'sed -i "s/      const { data: ref } = await admin.rpc(.rpc_standing_retry_refused., {/      const { data: ref } = await admin.rpc(\x27x_disabled\x27, {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ חיוב חוזר שלא בוצע — הסטטוס אצלנו לא מתעדכן לפי SUMIT" \
+  "$DIR/../migrations/0060_standing_retry_refused.sql" \
+  'sed -i "s/^  v_obs := rpc_standing_billing_observed(p_id, p_sumit_status, p_next, p_prev, p_final);/  v_obs := null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/37_standing_retry_refused.sql"
+
+expect_fail_code "חיוב חוזר שלא בוצע — לא נרשם ביומן" \
+  "$DIR/../migrations/0060_standing_retry_refused.sql" \
+  'sed -i "s/  values (o.id, .retry_refused., o.next_billing,/  values (o.id, \x27sumit_change\x27, o.next_billing,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/37_standing_retry_refused.sql"
+
+expect_fail_code "★ המסך: בלי שורת \"ניסיון חיוב חוזר אחרון\"" \
+  "$DIR/../../src/components/StandingOrderPanel.tsx" \
+  'sed -i "s/        const last = lastRetryText(events.data ?? \[\], formatDateTime, formatILS);/        const last = null as ReturnType<typeof lastRetryText>;/" "$F"' \
+  "node supabase/tests/standing-retry-ui.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

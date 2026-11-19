@@ -49,7 +49,7 @@ export function useCancelStanding() {
 
 export type StandingEvent = Views<'v_standing_order_events'>;
 export const EVENT_LABEL: Record<string, string> = { reschedule: 'שינוי יום חיוב', sumit_change: 'שונה ב-SUMIT', amount_change: 'שינוי סכום (הנחה)',
-  retry_charge: 'חיוב חוזר', retry_declined: 'חיוב חוזר נדחה', renewed: 'הוראה חודשה ב-SUMIT' };
+  retry_charge: 'חיוב חוזר', retry_declined: 'חיוב חוזר נדחה', renewed: 'הוראה חודשה ב-SUMIT', retry_refused: 'חיוב חוזר לא בוצע' };
 /** "מאיזה לאיזה" ביומן: תאריכים — או סכומים בשינוי סכום; בחיוב חוזר — איזה חיוב ומה קרה. */
 export function eventChange(e: { kind: string | null; from_date: string | null; to_date: string | null; from_amount?: number | null; to_amount?: number | null;
                                  remaining?: number | null; note?: string | null },
@@ -58,6 +58,7 @@ export function eventChange(e: { kind: string | null; from_date: string | null; 
   if (e.kind === 'retry_charge') return [`${fmtDate(e.from_date)} (נכשל)`, `${fmtMoney(e.to_amount)} — עבר`];
   if (e.kind === 'retry_declined') return [`${fmtDate(e.from_date)} (נכשל)`, `נדחה${e.note ? `: ${e.note}` : ''}`];
   if (e.kind === 'renewed') return ['הוראה שהושבתה', `${fmtDate(e.to_date)} · ${e.remaining ?? '—'} חיובים`];
+  if (e.kind === 'retry_refused') return [`${fmtDate(e.from_date)} (נכשל)`, e.note ?? 'לא חויב'];
   return [fmtDate(e.from_date), fmtDate(e.to_date)];
 }
 
@@ -175,4 +176,17 @@ export function useRetryStanding() {
       void qc.invalidateQueries({ queryKey: ['payments'] });
     },
   });
+}
+
+/** ★ הניסיון האחרון לחיוב חוזר בהוראה (מהיומן): מתי ומה יצא — "איך אני יודעת אם עבר?" (19/11). */
+export const RETRY_KINDS = ['retry_charge', 'retry_declined', 'retry_refused'] as const;
+export function lastRetryText(events: { kind: string | null; created_at: string | null; to_amount?: number | null; note?: string | null }[],
+                              fmtDateTime: (d: string) => string, fmtMoney: (n: number | null | undefined) => string): { text: string; tone: 'ok' | 'bad' | 'warn' } | null {
+  const e = events.filter((x) => (RETRY_KINDS as readonly string[]).includes(x.kind ?? '') && x.created_at)
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+  if (!e) return null;
+  const when = fmtDateTime(e.created_at as string);
+  if (e.kind === 'retry_charge') return { text: `ניסיון חיוב חוזר אחרון (${when}): ✓ עבר — ${fmtMoney(e.to_amount)}`, tone: 'ok' };
+  if (e.kind === 'retry_declined') return { text: `ניסיון חיוב חוזר אחרון (${when}): ✗ נדחה${e.note ? ` — ${e.note}` : ''}`, tone: 'bad' };
+  return { text: `ניסיון חיוב חוזר אחרון (${when}): לא בוצע — ${e.note ?? 'לא חויב'}`, tone: 'warn' };
 }
