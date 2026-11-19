@@ -150,6 +150,7 @@ try {
     check('בלי שגיאות דף', log.pageErrors.length === 0, log.pageErrors.join('\n'));
     await page.close();
     listStatus = 3; listNext = null;
+    failed();   // ★ הבלוק הבא (הרשאות) בודק כפתור שמופיע רק בהוראה מושבתת
   }
 
   console.log('\nהרשאות במסך:');
