@@ -49,9 +49,10 @@ const ddmmyyyy = (d) => d.split('-').reverse().join('/');
 
 // SUMIT מזויפת: ההוראה מושבתת (3) עד שנוצרת חדשה; החיוב — לפי מה שהבדיקה קובעת.
 const sumitCalls = [];
+let listStatus = 3, listNext = null;   // ★ 0060: "חיוב חוזר" ב-SUMIT מחזיר את ההוראה לפעילה (0)
 let chargeResult = { ok: true, dryRun: true, payment: { ID: 77001, Amount: 100, Date: new Date().toISOString(), ValidPayment: true, StatusDescription: ' (קוד 000)' } };
 const sumit = {
-  list: async () => { sumitCalls.push({ fn: 'list' }); return [{ ID: RECURRING, Status: 3, Date_NextBilling: null, Date_PreviousBilling: null, Date_Last: null }]; },
+  list: async () => { sumitCalls.push({ fn: 'list' }); return [{ ID: RECURRING, Status: listStatus, Date_NextBilling: listNext, Date_PreviousBilling: null, Date_Last: null }]; },
   chargeOnce: async (i) => { sumitCalls.push({ fn: 'chargeOnce', ...i }); return chargeResult; },
   create: async (i) => { sumitCalls.push({ fn: 'create', ...i }); return { ok: true, recurringId: NEW_RECURRING, immediatePayment: null, dryRun: true }; },
   update: async () => ({ ok: true }), cancel: async () => ({ ok: true }),
@@ -100,6 +101,8 @@ try {
     await events.getByText('הוראה חודשה ב-SUMIT', { exact: false }).waitFor({ timeout: 8000 });
     const ev = (await events.textContent()) ?? '';
     check('★ ביומן ההוראה: חיוב חוזר (עבר) והוראה חודשה', ev.includes('(חיוב חוזר)') && ev.includes('₪100 — עבר') && ev.includes('(הוראה חודשה ב-SUMIT)') && ev.includes('6 חיובים'), ev);
+    const lastOk = (await card.getByTestId('last-retry').textContent()) ?? '';
+    check('★ "ניסיון חיוב חוזר אחרון": ✓ עבר, והסכום', lastOk.includes('ניסיון חיוב חוזר אחרון') && lastOk.includes('✓ עבר') && lastOk.includes('₪100'), lastOk);
     check('בלי שגיאות דף ובלי שאילתות שבורות', log.pageErrors.length === 0 && log.badResponses.length === 0, [...log.pageErrors, ...log.badResponses].join('\n'));
     await page.close();
   }
@@ -122,6 +125,32 @@ try {
     check('★ במסד: עדיין מושבתת, ניסיון שנדחה נספר, הסיבה', sql(`select status || '|' || failed_count || '|' || last_error from standing_orders where id = '${ORDER}'`) === 'failed|1|ניסיון חוזר נדחה: סירוב (קוד 004)');
     check('בלי שגיאות דף', log.pageErrors.length === 0, log.pageErrors.join('\n'));
     await page.close();
+  }
+
+  console.log('\nפעילה שוב ב-SUMIT (הניסו "חיוב חוזר" שם קודם):');
+  {
+    failed(); sumitCalls.length = 0; listStatus = 0;
+    const paidBefore = sql(`select count(*) from payments where student_id = '${SHIRA}' and note like '%חיוב חוזר%'`); listNext = new Date(Date.now() + 2 * 86400e3).toISOString().slice(0, 10) + 'T00:00:00+02:00';
+    const { page, log } = await ui.newPage(USERS.owner, { functions });
+    page.on('dialog', (d) => void d.accept());
+    const card = await openCard(page);
+    await card.getByRole('button', { name: 'ניסיון חיוב חוזר' }).click();
+    await card.getByTestId('retry-plan').waitFor({ timeout: 8000 });
+    await card.getByRole('button', { name: 'לחייב עכשיו ₪100' }).click();
+    const last = card.getByTestId('last-retry');
+    await last.filter({ hasText: 'לא בוצע' }).waitFor({ timeout: 10000 });
+    const t = (await last.textContent()) ?? '';
+    check('★ במסך: "ניסיון חיוב חוזר אחרון — לא בוצע", ולמה', t.includes('לא בוצע') && t.includes('לא חויב') && t.includes('פעילה (קוד 0)'), t);
+    check('★ ההוראה במסך — "פעילה" (המצב מ-SUMIT נקלט מיד, בלי לחכות לסנכרון)', ((await card.textContent()) ?? '').includes('פעילה')
+          && (await card.getByRole('button', { name: 'ניסיון חיוב חוזר' }).count()) === 0);
+    check('★ לא חויב: אין חיוב ב-SUMIT ואין תשלום', !sumitCalls.some((c) => c.fn === 'chargeOnce')
+          && sql(`select count(*) from payments where student_id = '${SHIRA}' and note like '%חיוב חוזר%'`) === paidBefore);
+    check('★ במסד: פעילה, קוד 0, וביומן "לא בוצע"', sql(`select status || '|' || sumit_status from standing_orders where id = '${ORDER}'`) === 'active|0'
+          && sql(`select count(*) from standing_order_events where standing_order_id = '${ORDER}' and kind = 'retry_refused'`) === '1');
+    check('בלי שגיאות דף', log.pageErrors.length === 0, log.pageErrors.join('\n'));
+    await page.close();
+    listStatus = 3; listNext = null;
+    failed();   // ★ הבלוק הבא (הרשאות) בודק כפתור שמופיע רק בהוראה מושבתת
   }
 
   console.log('\nהרשאות במסך:');

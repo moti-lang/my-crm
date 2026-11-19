@@ -24,7 +24,7 @@ export type RetryPlan = {
 };
 export type RetryOutcome = { status: number; body:
   | { ok: true; charged: number; renewed: boolean; completed: boolean; next: string | null; remaining: number }
-  | { ok: false; error: string; changed?: boolean; plan?: RetryPlan; declined?: boolean; charged?: number; uncertain?: boolean } };
+  | { ok: false; error: string; changed?: boolean; plan?: RetryPlan; declined?: boolean; charged?: number; uncertain?: boolean; refused?: boolean } };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fail = (status: number, error: string, extra: Record<string, unknown> = {}): RetryOutcome => ({ status, body: { ok: false, error, ...extra } });
@@ -65,7 +65,14 @@ export async function retryStanding(user: UserDb, admin: AdminDb, sumit: Standin
     catch (e) { return fail(502, `לא הצלחנו לבדוק את ההוראה מול SUMIT (${e instanceof Error ? e.message : 'שגיאה'}). לא חויב כלום.`); }
     if (!item) return fail(502, 'ההוראה לא נמצאה ב-SUMIT אצל הלקוחה הזו. לא חויב כלום.');
     if (Number(item.Status) !== DISABLED_AFTER_FAILURE) {
-      return fail(409, `לפי SUMIT ההוראה לא במצב "הושבתה אחרי כישלון" (קוד ${item.Status ?? '—'}) — לא מחייבים במקביל. הסנכרון יעדכן את המצב.`);
+      // ★ 0060: לא מחייבים במקביל ל-SUMIT — אבל המצב מ-SUMIT נקלט מיד, והניסיון נרשם ביומן ההוראה
+      //   (בנות הוכהייזר, 19/11: "חיוב חוזר" בממשק של SUMIT החזיר את ההוראה לפעילה, והמסך כאן נשאר "הושבתה").
+      const { data: ref } = await admin.rpc('rpc_standing_retry_refused', { p_id: id, p_sumit_status: item.Status ?? null,
+        p_next: item.Date_NextBilling?.slice(0, 10) ?? null, p_prev: item.Date_PreviousBilling?.slice(0, 10) ?? null,
+        p_final: item.Date_Last?.slice(0, 10) ?? null, p_by: by });
+      const note = (ref as { note?: string } | null)?.note;
+      return fail(409, `${note ?? `לא חויב: לפי SUMIT ההוראה לא במצב "הושבתה אחרי כישלון" (קוד ${item.Status ?? '—'})`}. `
+        + 'לא מחייבים במקביל ל-SUMIT. המצב כאן עודכן, וחיוב שיעבור ב-SUMIT ייקלט אוטומטית.', { refused: true });
     }
     const r = await sumit.chargeOnce({ customerId, amount: Number(first.plan.amount),
       itemName: `שכר לימוד — חיוב חוזר בהוראת קבע (${branch})`,

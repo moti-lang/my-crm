@@ -268,6 +268,15 @@ console.log('\nניסיון חיוב חוזר — הזרימה (retryStanding):'
     check('★ לפי SUMIT ההוראה בניסיון חוזר משלה (14) — לא מחייבים במקביל', r.status === 409 && !calls(e).includes('sumit:chargeOnce'));
   }
   {
+    // ★ 0060 (בנות הוכהייזר, 19/11): "חיוב חוזר" בממשק של SUMIT החזיר את ההוראה לפעילה (0).
+    const e = env({ item: { ...disabled, Status: 0, Date_NextBilling: '2026-11-19T00:00:00+02:00' } }); const r = await e.run();
+    const ref = e.log.find(([who, fn]) => who === 'admin' && fn === 'rpc_standing_retry_refused')?.[2];
+    check('★ פעילה שוב ב-SUMIT (0) — לא מחייבים, והמצב מ-SUMIT נקלט מיד (סטטוס, תאריך הבא, מי)',
+      r.status === 409 && r.body.refused === true && !calls(e).includes('sumit:chargeOnce')
+      && ref?.p_id === ID && ref?.p_sumit_status === 0 && ref?.p_next === '2026-11-19' && ref?.p_by === 'owner-1', JSON.stringify(ref));
+    check('★ ההודעה לבעלים: "לא חויב", ולמה', r.body.error.includes('לא חויב') && r.body.error.includes('לא מחייבים במקביל'), r.body.error);
+  }
+  {
     const e = env({ item: null }); const r = await e.run();
     check('ההוראה לא נמצאה אצל הלקוחה ב-SUMIT — לא מחייבים', r.status === 502 && !calls(e).includes('sumit:chargeOnce'));
   }
