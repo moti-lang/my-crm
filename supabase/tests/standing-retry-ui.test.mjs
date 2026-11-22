@@ -28,7 +28,7 @@ const NAME = sql(`select full_name from students where id = '${SHIRA}'`);
 const cleanup = () => sql(`
   delete from standing_order_events where standing_order_id = '${ORDER}';
   delete from standing_order_charges where standing_order_id = '${ORDER}';
-  delete from payments where student_id = '${SHIRA}' and note like '%חיוב חוזר%';
+  delete from payments where student_id = '${SHIRA}' and (note like '%חיוב חוזר%' or note like '%שולם בנפרד%');
   delete from audit_log where row_id = '${ORDER}';
   delete from standing_orders where id = '${ORDER}';
   delete from payment_links where id = '${LINK}'`);
@@ -153,12 +153,44 @@ try {
     failed();   // ★ הבלוק הבא (הרשאות) בודק כפתור שמופיע רק בהוראה מושבתת
   }
 
+  console.log('\nהחיוב שולם בנפרד (חיוב ידני ב-SUMIT) — רושמים ומחדשים, בלי לחייב:');
+  {
+    failed(); sumitCalls.length = 0;
+    sql(`update standing_orders set sumit_recurring_id = ${RECURRING} where id = '${ORDER}'`);
+    const paidBefore = Number(sql(`select count(*) from payments where student_id = '${SHIRA}' and deleted_at is null`));
+    const { page, log } = await ui.newPage(USERS.owner, { functions });
+    const dialogs = [];
+    page.on('dialog', (d) => { dialogs.push(d.message()); void d.accept(); });
+    const card = await openCard(page);
+    await card.getByRole('button', { name: 'החיוב שולם בנפרד' }).click();
+    const form = card.getByTestId('paid-elsewhere');
+    check('★ בטופס: נרשם בלי לחייב, ואחר כך חידוש בלי חיוב', ((await form.textContent()) ?? '').includes('בלי לחייב') && ((await form.textContent()) ?? '').includes('גם בלי חיוב'));
+    check('בלי "איך שולם" — אין רישום', await form.getByRole('button', { name: 'לרשום, בלי לחייב' }).isDisabled());
+    await form.getByLabel('איך שולם').fill('חיוב ידני בכרטיס ב-SUMIT');
+    await form.getByRole('button', { name: 'לרשום, בלי לחייב' }).click();
+    await card.getByTestId('retry-plan').waitFor({ timeout: 10000 });
+    check('★ אישור לפני הרישום: "לא יבוצע שום חיוב"', dialogs.length === 1 && dialogs[0].includes('לא יבוצע שום חיוב'), dialogs.join(' | '));
+    const plan = (await card.getByTestId('retry-plan').textContent()) ?? '';
+    check('★ מיד אחרי: רק חידוש ההוראה, בלי חיוב', plan.includes('בלי חיוב נוסף') && plan.includes('בנפרד'), plan);
+    check('★ התשלום נרשם בכרטיס', Number(sql(`select count(*) from payments where student_id = '${SHIRA}' and deleted_at is null`)) === paidBefore + 1
+          && sql(`select count(*) from payments where student_id = '${SHIRA}' and note like '%שולם בנפרד%חיוב ידני בכרטיס ב-SUMIT'`) === '1');
+    await card.getByRole('button', { name: 'לחדש את ההוראה ב-SUMIT' }).click();
+    await card.getByText('ההוראה חודשה ב-SUMIT', { exact: false }).first().waitFor({ timeout: 10000 });
+    check('★ ב-SUMIT: רק הוראה חדשה — בלי שום חיוב', !sumitCalls.some((c) => c.fn === 'chargeOnce') && sumitCalls.some((c) => c.fn === 'create'), JSON.stringify(sumitCalls));
+    check('★ במסד: פעילה, המזהה החדש', sql(`select status || '|' || sumit_recurring_id || '|' || needs_renewal from standing_orders where id = '${ORDER}'`) === `active|${NEW_RECURRING}|false`);
+    check('בלי שגיאות דף ובלי שאילתות שבורות', log.pageErrors.length === 0 && log.badResponses.length === 0, [...log.pageErrors, ...log.badResponses].join('\n'));
+    await page.close();
+    sql(`delete from payments where student_id = '${SHIRA}' and note like '%שולם בנפרד%'`);
+    failed();
+  }
+
   console.log('\nהרשאות במסך:');
   {
     const { page, log } = await ui.newPage(USERS.branch_manager);
     const card = await openCard(page);
     await card.getByText('חיוב 3 מתוך 10', { exact: false }).first().waitFor({ timeout: 8000 });
-    check('★ מנהלת סניף — אין "ניסיון חיוב חוזר"', (await card.getByRole('button', { name: 'ניסיון חיוב חוזר' }).count()) === 0);
+    check('★ מנהלת סניף — אין "ניסיון חיוב חוזר" ואין "החיוב שולם בנפרד"', (await card.getByRole('button', { name: 'ניסיון חיוב חוזר' }).count()) === 0
+          && (await card.getByRole('button', { name: 'החיוב שולם בנפרד' }).count()) === 0);
     check('בלי שגיאות דף', log.pageErrors.length === 0, log.pageErrors.join('\n'));
     await page.close();
   }

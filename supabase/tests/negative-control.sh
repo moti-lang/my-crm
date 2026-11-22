@@ -1568,7 +1568,7 @@ expect_fail_code "★ הרשמה: מסך הסיום מבטיח שהקישור נ
 
 # ─── ניסיון חיוב חוזר בהוראת קבע (0048) ───
 expect_fail_code "★ חיוב חוזר: גם להוראה פעילה" \
-  "$DIR/../migrations/0048_standing_retry.sql" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
   'sed -i "s/^  if not o.needs_renewal and o.status <> .failed. then\$/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
@@ -1578,12 +1578,12 @@ expect_fail_code "★ חיוב חוזר: לא רק הבעלים" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
 expect_fail_code "★ חיוב חוזר: אחרי חיוב שעבר — שוב \"חיוב\" (כפול) ולא \"חידוש\"" \
-  "$DIR/../migrations/0048_standing_retry.sql" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
   'sed -i "s/  v_stage := case when o.needs_renewal then .renew. else .charge. end;/  v_stage := \x27charge\x27;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
 expect_fail_code "★ חיוב חוזר: החידוש לפי התאריך הישן מהסנכרון (חיוב שני באותו חודש)" \
-  "$DIR/../migrations/0048_standing_retry.sql" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
   'sed -i "s/    v_last := greatest(o.last_billing, v_paid, v_charged);/    v_last := o.last_billing;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
@@ -1643,7 +1643,7 @@ expect_fail_code "★ חיוב חוזר: החיבור נפל — והמסך או
   "node supabase/tests/standing.test.mjs"
 
 expect_fail_code "★ חיוב חוזר: אחרי \"לא ברור אם חויב\" — אפשר לחייב שוב מיד" \
-  "$DIR/../migrations/0048_standing_retry.sql" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
   'sed -i "s/^  if v_stage = .charge. and o.retry_uncertain_at > now() - interval .24 hours. then\$/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
@@ -1886,6 +1886,37 @@ expect_fail_code "חיוב חוזר שלא בוצע — לא נרשם ביומן
 expect_fail_code "★ המסך: בלי שורת \"ניסיון חיוב חוזר אחרון\"" \
   "$DIR/../../src/components/StandingOrderPanel.tsx" \
   'sed -i "s/        const last = lastRetryText(events.data ?? \[\], formatDateTime, formatILS);/        const last = null as ReturnType<typeof lastRetryText>;/" "$F"' \
+  "node supabase/tests/standing-retry-ui.test.mjs"
+
+# ─── החיוב שולם בנפרד (0061) ───
+expect_fail_code "★ שולם בנפרד: לא רק הבעלים" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לרשום חיוב ששולם בנפרד./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "שולם בנפרד: בלי \"איך שולם\"" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/  if v_note is null then raise exception .יש לכתוב איך שולם/  if false then raise exception \x27x/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "★ שולם בנפרד: ההוראה לא מסומנת \"צריך לחדש\" (הלחיצה הבאה הייתה מחייבת שוב)" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/         needs_renewal = v_after > 0,/         needs_renewal = false,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "★ שולם בנפרד: אפשר לרשום פעמיים" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/  if o.status <> .failed. or o.needs_renewal then/  if o.status <> \x27failed\x27 then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "יומן ההוראה בלי שם מי שעשתה" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/    new.actor_label := coalesce((select full_name from profiles where id = new.actor), .משתמשת לא מזוהה.);/    new.actor_label := \x27משתמשת לא מזוהה\x27;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "★ המסך: \"שולם בנפרד\" בלי אישור" \
+  "$DIR/../../src/components/StandingOrderPanel.tsx" \
+  'sed -i "s/            if (!window.confirm(\x60לרשום שהחיוב של/            if (false \&\& !window.confirm(\x60לרשום שהחיוב של/" "$F"' \
   "node supabase/tests/standing-retry-ui.test.mjs"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.

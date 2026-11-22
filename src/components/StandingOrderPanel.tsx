@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 import {
-  EVENT_LABEL, STANDING_LABEL, STANDING_TONE, RescheduleChanged, RetryChanged, eventChange, lastRetryText, useCancelStanding, useReschedulePreview, useRescheduleStanding,
+  EVENT_LABEL, STANDING_LABEL, STANDING_TONE, RescheduleChanged, RetryChanged, eventChange, lastRetryText, useCancelStanding, usePaidElsewhere, useReschedulePreview, useRescheduleStanding,
   useRetryPreview, useRetryStanding, useStandingEvents, type StandingOrder,
 } from '@/hooks/standing';
 import { formatDate, formatDateTime, formatILS } from '@/lib/format';
@@ -16,6 +16,7 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
   const [retrying, setRetrying] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [retried, setRetried] = useState<string | null>(null);
+  const [paidElsewhere, setPaidElsewhere] = useState(false);
   const live = order.status && !['cancelled', 'completed'].includes(order.status);
   const owner = profile?.role === 'owner';
   return (
@@ -41,7 +42,12 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
       {retried && <p className="text-xs text-ok" role="status">{retried}</p>}
       {owner && order.status === 'failed' && order.id && (retrying
         ? <RetryForm order={order} onDone={(msg) => { setRetried(msg); setRetrying(false); }} onCancel={() => setRetrying(false)} />
-        : <button type="button" className="btn-ghost mt-1 px-3 py-1 text-xs" onClick={() => { setRetried(null); setRetrying(true); }}>ניסיון חיוב חוזר</button>)}
+        : paidElsewhere
+          ? <PaidElsewhereForm order={order} onDone={(msg) => { setRetried(msg); setPaidElsewhere(false); setRetrying(true); }} onCancel={() => setPaidElsewhere(false)} />
+          : <span className="mt-1 flex flex-wrap gap-2">
+              <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => { setRetried(null); setRetrying(true); }}>ניסיון חיוב חוזר</button>
+              <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => { setRetried(null); setPaidElsewhere(true); }}>החיוב שולם בנפרד</button>
+            </span>)}
       {owner && live && order.id && !rescheduling && !retrying && (
         <button type="button" className="btn-ghost mt-1 px-3 py-1 text-xs text-bad" disabled={cancel.isPending}
           onClick={() => {
@@ -65,7 +71,7 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
 /** שינוי תאריך / סכום: "מ-X ל-Y". חיוב חוזר וחידוש: "על מה · מה קרה". */
 function eventText(e: Parameters<typeof eventChange>[0]): string {
   const [from, to] = eventChange(e, formatDate, formatILS);
-  return ['retry_charge', 'retry_declined', 'renewed', 'retry_refused'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
+  return ['retry_charge', 'retry_declined', 'renewed', 'retry_refused', 'paid_elsewhere'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
 }
 
 const DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
@@ -152,6 +158,45 @@ function RetryForm({ order, onDone, onCancel }: { order: StandingOrder; onDone: 
           {retry.isPending ? 'מחייבת ב-SUMIT…' : label || 'ניסיון חיוב חוזר'}
         </button>
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={retry.isPending} onClick={onCancel}>ביטול</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ★ "החיוב שולם בנפרד" (0061): החיוב שנכשל עבר מחוץ להוראה (למשל חיוב ידני בכרטיס ב-SUMIT). נרשם כאן
+ * בלי לחייב; אחר כך נפתח "ניסיון חיוב חוזר" בשלב החידוש בלבד — הוראה חדשה ב-SUMIT לחיובים שנותרו.
+ */
+function PaidElsewhereForm({ order, onDone, onCancel }: { order: StandingOrder; onDone: (msg: string) => void; onCancel: () => void }) {
+  const save = usePaidElsewhere();
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+  const [paidOn, setPaidOn] = useState(today);
+  const [note, setNote] = useState('');
+  return (
+    <div className="mt-1 space-y-2 rounded-field border border-rule p-2" data-testid="paid-elsewhere">
+      <p className="text-xs">
+        נרשם תשלום של {formatILS(order.amount)} על החיוב של {order.next_billing ? formatDate(order.next_billing) : 'החודש'} שנכשל, <b>בלי לחייב</b>.
+        אחר כך: חידוש ההוראה ב-SUMIT לחיובים שנותרו, מהחודש הבא — גם בלי חיוב.
+      </p>
+      <label className="block text-xs">תאריך התשלום
+        <input type="date" className="field mt-1" value={paidOn} max={today} onChange={(e) => setPaidOn(e.target.value)} />
+      </label>
+      <label className="block text-xs">איך שולם
+        <input className="field mt-1" value={note} placeholder="למשל: חיוב ידני בכרטיס ב-SUMIT, קבלה 1234" onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {save.error != null && <p className="text-xs text-bad" role="alert">{humanError(save.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={!note.trim() || !paidOn || save.isPending}
+          onClick={() => {
+            if (!order.id) return;
+            if (!window.confirm(`לרשום שהחיוב של ${order.full_name} (${formatILS(order.amount)}) שולם בנפרד? לא יבוצע שום חיוב.`)) return;
+            save.mutate({ id: order.id, paidOn, note: note.trim() }, {
+              onSuccess: (r) => onDone(`✓ נרשם תשלום של ${formatILS(r.amount)} (שולם בנפרד).${r.needs_renewal ? ' עכשיו: לחדש את ההוראה ב-SUMIT, בלי חיוב.' : ' זה היה החיוב האחרון.'}`),
+            });
+          }}>
+          {save.isPending ? 'רושמת…' : 'לרשום, בלי לחייב'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>ביטול</button>
       </div>
     </div>
   );

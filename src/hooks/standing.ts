@@ -49,7 +49,7 @@ export function useCancelStanding() {
 
 export type StandingEvent = Views<'v_standing_order_events'>;
 export const EVENT_LABEL: Record<string, string> = { reschedule: 'שינוי יום חיוב', sumit_change: 'שונה ב-SUMIT', amount_change: 'שינוי סכום (הנחה)',
-  retry_charge: 'חיוב חוזר', retry_declined: 'חיוב חוזר נדחה', renewed: 'הוראה חודשה ב-SUMIT', retry_refused: 'חיוב חוזר לא בוצע' };
+  retry_charge: 'חיוב חוזר', retry_declined: 'חיוב חוזר נדחה', renewed: 'הוראה חודשה ב-SUMIT', retry_refused: 'חיוב חוזר לא בוצע', paid_elsewhere: 'שולם בנפרד' };
 /** "מאיזה לאיזה" ביומן: תאריכים — או סכומים בשינוי סכום; בחיוב חוזר — איזה חיוב ומה קרה. */
 export function eventChange(e: { kind: string | null; from_date: string | null; to_date: string | null; from_amount?: number | null; to_amount?: number | null;
                                  remaining?: number | null; note?: string | null },
@@ -59,6 +59,7 @@ export function eventChange(e: { kind: string | null; from_date: string | null; 
   if (e.kind === 'retry_declined') return [`${fmtDate(e.from_date)} (נכשל)`, `נדחה${e.note ? `: ${e.note}` : ''}`];
   if (e.kind === 'renewed') return ['הוראה שהושבתה', `${fmtDate(e.to_date)} · ${e.remaining ?? '—'} חיובים`];
   if (e.kind === 'retry_refused') return [`${fmtDate(e.from_date)} (נכשל)`, e.note ?? 'לא חויב'];
+  if (e.kind === 'paid_elsewhere') return [`${fmtDate(e.from_date)} (נכשל)`, `${fmtMoney(e.to_amount)} — שולם בנפרד${e.note ? `: ${e.note}` : ''}`];
   return [fmtDate(e.from_date), fmtDate(e.to_date)];
 }
 
@@ -189,4 +190,26 @@ export function lastRetryText(events: { kind: string | null; created_at: string 
   if (e.kind === 'retry_charge') return { text: `ניסיון חיוב חוזר אחרון (${when}): ✓ עבר — ${fmtMoney(e.to_amount)}`, tone: 'ok' };
   if (e.kind === 'retry_declined') return { text: `ניסיון חיוב חוזר אחרון (${when}): ✗ נדחה${e.note ? ` — ${e.note}` : ''}`, tone: 'bad' };
   return { text: `ניסיון חיוב חוזר אחרון (${when}): לא בוצע — ${e.note ?? 'לא חויב'}`, tone: 'warn' };
+}
+
+/**
+ * ★ 0061 (שלוש אחיות, 22/11): החיוב שנכשל שולם בנפרד (חיוב ידני ב-SUMIT) — רושמים אותו בלי לחייב.
+ * אחריו ההוראה "צריך לחדש", ו"ניסיון חיוב חוזר" מציע רק חידוש ב-SUMIT, בלי חיוב.
+ */
+export function usePaidElsewhere() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; paidOn: string; note: string }) => {
+      const { data, error } = await supabase.rpc('rpc_standing_paid_elsewhere', { p_id: input.id, p_paid_on: input.paidOn, p_note: input.note });
+      if (error) throw new Error(error.message);
+      return data as unknown as { amount: number; remaining: number; needs_renewal: boolean };
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['standing-orders'] });
+      void qc.invalidateQueries({ queryKey: ['standing-events'] });
+      void qc.invalidateQueries({ queryKey: ['standing-retry-preview'] });
+      void qc.invalidateQueries({ queryKey: ['students'] });
+      void qc.invalidateQueries({ queryKey: ['payments'] });
+    },
+  });
 }

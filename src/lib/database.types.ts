@@ -2533,6 +2533,14 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_standing_paid_elsewhere: {
+        Args: {
+          p_id: string;
+          p_paid_on: string;
+          p_note: string;
+        };
+        Returns: Json;
+      };
       rpc_renew_enrollment_link: {
         Args: {
           p_student: string;
