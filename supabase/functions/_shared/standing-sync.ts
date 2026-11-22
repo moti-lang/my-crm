@@ -11,7 +11,9 @@
 import type { Db } from './sumit-sync.ts';
 import type { StandingProvider } from './standing.ts';
 
-type ToSetup = { link_id: string; student_name: string; branch: string; customer_id: number | null; amount: number; installments: number; installments_total: number; date_start: string };
+type ToSetup = { link_id: string; student_name: string; branch: string; customer_id: number | null; amount: number; installments: number; installments_total: number; date_start: string;
+  // ★ החלפת כרטיס (0062): ההוראה הישנה — מושבתת אחרי כישלון — מבוטלת ב-SUMIT רק אחרי שהחדשה נוצרה.
+  replaces_customer_id?: number | null; replaces_recurring_id?: number | null };
 type ToCheck = { id: string; customer_id: number; recurring_id: number; amount: number; date_start: string; last_checked_at: string | null; status: string };
 
 export async function syncStandingOrders(db: Db, sumit: StandingProvider) {
@@ -35,6 +37,15 @@ export async function syncStandingOrders(db: Db, sumit: StandingProvider) {
     });
     if (!r.ok) { out.setup_failed++; continue; }
     out.created++;
+    if (s.replaces_recurring_id && s.replaces_customer_id) {
+      const c = await sumit.cancel(Number(s.replaces_customer_id), Number(s.replaces_recurring_id));
+      if (!c.ok) {
+        await db.from('system_alerts').insert({ kind: 'standing_order_old_not_cancelled', severity: 'warning',
+          title: 'כרטיס הוחלף, אבל ההוראה הישנה לא בוטלה ב-SUMIT',
+          body: `${s.student_name}: נוצרה הוראה חדשה על הכרטיס החדש. ביטול ההוראה הישנה (${s.replaces_recurring_id}) ב-SUMIT נכשל: ${c.error}. לבטל ידנית ב-SUMIT — היא מושבתת ולא תחייב, אבל שלא תופעל בטעות.`,
+          meta: { link_id: s.link_id, recurring_id: s.replaces_recurring_id } });
+      }
+    }
     // ★ אם SUMIT חייבה מיד (לא אמור לקרות עם Date_Start עתידי) — הכסף נרשם, והבעלים יודעת.
     if (r.immediatePayment && orderId) {
       const p = r.immediatePayment;

@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 import {
   EVENT_LABEL, STANDING_LABEL, STANDING_TONE, RescheduleChanged, RetryChanged, eventChange, lastRetryText, useCancelStanding, usePaidElsewhere, useReschedulePreview, useRescheduleStanding,
-  useRetryPreview, useRetryStanding, useStandingEvents, type StandingOrder,
+  useRetryPreview, useRetryStanding, useStandingCardLink, useStandingEvents, type StandingOrder,
 } from '@/hooks/standing';
 import { formatDate, formatDateTime, formatILS } from '@/lib/format';
 import { humanError } from '@/lib/errors';
+import { LinkResult } from '@/components/LinkResult';
 
 /** הוראת קבע של תלמידה: חיוב X מתוך N, הבא מתי, שינוי יום חיוב, ניסיון חיוב חוזר ועצירה לבעלים, והיומן שלה. */
 export function StandingOrderPanel({ order }: { order: StandingOrder }) {
@@ -47,6 +48,7 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
           : <span className="mt-1 flex flex-wrap gap-2">
               <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => { setRetried(null); setRetrying(true); }}>ניסיון חיוב חוזר</button>
               <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => { setRetried(null); setPaidElsewhere(true); }}>החיוב שולם בנפרד</button>
+              <CardLinkButton order={order} />
             </span>)}
       {owner && live && order.id && !rescheduling && !retrying && (
         <button type="button" className="btn-ghost mt-1 px-3 py-1 text-xs text-bad" disabled={cancel.isPending}
@@ -71,7 +73,7 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
 /** שינוי תאריך / סכום: "מ-X ל-Y". חיוב חוזר וחידוש: "על מה · מה קרה". */
 function eventText(e: Parameters<typeof eventChange>[0]): string {
   const [from, to] = eventChange(e, formatDate, formatILS);
-  return ['retry_charge', 'retry_declined', 'renewed', 'retry_refused', 'paid_elsewhere'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
+  return ['retry_charge', 'retry_declined', 'renewed', 'retry_refused', 'paid_elsewhere', 'card_link', 'card_replaced'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
 }
 
 const DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
@@ -199,5 +201,31 @@ function PaidElsewhereForm({ order, onDone, onCancel }: { order: StandingOrder; 
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>ביטול</button>
       </div>
     </div>
+  );
+}
+
+/**
+ * ★ "קישור להחלפת כרטיס" (0062): כשהכרטיס השמור לא עובר (נדחה / גנוב / פג). ההורה משלמת בקישור את
+ * החיוב שנכשל בכרטיס חדש, ומאשרת בדף את המשך ההוראה עליו — אותו "חיוב X מתוך N", מהחודש הבא.
+ */
+function CardLinkButton({ order }: { order: StandingOrder }) {
+  const link = useStandingCardLink();
+  const [result, setResult] = useState<{ url: string; amount: number; whatsapp: Parameters<typeof LinkResult>[0]['whatsapp'] } | null>(null);
+  const after = (order.remaining ?? 1) - 1;
+  if (result) return <span className="block w-full" data-testid="card-link-result"><LinkResult url={result.url} amount={result.amount} whatsapp={result.whatsapp} /></span>;
+  return (
+    <span className="inline-flex flex-col items-start gap-1">
+      <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={link.isPending}
+        title="הכרטיס השמור לא עובר — ההורה משלמת בכרטיס חדש, וההוראה ממשיכה עליו"
+        onClick={() => {
+          if (!order.id) return;
+          const rest = after > 0 ? `\nבדף היא תאשר את המשך הוראת הקבע על הכרטיס החדש: עוד ${after} חיובים, מהחודש הבא. ההוראה הישנה תבוטל.` : '\nזה החיוב האחרון בהוראה.';
+          if (!window.confirm(`לשלוח להורה של ${order.full_name} קישור לתשלום ${formatILS(order.amount)} (החיוב שנכשל) בכרטיס חדש?${rest}\nקישור פתוח אחר שלה יבוטל. הקישור תקף 7 ימים.`)) return;
+          link.mutate(order.id, { onSuccess: (r) => setResult({ url: r.url, amount: Number(r.amount), whatsapp: r.whatsapp }) });
+        }}>
+        {link.isPending ? 'יוצרת…' : 'קישור להחלפת כרטיס'}
+      </button>
+      {link.error != null && <span className="text-xs text-bad" role="alert">{humanError(link.error)}</span>}
+    </span>
   );
 }

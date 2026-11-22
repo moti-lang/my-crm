@@ -1292,7 +1292,7 @@ expect_fail_code "★ הרשמה: יום חיוב 29 (או זבל) מתקבל" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
 expect_fail_code "★ הרשמה: התאריכים בנוסח לא לפי היום שנבחר" \
-  "$DIR/../migrations/0044_pay_page_billing_day.sql" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
   'sed -i "s/    v_dates := f_standing_dates_on_day(coalesce(p_on, f_today_il()), v_day, v_n);/    v_dates := f_standing_dates(coalesce(p_on, current_date), v_n);/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
@@ -1342,7 +1342,7 @@ expect_fail_code "★ הרשמה: יום החיוב לא נשלח" \
   "node supabase/tests/billing-day-ui.test.mjs"
 
 expect_fail_code "★ מכסה: הוראה שנוצרה עכשיו נבדקת מיד באותה ריצה (קריאה כפולה ל-SUMIT)" \
-  "$DIR/../migrations/0042_no_check_after_create.sql" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
   'sed -i "s/          case when p_ok then now() end)/          null)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
@@ -1917,6 +1917,57 @@ expect_fail_code "יומן ההוראה בלי שם מי שעשתה" \
 expect_fail_code "★ המסך: \"שולם בנפרד\" בלי אישור" \
   "$DIR/../../src/components/StandingOrderPanel.tsx" \
   'sed -i "s/            if (!window.confirm(\x60לרשום שהחיוב של/            if (false \&\& !window.confirm(\x60לרשום שהחיוב של/" "$F"' \
+  "node supabase/tests/standing-retry-ui.test.mjs"
+
+# ─── קישור להחלפת כרטיס (0062) ───
+expect_fail_code "★ החלפת כרטיס: לא רק הבעלים" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לשלוח קישור להחלפת כרטיס./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ החלפת כרטיס: ההוראה הישנה לא נסגרת כשההורה משלמת (אפשר לחייב אותה שוב)" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/       set status = case when v_done then .completed. else .cancelled. end,/       set status = case when v_done then \x27completed\x27 else status end,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ החלפת כרטיס: \"חיוב X מתוך N\" מתחיל מחדש בהוראה החדשה" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/case when p_ok then .active. else .setup_failed. end, case when p_ok then v_start end, old.charged_count + 1,/case when p_ok then \x27active\x27 else \x27setup_failed\x27 end, case when p_ok then v_start end, 0,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ החלפת כרטיס: הוראה שנייה אחרי שההוראה כבר טופלה (חיוב כפול)" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/(l.standing_installments > 0 and old.status = .cancelled.)/(l.standing_installments > 0)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "החלפת כרטיס: קישור פתוח נשאר אחרי \"שולם בנפרד\"" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/  if old.status = .failed. and not old.needs_renewal and (new.status <> .failed. or new.needs_renewal) then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "החלפת כרטיס: בחיוב האחרון ההוראה לא מסתיימת" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/           charged_count = charged_count + case when v_done then 1 else 0 end,/           charged_count = charged_count,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ החלפת כרטיס: נוסח האישור לא לפי החיובים שנותרו" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/    v_n := l.standing_installments;/    v_n := l.standing_installments + 1;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ סנכרון: ההוראה הישנה לא מבוטלת ב-SUMIT אחרי החלפת כרטיס" \
+  "$DIR/../functions/_shared/standing-sync.ts" \
+  'sed -i "s/      const c = await sumit.cancel(Number(s.replaces_customer_id), Number(s.replaces_recurring_id));/      const c = { ok: true } as { ok: true } | { ok: false; error: string };/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ סנכרון: הישנה מבוטלת גם כשהחדשה לא נוצרה" \
+  "$DIR/../functions/_shared/standing-sync.ts" \
+  'sed -i "s/    if (!r.ok) { out.setup_failed++; continue; }/    if (!r.ok) { out.setup_failed++; if (s.replaces_recurring_id \&\& s.replaces_customer_id) await sumit.cancel(Number(s.replaces_customer_id), Number(s.replaces_recurring_id)); continue; }/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ המסך: קישור להחלפת כרטיס בלי אישור" \
+  "$DIR/../../src/components/StandingOrderPanel.tsx" \
+  'sed -i "s/          if (!window.confirm(\x60לשלוח להורה של/          if (false \&\& !window.confirm(\x60לשלוח להורה של/" "$F"' \
   "node supabase/tests/standing-retry-ui.test.mjs"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.

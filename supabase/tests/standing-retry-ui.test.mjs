@@ -26,6 +26,8 @@ const SHIRA = 'dddddddd-0000-0000-0000-000000000001', BEITAR = 'bbbbbbbb-0000-00
 const LINK = 'eeeeeeee-0000-0000-0000-0000000008a1', ORDER = 'eeeeeeee-0000-0000-0000-0000000008b1', RECURRING = 9811, CUSTOMER = 9810, NEW_RECURRING = 9899;
 const NAME = sql(`select full_name from students where id = '${SHIRA}'`);
 const cleanup = () => sql(`
+  with d as (delete from payment_links where replaces_standing_order_id = '${ORDER}' returning reminder_id)
+  delete from reminders where id in (select reminder_id from d);
   delete from standing_order_events where standing_order_id = '${ORDER}';
   delete from standing_order_charges where standing_order_id = '${ORDER}';
   delete from payments where student_id = '${SHIRA}' and (note like '%חיוב חוזר%' or note like '%שולם בנפרד%');
@@ -184,13 +186,40 @@ try {
     failed();
   }
 
+  console.log('\nקישור להחלפת כרטיס (הכרטיס השמור לא עובר):');
+  {
+    failed(); sumitCalls.length = 0;
+    const { page, log } = await ui.newPage(USERS.owner, { functions });
+    const dialogs = [];
+    page.on('dialog', (d) => { dialogs.push(d.message()); void d.accept(); });
+    const card = await openCard(page);
+    await card.getByRole('button', { name: 'קישור להחלפת כרטיס' }).click();
+    await card.getByTestId('card-link-result').waitFor({ timeout: 10000 });
+    check('★ אישור לפני השליחה: הסכום, ומה ממשיך — עוד 6 חיובים מהחודש הבא', dialogs.length === 1 && dialogs[0].includes('100')
+          && dialogs[0].includes('עוד 6 חיובים, מהחודש הבא') && dialogs[0].includes('ההוראה הישנה תבוטל'), dialogs.join(' | '));
+    const res = (await card.getByTestId('card-link-result').textContent()) ?? '';
+    const href = (await card.getByTestId('card-link-result').getByRole('link', { name: 'פתיחה' }).getAttribute('href')) ?? '';
+    check('★ הקישור מוצג: העתקה ופתיחה', res.includes('העתקת קישור') && href.includes('/pay/'), `${res} | ${href}`);
+    check('★ במסד: קישור על 100, ואחריו 6 חיובים — ושום פנייה ל-SUMIT', sql(`select amount || '|' || standing_installments || '|' || status from payment_links
+          where replaces_standing_order_id = '${ORDER}'`) === '100.00|6|pending' && sumitCalls.length === 0, JSON.stringify(sumitCalls));
+    await card.getByText('קישור להחלפת כרטיס)', { exact: false }).first().waitFor({ timeout: 8000 });
+    check('ביומן ההוראה: נשלח קישור', ((await card.getByLabel('יומן ההוראה').textContent()) ?? '').includes('נשלח להורה קישור על'));
+    check('בלי שגיאות דף ובלי שאילתות שבורות', log.pageErrors.length === 0 && log.badResponses.length === 0, [...log.pageErrors, ...log.badResponses].join('\n'));
+    await page.close();
+    sql(`with d as (delete from payment_links where replaces_standing_order_id = '${ORDER}' returning reminder_id)
+         delete from reminders where id in (select reminder_id from d);
+         delete from standing_order_events where standing_order_id = '${ORDER}' and kind = 'card_link'`);
+    failed();
+  }
+
   console.log('\nהרשאות במסך:');
   {
     const { page, log } = await ui.newPage(USERS.branch_manager);
     const card = await openCard(page);
     await card.getByText('חיוב 3 מתוך 10', { exact: false }).first().waitFor({ timeout: 8000 });
-    check('★ מנהלת סניף — אין "ניסיון חיוב חוזר" ואין "החיוב שולם בנפרד"', (await card.getByRole('button', { name: 'ניסיון חיוב חוזר' }).count()) === 0
-          && (await card.getByRole('button', { name: 'החיוב שולם בנפרד' }).count()) === 0);
+    check('★ מנהלת סניף — אין "ניסיון חיוב חוזר", "החיוב שולם בנפרד" או "קישור להחלפת כרטיס"', (await card.getByRole('button', { name: 'ניסיון חיוב חוזר' }).count()) === 0
+          && (await card.getByRole('button', { name: 'החיוב שולם בנפרד' }).count()) === 0
+          && (await card.getByRole('button', { name: 'קישור להחלפת כרטיס' }).count()) === 0);
     check('בלי שגיאות דף', log.pageErrors.length === 0, log.pageErrors.join('\n'));
     await page.close();
   }

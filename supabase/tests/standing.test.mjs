@@ -355,6 +355,28 @@ const S = { link_id: 'L1', student_name: 'רות', branch: 'ביתר', customer_
   check('★ ...והבעלים מקבלת התראה', f.inserts.some((i) => i.kind === 'standing_order_immediate_charge'));
 }
 {
+  // ★ החלפת כרטיס (0062): הוראה חדשה על הלקוחה החדשה, ורק אחרי שנוצרה — הישנה מבוטלת ב-SUMIT.
+  const log = [];
+  const mk = (createOk, cancelOk) => ({ ...so.standingProvider(),
+    create: async (i) => { log.push(['create', i.customerId, i.installments]); return createOk ? { ok: true, recurringId: 55, immediatePayment: null, dryRun: false } : { ok: false, error: 'SUMIT: x', dryRun: false }; },
+    cancel: async (cid, rid) => { log.push(['cancel', cid, rid]); return cancelOk ? { ok: true } : { ok: false, error: 'SUMIT: לא בוטלה' }; },
+    list: async () => [] });
+  const R = { ...S, customer_id: 888, installments: 8, replaces_customer_id: 777, replaces_recurring_id: 41 };
+  let f = fakeDb([R]);
+  await syncStandingOrders(f.db, mk(true, true));
+  check('★ החלפת כרטיס: נוצרת על הלקוחה החדשה (8 חיובים), ואחר כך הישנה מבוטלת', JSON.stringify(log) === '[["create",888,8],["cancel",777,41]]', JSON.stringify(log));
+  check('...בלי התראה כשהביטול עבר', !f.inserts.some((i) => i.kind === 'standing_order_old_not_cancelled'));
+  log.length = 0; f = fakeDb([R]);
+  await syncStandingOrders(f.db, mk(false, true));
+  check('★ היצירה נכשלה — הישנה לא מבוטלת', JSON.stringify(log) === '[["create",888,8]]', JSON.stringify(log));
+  log.length = 0; f = fakeDb([R]);
+  await syncStandingOrders(f.db, mk(true, false));
+  check('★ הביטול נכשל — התראה לבטל ידנית', f.inserts.some((i) => i.kind === 'standing_order_old_not_cancelled' && i.body.includes('41')));
+  log.length = 0; f = fakeDb([S]);
+  await syncStandingOrders(f.db, mk(true, true));
+  check('הוראה רגילה (הרשמה) — שום ביטול', !log.some(([k]) => k === 'cancel'));
+}
+{
   // ★ הלקוחה שלנו בלבד (listforcustomer). חיוב חדש = Date_PreviousBilling; כישלון = הסטטוס (rpc_standing_order_status בתוך observed).
   const listed = [];
   const sumit = { create: async () => ({ ok: false, error: 'x', dryRun: false }),

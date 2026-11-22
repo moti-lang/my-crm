@@ -2533,6 +2533,12 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_standing_card_link: {
+        Args: {
+          p_id: string;
+        };
+        Returns: Json;
+      };
       rpc_standing_paid_elsewhere: {
         Args: {
           p_id: string;
