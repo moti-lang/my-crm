@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory,
+import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory, useTransferStudent, useStudentBranchHistory,
   useDiscountPreview, useApplyDiscount, useStudentDiscountHistory, usePaymentVoidHistory, useVoidPayment, STATUS_LABEL, STATUS_TONE,
   type VoidKind } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
@@ -12,6 +12,7 @@ import { PaymentLinkButton } from '@/components/PaymentLinkButton';
 import { RenewEnrollmentLinkButton } from '@/components/RenewEnrollmentLinkButton';
 import { useInstallmentProgress, useCancelEnrollment, useCancelEnrollmentOverride } from '@/hooks/enrollment';
 import { useAuth } from '@/auth/AuthProvider';
+import { useBranches } from '@/hooks/queries';
 import { humanError } from '@/lib/errors';
 import type { Views } from '@/lib/database.types';
 
@@ -44,6 +45,9 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const deleteStudent = useDeleteStudent();
   const cancelEnrollment = useCancelEnrollment();
   const nameHistory = useStudentNameHistory(student?.id ?? null);
+  const branchHistory = useStudentBranchHistory(student?.id ?? null);
+  const [transferring, setTransferring] = useState(false);
+  const [transferred, setTransferred] = useState<string | null>(null);
   const discountHistory = useStudentDiscountHistory(student?.id ?? null);
   const [discounting, setDiscounting] = useState(false);
   const [discounted, setDiscounted] = useState<string | null>(null);
@@ -54,7 +58,7 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const [voided, setVoided] = useState<string | null>(null);
   const [overriding, setOverriding] = useState(false);
   const [overrideDone, setOverrideDone] = useState<string | null>(null);
-  useEffect(() => { setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); setVoiding(null); setVoided(null); setOverriding(false); setOverrideDone(null); cancelEnrollment.reset(); }, [student?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setTransferring(false); setTransferred(null); setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); setVoiding(null); setVoided(null); setOverriding(false); setOverrideDone(null); cancelEnrollment.reset(); }, [student?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!student) return null;
 
@@ -105,6 +109,11 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
               {student.grade ? ` · כיתה ${student.grade}` : ''}
             </p>
             {renamed && <p className="mt-1 text-xs text-ok" role="status">{renamed}</p>}
+            {transferred && <p className="mt-1 text-xs text-ok" role="status">{transferred}</p>}
+            {profile?.role === 'owner' && student.id && student.branch_id && (transferring
+              ? <TransferForm id={student.id} name={student.full_name ?? ''} branchId={student.branch_id} branchName={student.branch_name ?? ''}
+                  onDone={(msg) => { setTransferring(false); setTransferred(msg); }} onCancel={() => setTransferring(false)} />
+              : <button type="button" className="btn-ghost mt-1 px-2 py-0.5 text-xs" onClick={() => { setTransferred(null); setTransferring(true); }}>⇄ העברה לסניף אחר</button>)}
           </div>
           <div className="flex items-center gap-2">
             <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[status]}`}>
@@ -337,6 +346,16 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             </Section>
           )}
 
+          {(branchHistory.data ?? []).length > 0 && (
+            <Section title="מעברי סניף">
+              <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית הסניפים">
+                {(branchHistory.data ?? []).map((h, i) => (
+                  <li key={i}>{formatDateTime(h.changed_at)} · {h.changed_by}: מ{h.from_branch} ל{h.to_branch}</li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
           {(nameHistory.data ?? []).length > 0 && (
             <Section title="שינויי שם">
               <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית השם">
@@ -420,6 +439,50 @@ function RenameForm({ id, fullName, onDone, onCancel }: { id: string; fullName: 
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={rename.isPending} onClick={onCancel}>ביטול</button>
       </div>
     </form>
+  );
+}
+
+/**
+ * ★ העברה לסניף אחר (הבעלים, 0063). בוחרים סניף, רואים מה יקרה, מאשרים. ההעברה במסד — שם גם
+ * הבדיקות (סניף פעיל, אין תלמידה באותו שם בסניף החדש).
+ */
+function TransferForm({ id, name, branchId, branchName, onDone, onCancel }:
+  { id: string; name: string; branchId: string; branchName: string; onDone: (msg: string) => void; onCancel: () => void }) {
+  const branches = useBranches();
+  const transfer = useTransferStudent();
+  const [to, setTo] = useState('');
+  const options = (branches.data ?? []).filter((b) => b.is_active && b.id !== branchId);
+  const toName = options.find((b) => b.id === to)?.name ?? '';
+  return (
+    <div className="mt-2 space-y-2 rounded-field border border-rule p-2 text-xs" data-testid="transfer">
+      <label className="block">לאיזה סניף
+        <select className="field mt-1 py-1 text-sm" value={to} aria-label="סניף חדש" onChange={(e) => { transfer.reset(); setTo(e.target.value); }}>
+          <option value="">בחרי סניף</option>
+          {options.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+      </label>
+      <ul className="list-disc space-y-0.5 pr-4 text-soft">
+        <li>מעכשיו היא ברשימה, בנוכחות ובגבייה של הסניף החדש. הקבוצה מתאפסת.</li>
+        <li>תשלומים ונוכחות מהעבר נשארים ב{branchName} — הדוחות של החודשים הקודמים לא משתנים.</li>
+        <li>הוראת קבע ממשיכה כרגיל (ב-SUMIT לא משתנה כלום); החיובים הבאים נרשמים בסניף החדש.</li>
+        <li>קישור תשלום פתוח מתבטל — אפשר ליצור חדש. שכר הלימוד וההנחה נשארים.</li>
+      </ul>
+      {transfer.error != null && <p className="text-bad" role="alert">{humanError(transfer.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={!to || transfer.isPending}
+          onClick={() => {
+            if (!window.confirm(`להעביר את ${name} מ${branchName} ל${toName}?`)) return;
+            transfer.mutate({ id, branch: to }, {
+              onSuccess: (r) => onDone(`✓ ${name} הועברה מ${r.from} ל${r.to}.`
+                + (r.standing_moved ? ' הוראת הקבע ממשיכה — החיובים הבאים בסניף החדש.' : '')
+                + (r.links_cancelled ? ` ${r.links_cancelled === 1 ? 'קישור תשלום פתוח בוטל' : `${r.links_cancelled} קישורי תשלום פתוחים בוטלו`} — אפשר ליצור חדש.` : '')),
+            });
+          }}>
+          {transfer.isPending ? 'מעבירה…' : 'העברה'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={transfer.isPending} onClick={onCancel}>ביטול</button>
+      </div>
+    </div>
   );
 }
 

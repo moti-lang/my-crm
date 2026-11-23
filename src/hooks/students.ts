@@ -151,6 +151,35 @@ export function useRenameStudent() {
   });
 }
 
+/**
+ * העברה לסניף אחר (הבעלים, 0063): התלמידה והוראת קבע חיה עוברות; תשלומים ונוכחות מהעבר נשארים
+ * בסניף שבו קרו; קישור פתוח מתבטל; הקבוצה מתאפסת.
+ */
+export function useTransferStudent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; branch: string }) => {
+      const { data, error } = await supabase.rpc('rpc_transfer_student', { p_student: input.id, p_branch: input.branch });
+      if (error) throw new Error(error.message);
+      return data as { ok: boolean; from: string; to: string; group_cleared: boolean; links_cancelled: number; reminders_moved: number; standing_moved: number };
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+/** היסטוריית הסניפים בכרטיס: מתי, מי, מאיזה סניף לאיזה. */
+export function useStudentBranchHistory(studentId: string | null) {
+  return useQuery({
+    queryKey: ['student-branch-history', studentId],
+    enabled: Boolean(studentId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_student_branch_history', { p_student: studentId as string });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as { changed_at: string; changed_by: string; from_branch: string; to_branch: string }[];
+    },
+  });
+}
+
 /** היסטוריית השם בכרטיס: מתי, מי, מאיזה שם לאיזה. */
 export function useStudentNameHistory(studentId: string | null) {
   return useQuery({

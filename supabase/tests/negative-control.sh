@@ -1970,6 +1970,62 @@ expect_fail_code "★ המסך: קישור להחלפת כרטיס בלי איש
   'sed -i "s/          if (!window.confirm(\x60לשלוח להורה של/          if (false \&\& !window.confirm(\x60לשלוח להורה של/" "$F"' \
   "node supabase/tests/standing-retry-ui.test.mjs"
 
+# ─── העברת תלמידה לסניף אחר (0063) ───
+expect_fail_code "★ העברה: לא רק הבעלים" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה להעביר תלמידה לסניף אחר./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: הוראת קבע פעילה נשארת בסניף הקודם" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  with c as (update standing_orders set branch_id = p_branch where student_id = s.id and status not in (.cancelled., .completed.) returning 1)/  with c as (select 1 from standing_orders where false)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "העברה: גם הוראה שהסתיימה זזה (ההיסטוריה משתנה)" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/where student_id = s.id and status not in (.cancelled., .completed.) returning 1)/where student_id = s.id returning 1)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: קישור פתוח עם שם הסניף הקודם נשאר" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  with c as (update payment_links set status = .cancelled. where student_id = s.id and status in (.pending., .opened.) returning reminder_id)/  with c as (select null::uuid as reminder_id where false)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "העברה: הקבוצה של הסניף הקודם נשארת" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  update students set branch_id = p_branch, group_name = null where id = s.id;/  update students set branch_id = p_branch where id = s.id;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: לסניף סגור" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/where id = p_branch and deleted_at is null and is_active;/where id = p_branch;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: כפילות שם בסניף החדש" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  if exists (select 1 from students o where o.id <> s.id and o.season_id = s.season_id and o.branch_id = p_branch/  if false and exists (select 1 from students o where o.id <> s.id and o.season_id = s.season_id and o.branch_id = p_branch/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "העברה: שינוי סניף ישיר לא נרשם ביומן" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  for each row when (old.branch_id is distinct from new.branch_id) execute function f_student_branch_audit();/  for each row when (false) execute function f_student_branch_audit();/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: ההיסטוריה גלויה למנהלת שכבר לא אחראית על התלמידה" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/(auth_role() = .branch_manager. and s.branch_id in (select my_branches()))/(auth_role() = \x27branch_manager\x27)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ המסך: העברה בלי אישור" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/            if (!window.confirm(\x60להעביר את/            if (false \&\& !window.confirm(\x60להעביר את/" "$F"' \
+  "node supabase/tests/student-transfer-ui.test.mjs"
+
+expect_fail_code "★ המסך: גם מנהלת סניף רואה \"העברה לסניף אחר\"" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/            {profile?.role === .owner. \&\& student.id \&\& student.branch_id \&\& (transferring/            {(profile?.role === \x27owner\x27 || profile?.role === \x27branch_manager\x27) \&\& student.id \&\& student.branch_id \&\& (transferring/" "$F"' \
+  "node supabase/tests/student-transfer-ui.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה
