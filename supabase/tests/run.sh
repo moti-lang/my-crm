@@ -19,7 +19,7 @@ node_test() {
     return 1
   fi
 }
-for suite in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql 11_allowlist_proof.sql 12_reports_proof.sql 13_attendance_link_hardening.sql 14_real_data.sql 15_users_screen_attack.sql 16_payment_links.sql 17_enrollment.sql 18_standing_orders.sql 19_question_delete.sql 20_student_delete.sql 21_wa_provision.sql 22_sumit_privacy.sql 23_commands_screen.sql 24_students_export.sql 25_parent_email.sql 26_billing_day.sql 27_student_rename.sql 28_student_discount.sql 29_renew_enrollment_link.sql 30_standing_retry.sql 31_activate_on_payment.sql 32_payment_void.sql 33_cancel_override.sql 34_security_hardening.sql 35_standing_link_active.sql 36_discount_track.sql 37_standing_retry_refused.sql 38_standing_paid_elsewhere.sql 39_standing_card_replace.sql 40_student_transfer.sql; do
+for suite in 02_rls_proof.sql 03_allocation_proof.sql 04_wa_dedupe_proof.sql 05_role_consistency_proof.sql 06_attendance_proof.sql 07_reminder_queue_proof.sql 08_command_rollback_proof.sql 09_business_rules_proof.sql 10_portability_proof.sql 11_allowlist_proof.sql 12_reports_proof.sql 13_attendance_link_hardening.sql 14_real_data.sql 15_users_screen_attack.sql 16_payment_links.sql 17_enrollment.sql 18_standing_orders.sql 19_question_delete.sql 20_student_delete.sql 21_wa_provision.sql 22_sumit_privacy.sql 23_commands_screen.sql 24_students_export.sql 25_parent_email.sql 26_billing_day.sql 27_student_rename.sql 28_student_discount.sql 29_renew_enrollment_link.sql 30_standing_retry.sql 31_activate_on_payment.sql 32_payment_void.sql 33_cancel_override.sql 34_security_hardening.sql 35_standing_link_active.sql 36_discount_track.sql 37_standing_retry_refused.sql 38_standing_paid_elsewhere.sql 39_standing_card_replace.sql 40_student_transfer.sql 41_tuition_change.sql; do
   echo "═══ $suite ═══"
   psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d teichtal -v ON_ERROR_STOP=1 -f "$DIR/$suite" 2>&1 \
     | grep -E '✓|✗|ERROR|═|עברו|עקביים|:$' | sed 's/^psql.*NOTICE:  //'
@@ -84,6 +84,7 @@ node_test "standing-link-active-ui.test.mjs" "✓|✗|נכשלו|עברו"
 echo "▶ עריכת שם תלמידה (דפדפן)"
 node_test "student-rename-ui.test.mjs" "✓|✗|נכשלו|עברו"
 node_test "student-transfer-ui.test.mjs" "✓|✗|נכשלו|עברו"
+node_test "student-tuition-ui.test.mjs" "✓|✗|נכשלו|עברו"
 
 echo "▶ יום החיוב בהוראת קבע: שינוי על ידי הבעלים + בחירה בהרשמה (דפדפן)"
 node_test "billing-day-ui.test.mjs" "✓|✗|נכשלו|עברו"

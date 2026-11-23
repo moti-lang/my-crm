@@ -2026,6 +2026,62 @@ expect_fail_code "★ המסך: גם מנהלת סניף רואה \"העברה �
   'sed -i "s/            {profile?.role === .owner. \&\& student.id \&\& student.branch_id \&\& (transferring/            {(profile?.role === \x27owner\x27 || profile?.role === \x27branch_manager\x27) \&\& student.id \&\& student.branch_id \&\& (transferring/" "$F"' \
   "node supabase/tests/student-transfer-ui.test.mjs"
 
+# ─── שינוי מחיר ידני (0064) ───
+expect_fail_code "★ מחיר: לא רק הבעלים" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לשנות מחיר. using errcode = .42501.; end if;/  null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ מחיר: הורדה מתחת למה שהוראת הקבע עוד תגבה" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/    if v_after < v_order_left then/    if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ מחיר: נשמר למרות שהיתרה השתנתה מאז התוכנית" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  if (v_plan ->> .balance_after.)::numeric is distinct from p_expected then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ מחיר: null של JSON מוחק את המסלול" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/         payment_track = case when jsonb_typeof(v_plan -> .track.) = .object. then v_plan -> .track. else payment_track end/         payment_track = coalesce(v_plan -> \x27track\x27, payment_track)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "מחיר: המסלול לא מחושב מחדש כשעוד לא שולם" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/    v_track := f_track_with_tuition(s.payment_track, v_tuition - s.discount, s.registration_fee);/    v_track := s.payment_track;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ מחיר: קישור בסכום הישן נשאר פתוח" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  with c as (update payment_links set status = .cancelled. where student_id = s.id and status in (.pending., .opened.) returning 1)/  with c as (select 1 where false)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "מחיר: בלי סיבה" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  if v_reason is null then raise exception .יש לכתוב למה המחיר משתנה.; end if;/  null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "מחיר: הסיבה נשארת לעדכון הבא" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  perform set_config(.app.tuition_reason., .., true);/  null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "מחיר: שינוי ישיר לא נרשם ביומן" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  for each row when (old.tuition_total is distinct from new.tuition_total) execute function f_student_tuition_audit();/  for each row when (false) execute function f_student_tuition_audit();/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ המסך: שינוי מחיר בלי אישור" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/            if (!window.confirm(\x60לשנות את המחיר השנתי/            if (false \&\& !window.confirm(\x60לשנות את המחיר השנתי/" "$F"' \
+  "node supabase/tests/student-tuition-ui.test.mjs"
+
+expect_fail_code "★ המסך: גם מנהלת סניף רואה \"שינוי מחיר\"" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/            {profile?.role === .owner. \&\& student.id \&\& (pricing/            {(profile?.role === \x27owner\x27 || profile?.role === \x27branch_manager\x27) \&\& student.id \&\& (pricing/" "$F"' \
+  "node supabase/tests/student-tuition-ui.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

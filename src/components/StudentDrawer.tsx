@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory, useTransferStudent, useStudentBranchHistory,
+import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory, useTransferStudent, useStudentBranchHistory, useTuitionPreview, useChangeTuition, useStudentTuitionHistory,
   useDiscountPreview, useApplyDiscount, useStudentDiscountHistory, usePaymentVoidHistory, useVoidPayment, STATUS_LABEL, STATUS_TONE,
   type VoidKind } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
@@ -49,6 +49,9 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const [transferring, setTransferring] = useState(false);
   const [transferred, setTransferred] = useState<string | null>(null);
   const discountHistory = useStudentDiscountHistory(student?.id ?? null);
+  const tuitionHistory = useStudentTuitionHistory(student?.id ?? null);
+  const [pricing, setPricing] = useState(false);
+  const [priced, setPriced] = useState<string | null>(null);
   const [discounting, setDiscounting] = useState(false);
   const [discounted, setDiscounted] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -58,7 +61,7 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const [voided, setVoided] = useState<string | null>(null);
   const [overriding, setOverriding] = useState(false);
   const [overrideDone, setOverrideDone] = useState<string | null>(null);
-  useEffect(() => { setTransferring(false); setTransferred(null); setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); setVoiding(null); setVoided(null); setOverriding(false); setOverrideDone(null); cancelEnrollment.reset(); }, [student?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPricing(false); setPriced(null); setTransferring(false); setTransferred(null); setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); setVoiding(null); setVoided(null); setOverriding(false); setOverrideDone(null); cancelEnrollment.reset(); }, [student?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!student) return null;
 
@@ -196,6 +199,11 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
               ? <DiscountForm studentId={student.id} current={Number(student.discount ?? 0)} currentReason={student.discount_reason ?? ''}
                   onDone={(msg) => { setDiscounting(false); setDiscounted(msg); }} onCancel={() => setDiscounting(false)} />
               : <button type="button" className="btn-ghost mt-2 w-full" onClick={() => { setDiscounted(null); setDiscounting(true); }}>✎ הנחה</button>)}
+            {priced && <p className="mt-1 text-xs text-ok" role="status">{priced}</p>}
+            {profile?.role === 'owner' && student.id && (pricing
+              ? <TuitionForm studentId={student.id} total={Number(student.tuition_total ?? 0) + Number(student.registration_fee ?? 0)} fee={Number(student.registration_fee ?? 0)}
+                  onDone={(msg) => { setPricing(false); setPriced(msg); }} onCancel={() => setPricing(false)} />
+              : <button type="button" className="btn-ghost mt-2 w-full" onClick={() => { setPriced(null); setPricing(true); }}>✎ שינוי מחיר</button>)}
 
             {adding && student.id ? (
               <div className="mt-3">
@@ -346,6 +354,16 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             </Section>
           )}
 
+          {(tuitionHistory.data ?? []).length > 0 && (
+            <Section title="שינויי מחיר">
+              <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית המחיר">
+                {(tuitionHistory.data ?? []).map((h, i) => (
+                  <li key={i}>{formatDateTime(h.changed_at)} · {h.changed_by}: {formatILS(h.from_total)} ← {formatILS(h.to_total)}{h.reason ? ` · ${h.reason}` : ''}</li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
           {(branchHistory.data ?? []).length > 0 && (
             <Section title="מעברי סניף">
               <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית הסניפים">
@@ -439,6 +457,57 @@ function RenameForm({ id, fullName, onDone, onCancel }: { id: string; fullName: 
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={rename.isPending} onClick={onCancel}>ביטול</button>
       </div>
     </form>
+  );
+}
+
+/**
+ * ★ שינוי מחיר ידני (הבעלים, 0064): הסכום השנתי כולל דמי רישום, וסיבה. המסד מחשב מה ישתנה
+ * (חוב, הוראת קבע, מסלול, קישור פתוח) — ורק אז אפשר לשמור.
+ */
+function TuitionForm({ studentId, total, fee, onDone, onCancel }:
+  { studentId: string; total: number; fee: number; onDone: (msg: string) => void; onCancel: () => void }) {
+  const [raw, setRaw] = useState(String(total));
+  const [reason, setReason] = useState('');
+  const [value, setValue] = useState<number | null>(null);
+  useEffect(() => {
+    const t = window.setTimeout(() => { const n = Number(raw); setValue(raw.trim() !== '' && Number.isFinite(n) && n !== total ? n : null); }, 350);
+    return () => window.clearTimeout(t);
+  }, [raw, total]);
+  const preview = useTuitionPreview(studentId, value);
+  const save = useChangeTuition();
+  const plan = preview.data;
+  const ready = Boolean(plan?.ok) && !preview.isFetching && Number(raw) === value;
+  return (
+    <div className="mt-2 space-y-2 rounded-field border border-rule p-3 text-sm" data-testid="tuition-form">
+      <label className="block text-xs">מחיר שנתי (כולל {formatILS(fee)} דמי רישום)
+        <input className="field mt-0.5" inputMode="numeric" value={raw} onChange={(e) => { save.reset(); setRaw(e.target.value); }} aria-label="מחיר שנתי" />
+      </label>
+      <label className="block text-xs">סיבה (חובה)
+        <input className="field mt-0.5" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="למשל: הועברה לסניף אחר" aria-label="סיבת שינוי המחיר" />
+      </label>
+      {value !== null && preview.isFetching && <p className="text-xs text-soft">מחשבת…</p>}
+      {preview.error != null && <p className="text-xs text-bad" role="alert">{humanError(preview.error)}</p>}
+      {plan && !plan.ok && <p className="text-xs text-bad" role="alert">{plan.error}</p>}
+      {plan?.ok && (
+        <ul className="space-y-0.5 text-xs" data-testid="tuition-plan">
+          {plan.lines.map((l, i) => <li key={i} className={i === 0 ? 'font-medium' : ''}>{l}</li>)}
+        </ul>
+      )}
+      {save.error != null && <p className="text-xs text-bad" role="alert">{humanError(save.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={!ready || !reason.trim() || save.isPending}
+          onClick={() => {
+            if (!plan?.ok || value === null) return;
+            if (!window.confirm(`לשנות את המחיר השנתי ל-${formatILS(value)} במקום ${formatILS(total)}?`)) return;
+            save.mutate({ student: studentId, total: value, reason: reason.trim(), expected: plan.balance_after },
+              { onSuccess: (r) => onDone(`✓ המחיר עודכן: ${formatILS(r.total_after)} במקום ${formatILS(r.total_before)}. נשאר לשלם: ${formatILS(Math.max(r.balance_after, 0))}.`
+                  + (r.links_cancelled ? ' הקישור הפתוח בוטל — אפשר ליצור חדש.' : '')) });
+          }}>
+          {save.isPending ? 'שומרת…' : 'שמירת המחיר'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>ביטול</button>
+      </div>
+    </div>
   );
 }
 

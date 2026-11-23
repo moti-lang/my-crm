@@ -180,6 +180,51 @@ export function useStudentBranchHistory(studentId: string | null) {
   });
 }
 
+/**
+ * שינוי מחיר ידני (הבעלים, 0064): הסכום השנתי כולל דמי רישום. התוכנית מהמסד לפני השמירה.
+ * הוראת קבע פעילה לא משתנה (ההורה אישרה את הסכומים); ההפרש — חוב בגבייה.
+ */
+export type TuitionPlan =
+  | { ok: true; total_before: number; total_after: number; balance_before: number; balance_after: number; links: number; lines: string[] }
+  | { ok: false; error: string };
+
+export function useTuitionPreview(studentId: string | null, total: number | null) {
+  return useQuery({
+    queryKey: ['tuition-preview', studentId, total],
+    enabled: Boolean(studentId) && total !== null && Number.isFinite(total),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_tuition_preview', { p_student: studentId as string, p_total: total as number });
+      if (error) throw new Error(error.message);
+      return data as unknown as TuitionPlan;
+    },
+  });
+}
+
+export function useChangeTuition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { student: string; total: number; reason: string; expected: number }) => {
+      const { data, error } = await supabase.rpc('rpc_change_tuition', { p_student: input.student, p_total: input.total, p_reason: input.reason, p_expected: input.expected });
+      if (error) throw new Error(error.message);
+      return data as unknown as Extract<TuitionPlan, { ok: true }> & { links_cancelled: number };
+    },
+    onSettled: () => qc.invalidateQueries(),
+  });
+}
+
+/** היסטוריית המחיר בכרטיס: מתי, מי, מכמה לכמה, ולמה. */
+export function useStudentTuitionHistory(studentId: string | null) {
+  return useQuery({
+    queryKey: ['student-tuition-history', studentId],
+    enabled: Boolean(studentId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_student_tuition_history', { p_student: studentId as string });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as { changed_at: string; changed_by: string; from_total: number; to_total: number; reason: string | null }[];
+    },
+  });
+}
+
 /** היסטוריית השם בכרטיס: מתי, מי, מאיזה שם לאיזה. */
 export function useStudentNameHistory(studentId: string | null) {
   return useQuery({

@@ -2659,6 +2659,28 @@ export type Database = {
         };
         Returns: unknown[];
       };
+      rpc_tuition_preview: {
+        Args: {
+          p_student: string;
+          p_total: number;
+        };
+        Returns: Json;
+      };
+      rpc_change_tuition: {
+        Args: {
+          p_student: string;
+          p_total: number;
+          p_reason: string;
+          p_expected: number;
+        };
+        Returns: Json;
+      };
+      rpc_student_tuition_history: {
+        Args: {
+          p_student: string;
+        };
+        Returns: unknown[];
+      };
       rpc_transfer_student: {
         Args: {
           p_student: string;
