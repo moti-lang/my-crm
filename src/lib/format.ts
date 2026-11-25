@@ -36,13 +36,8 @@ export function formatPhone(phone: string | null | undefined): string {
   return local.length === 10 ? `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}` : local;
 }
 
-/** כל טלפון נשמר מנורמל: 972XXXXXXXXX, בלי + ובלי מקפים. */
-export function normalizePhone(input: string): string {
-  const d = input.replace(/\D/g, '');
-  if (d.startsWith('972')) return d;
-  if (d.startsWith('0')) return `972${d.slice(1)}`;
-  return d;
-}
+/** כל טלפון נשמר מנורמל: 972XXXXXXXXX. ★ המקור היחיד — אותה פונקציה שרצה בשרת (ובמסד: f_normalize_phone). */
+export { normalizePhone } from '../../supabase/functions/_shared/phone.ts';
 
 export function formatPercent(value: number): string {
   return `${Math.round(value)}%`;

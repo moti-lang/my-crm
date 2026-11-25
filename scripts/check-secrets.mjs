@@ -98,7 +98,7 @@ if (process.argv.includes('--dist')) {
           }
         } catch { /* לא JWT */ }
       }
-      for (const marker of ['SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ACCESS_TOKEN', 'WA_API_KEY', 'WA_WEBHOOK_SECRET']) {
+      for (const marker of ['SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ACCESS_TOKEN', 'WA_PASS', 'WA_USER', 'WA_WEBHOOK_SECRET']) {
         if (src.includes(marker)) { fail(`★ ${f} מזכיר ${marker}`); found++; }
       }
     }

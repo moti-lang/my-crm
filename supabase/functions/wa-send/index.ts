@@ -1,17 +1,16 @@
 // wa-send — שער היציאה היחיד לוואטסאפ.
 // כל שליחה במערכת עוברת כאן: בריאות החיבור, שעות שקטות, ניסיונות חוזרים,
-// ורישום ב-wa_messages. עם WA_DRY_RUN=true (ברירת המחדל) הכל רץ ושום
-// הודעה לא יוצאת.
+// קצב (rpc_wa_reserve_send), ורישום ב-wa_messages. עם WA_DRY_RUN=true (ברירת המחדל) הכל רץ ושום
+// הודעה לא יוצאת — חוץ ממספר הבדיקה (WA_TEST_PHONE), אם הוגדר. ראו _shared/wa.ts.
 //
 // כלל שאין ממנו חריגה: אין כשל שקט. כל מסלול מסתיים ברישום מפורש —
 // sent, failed עם השגיאה, או deferred עם הזמן החדש.
 import { adminClient } from '../_shared/supabase.ts';
 import { requireCronSecret } from '../_shared/guard.ts';
-import { whatsappProvider } from '../_shared/wa.ts';
+import { whatsappProvider, realSendAllowed } from '../_shared/wa.ts';
 import { normalizePhone, isValidIsraeliMobile } from '../_shared/phone.ts';
 import { isBlocked, nextAllowedTime } from '../_shared/quiet-hours.ts';
 import { readWaHealth, maySend } from '../_shared/health.ts';
-import { WA_DRY_RUN } from '../_shared/env.ts';
 
 type Body = { to?: string; body?: string; reminder_id?: string; idempotency_key?: string };
 
@@ -83,9 +82,20 @@ Deno.serve(async (req) => {
       return json({ sent: false, deferred: true, scheduled_at: next.toISOString() });
     }
 
-    // ─── 3. שליחה, עד שלושה ניסיונות ───
-    // מפתח הייחודיות שה-Hub מכיר: ניסיון חוזר לא שולח פעמיים.
-    // לתזכורת — מזהה התזכורת. אחרת — טביעת אצבע של היעד, הטקסט והדקה.
+    // ─── 3. קצב: שליחה אמיתית רק עם "מקום" מהמסד (מרווח ותקרה לדקה, מההגדרות) ───
+    //   אין מקום → מוחזקת (התזכורת נשארת בתור), ו-cron-reminders ימתין ויחזור.
+    const real = realSendAllowed(to);
+    if (real) {
+      const { data: slot, error: slotErr } = await db.rpc('rpc_wa_reserve_send');
+      if (slotErr) throw new Error(slotErr.message);
+      const sl = slot as { ok: boolean; wait_seconds?: number; reason?: string };
+      if (!sl?.ok) {
+        return json({ sent: false, held: true, reason: 'pacing', limit: sl?.reason ?? null, retry_after_seconds: sl?.wait_seconds ?? 10 });
+      }
+    }
+
+    // ─── 4. שליחה, עד שלושה ניסיונות — רק כש-GOWA לא קיבלה את הבקשה (שער / עומס) ───
+    // ★ ל-GOWA אין מפתח ייחודיות: תשובה שלא חזרה (uncertain) לא נשלחת שוב — אולי כבר יצאה.
     const idempotencyKey = input.idempotency_key
       ?? (input.reminder_id ? `reminder-${input.reminder_id}` : await fingerprint(to, body));
 
@@ -114,16 +124,24 @@ Deno.serve(async (req) => {
       }
 
       lastError = result.error;
+      // ★ לא מוגדר: לא נשלח ולא נכשל — נשאר בתור עד שיוגדר.
+      if (result.notConfigured) {
+        return json({ sent: false, held: true, reason: 'not_configured', error: result.error }, 503);
+      }
+      if (result.uncertain) {
+        lastError = `${result.error} — לבדוק בטלפון לפני ששולחים שוב`;
+        break;
+      }
       if (!result.retryable) break;                 // 4xx — אין טעם לנסות שוב
       const wait = RETRY_BACKOFF_MS[attempt - 1];
       if (wait !== undefined) await new Promise((r) => setTimeout(r, wait));
     }
 
-    // ─── 4. כשל מפורש ───
+    // ─── 5. כשל מפורש ───
     await db.from('wa_messages').insert({
       direction: 'out', phone: to, body, status: 'failed',
       reminder_id: input.reminder_id ?? null,
-      meta: { error: lastError, dry_run: WA_DRY_RUN },
+      meta: { error: lastError, dry_run: !real },
     });
     if (input.reminder_id) {
       await db.from('reminders').update({ status: 'failed', error: lastError }).eq('id', input.reminder_id);

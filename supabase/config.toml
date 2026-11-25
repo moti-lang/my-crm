@@ -39,7 +39,7 @@ secret = "env(GOOGLE_CLIENT_SECRET)"
 verify_jwt = false             # נקראת מ-cron, לא מהדפדפן
 
 [functions.wa-webhook]
-verify_jwt = false             # מאומתת בחתימת HMAC של ה-Hub, לא ב-JWT
+verify_jwt = false             # GOWA לא שולחת JWT. מאומתת בחתימת HMAC (X-Hub-Signature-256) לפני כל גישה למסד
 
 [functions.cron-wa-health]
 verify_jwt = false             # נקראת מ-pg_cron
@@ -96,9 +96,6 @@ verify_jwt = true           # הבעלים מהמסך; ההרשאה נבדקת �
 
 [functions.standing-order-retry]
 verify_jwt = true           # הבעלים מהמסך; ההרשאה נבדקת במסד (rpc_standing_retry_preview)
-
-[functions.wa-provision]
-verify_jwt = false          # שרת הוואטסאפ החדש, בלי JWT. טוקן הקמה חד-פעמי + אימות שהשרת עונה במפתח
 
 [functions.wa-admin]
 verify_jwt = true           # מסך ההגדרות; בעלים בלבד (auth_role במסד)

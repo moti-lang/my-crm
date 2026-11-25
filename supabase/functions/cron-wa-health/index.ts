@@ -1,8 +1,9 @@
 // cron-wa-health — בדיקת בריאות כל 10 דקות.
 //
-// למה גם cron וגם webhook: connection.changed מודיע מיד כשוואטסאפ מתנתק,
+// למה גם cron וגם webhook: GOWA מודיעה מיד כשהמכשיר מתנתק (device.logged_out),
 // אבל כשהשרת עצמו מת — נפילת מכונה, קריסת תהליך, ניתוק רשת — שום webhook
 // לא יגיע. שקט אינו סימן לבריאות. ה-cron הוא מי שמבדיל בין השניים.
+// ★ "לא מוגדר" (אין סודות עדיין) אינו תקלה: נרשם, בלי התראה.
 import { adminClient } from '../_shared/supabase.ts';
 import { requireCronSecret } from '../_shared/guard.ts';
 import { whatsappProvider } from '../_shared/wa.ts';
@@ -25,6 +26,11 @@ Deno.serve(async (req) => {
     const previous = await readWaHealth(db);
     const result = await whatsappProvider().checkHealth();
     const now = new Date().toISOString();
+
+    if (!result.ok && result.state === 'not_configured') {
+      await writeWaHealth(db, { status: 'unknown', checked_at: now, last_ok_at: previous.last_ok_at, consecutive_failures: 0, error: result.error });
+      return json({ ok: false, state: result.state });
+    }
 
     if (result.ok) {
       await writeWaHealth(db, {

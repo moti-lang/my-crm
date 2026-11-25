@@ -10,7 +10,7 @@
 | `SUPABASE_DB_URL` | Settings ← Database ← Connection string ← URI |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | Google Cloud ← APIs & Services ← Credentials ← OAuth client (Web). Redirect URI: `https://<ref>.supabase.co/auth/v1/callback` |
 | `NETLIFY_AUTH_TOKEN` · `NETLIFY_SITE_ID` | אופציונלי. בלעדיהם `dist/` נגרר ידנית. `NETLIFY_SITE_ID` הוא המזהה (UUID), לא השם |
-| `WA_SERVER_URL` · `WA_API_KEY` | שרת ה-whatsapp-hub |
+| `WA_TEST_PHONE` | מספר הבדיקה לסקריפט `verify-whatsapp.mjs --send`. סודות GOWA עצמם (`WA_BASE_URL`, `WA_DEVICE_ID`, `WA_USER`, `WA_PASS`, `WA_WEBHOOK_SECRET`) — הבעלים מכניס ישירות לסודות של ה-Edge Functions, לא כאן |
 | `ANTHROPIC_API_KEY` | console.anthropic.com |
 
 ```bash

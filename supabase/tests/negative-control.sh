@@ -240,7 +240,7 @@ expect_fail_code "פלט פגום של המודל מגיע להורה" \
   "node supabase/tests/customer-agent.test.mjs"
 
 expect_fail_code "wa-webhook מפסיק לנתב לקוחות לסוכן" \
-  "$DIR/../../supabase/functions/wa-webhook/index.ts" \
+  "$DIR/../../supabase/functions/_shared/wa-webhook-core.ts" \
   'sed -i "s/? await answerCustomer(db, { alert: (a) => alertOwner(db, a) }, { phone, body: message.body })/? decision/" "$F"' \
   "node supabase/tests/customer-agent.test.mjs"
 
@@ -426,17 +426,17 @@ expect_fail_code "הרשמה: מבנה תשלום של סניף לא תקין ע
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: התקנון לא חובה" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if v_terms is distinct from true then return/  if false then return/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת הקצב מוסרת" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הסכום נלקח מהבקשה (הזרקה)" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/          coalesce((v_plan ->> .tuition.)::numeric, 0), coalesce((v_plan ->> .registration_fee.)/          coalesce((p ->> \x27tuition_total\x27)::numeric, (v_plan ->> \x27tuition\x27)::numeric, 0), coalesce((v_plan ->> \x27registration_fee\x27)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -466,7 +466,7 @@ expect_fail_code "הרשמה: rpc_enroll נפתחת שוב ל-anon (עוקפים
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת ה-IP מוסרת" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if v_n_phone >= 3 then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -645,7 +645,7 @@ expect_fail_code "שינוי מנוע התבניות בצד אחד בלבד" \
 # ★ הבקרה של הממצא: ניתוק החיבור בין ההחלטה לשליחה.
 #    זה בדיוק המצב שהיה בייצור — ההחלטה חושבה ואיש לא שלח אותה.
 expect_fail_code "ניתוק המסירה מ-wa-webhook" \
-  "$DIR/../functions/wa-webhook/index.ts" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
   'sed -i "s|  const delivery = await deliverReply(|  const delivery = { delivered: false, reason: \"no_reply\" }; const _unused = (|" "$F"' \
   "node supabase/tests/reply-delivery.test.mjs"
 
@@ -746,7 +746,7 @@ expect_fail_code "מסלולים: הוראות קבע מוצגות להורים 
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "מזומן: נוצר קישור תשלום" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if b.collect_payments and v_track ->> .method. <> .cash. then/  if b.collect_payments then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -756,12 +756,12 @@ expect_fail_code "וואטסאפ: תזכורות יוצאות גם למי שענ
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "צילום: התשובה לא נכתבת לשדה שחוסם הפקות" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/          coalesce(v_photo, false), case when v_photo is not null then b.photo_consent_text end,/          true, case when v_photo is not null then b.photo_consent_text end,/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "שאלה מוסתרת: התשובה נלקחת מהבקשה בכל זאת" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if (v_opts ->> .ask_whatsapp.)::boolean then/  v_wa := (p ->> \x27whatsapp\x27) = \x27yes\x27;\n  if (v_opts ->> \x27ask_whatsapp\x27)::boolean then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -801,7 +801,7 @@ expect_fail_code "מחיקת שאלה ללא מענה בלי אישור" \
   "node supabase/tests/question-delete.test.mjs"
 
 expect_fail_code "הודעת ההרשמה חוזרת ל\"תודה שנרשמת לחוג\"" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/coalesce(. ל. || v_program, ..)/coalesce(\x27 ל\x27 || v_program, \x27 לחוג\x27)/g" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -895,33 +895,8 @@ expect_fail_code "★ דף התשלום — RPC שגוי (ההורה לא רוא
   'sed -i "s/rpc(.rpc_payment_link_public.,/rpc(\x27rpc_payment_link_publicx\x27 as never,/" "$F"' \
   "node supabase/tests/ui-public.test.mjs"
 
-expect_fail_code "★ טוקן הקמה לא נמחק אחרי שימוש (אפשר לדרוס את כתובת השרת)" \
-  "$DIR/../migrations/0034_wa_provision.sql" \
-  'sed -i "s/provisioned_at = now(), provision_token_hash = null, provision_expires_at = null/provisioned_at = now()/" "$F"' \
-  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/21_wa_provision.sql"
-
-expect_fail_code "★ טוקן הקמה לא נבדק" \
-  "$DIR/../migrations/0034_wa_provision.sql" \
-  'sed -i "s/     or c.provision_token_hash <> encode(extensions.digest(coalesce(p_token, ..), .sha256.), .hex.) then/     then/" "$F"' \
-  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/21_wa_provision.sql"
-
-expect_fail_code "★ הנפקת טוקן לפי current_user (כל משתמשת עוברת — הבאג שנתפס)" \
-  "$DIR/../migrations/0034_wa_provision.sql" \
-  'sed -i "s/  if nullif(current_setting(.request.jwt.claims., true), ..) is not null and auth_role() is distinct from .owner. then/  if coalesce(auth_role()::text, \x27\x27) <> \x27owner\x27 and current_user not in (\x27postgres\x27, \x27service_role\x27) then/" "$F"' \
-  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/21_wa_provision.sql"
-
-expect_fail_code "★ wa-admin בלי בדיקת בעלים (QR לכל מחוברת)" \
-  "$DIR/../functions/wa-admin/index.ts" \
-  'sed -i "/  if (role !== .owner.) return json(/d" "$F"' \
-  "node supabase/tests/wa-provision.test.mjs"
-
-expect_fail_code "wa-provision שומר בלי לוודא שהשרת עונה" \
-  "$DIR/../functions/wa-provision/index.ts" \
-  'sed -i "/השרת לא אישר את המפתח/d" "$F"' \
-  "node supabase/tests/wa-provision.test.mjs"
-
 expect_fail_code "★ הבוט כבוי — והודעות נכנסות עדיין מעובדות" \
-  "$DIR/../functions/wa-webhook/index.ts" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
   'sed -i "/if (paused?.value === true) return json/d" "$F"' \
   "node supabase/tests/wa-bot-switch.test.mjs"
 
@@ -1287,7 +1262,7 @@ expect_fail_code "★ מספר החיובים שנותרו ב-SUMIT לא נבד�
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
 expect_fail_code "★ הרשמה: יום חיוב 29 (או זבל) מתקבל" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/    if v_day !~ .\^\[0-9\]{1,2}\$. or v_day::int not between 1 and 28 then/    if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
@@ -1806,10 +1781,6 @@ expect_fail "פונקציה חדשה פתוחה ל-anon (מעבר לשש של ה
   "create function public.hole_count() returns bigint language sql security definer set search_path = public as 'select count(*) from students'; grant execute on function public.hole_count() to anon" \
   "34_security_hardening.sql"
 
-expect_fail "wa_config בלי ה-policy המגבילה" \
-  "drop policy wa_config_server_only on wa_config" \
-  "34_security_hardening.sql"
-
 expect_fail_code "★ CSP: סקריפטים inline מותרים" \
   "$DIR/../../netlify.toml" \
   "sed -i \"s/script-src 'self';/script-src 'self' 'unsafe-inline';/\" \"\$F\"" \
@@ -2081,6 +2052,112 @@ expect_fail_code "★ המסך: גם מנהלת סניף רואה \"שינוי �
   "$DIR/../../src/components/StudentDrawer.tsx" \
   'sed -i "s/            {profile?.role === .owner. \&\& student.id \&\& (pricing/            {(profile?.role === \x27owner\x27 || profile?.role === \x27branch_manager\x27) \&\& student.id \&\& (pricing/" "$F"' \
   "node supabase/tests/student-tuition-ui.test.mjs"
+
+# ─── וואטסאפ על GOWA (0065) ───
+expect_fail_code "★ webhook: לקוח המסד נוצר לפני בדיקת החתימה" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
+  'sed -i "s|  // ─── 1. אימות. לפני כל נגיעה במסד. ───|  deps.db(); // ─── 1. אימות. לפני כל נגיעה במסד. ───|" "$F"' \
+  "node supabase/tests/wa-webhook.test.mjs"
+
+expect_fail_code "★ webhook: בלי בדיקת חתימה (verify_jwt=false — פתוח לעולם)" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
+  'sed -i "s|  if (!(await verifyWebhookSignature(rawBody, req.headers.get(.x-hub-signature-256.)))) {|  if (false) {|" "$F"' \
+  "node supabase/tests/wa-webhook.test.mjs"
+
+expect_fail_code "webhook: קורא את כותרת החתימה הישנה (x-hub-signature)" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
+  'sed -i "s|req.headers.get(.x-hub-signature-256.)|req.headers.get(\x27x-hub-signature\x27)|" "$F"' \
+  "node supabase/tests/wa-webhook.test.mjs"
+
+expect_fail_code "★ webhook: הודעה בלי מזהה מעובדת (אין מניעת כפילויות)" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "/  if (!id) return { kind: .unparsable., reason: .no_id. };/d" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "webhook: הודעה שלי מעובדת (הבוט עונה לעצמו)" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "/  if (p.is_from_me === true) return { kind: .ignore., reason: .from_me. };/d" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ מצב בדיקה: הודעה אמיתית לכל מספר, לא רק למספר הבדיקה" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "s|  if (test) return normalizePhone(to) === test;|  if (test) return true;|" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ הרצה יבשה לא נאכפת (שליחה אמיתית להורים)" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "s|    if (!realSendAllowed(to)) {|    if (false) {|" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ הסיסמה נשלחת בכתובת http" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "s/  if (u.protocol !== .https:. || u.username || u.password) return null;/  if (u.username || u.password) return null;/" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ QR: התמונה נשלפת מהמארח ש-GOWA החזירה (הסיסמה יוצאת למארח אחר)" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "s|const img = await fetch(.*path\.slice(at)}.,|const img = await fetch(String(r.body.results?.qr_link),|" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ wa-admin: בלי בדיקת בעלים (QR וניתוק לכל מחוברת)" \
+  "$DIR/../functions/wa-admin/index.ts" \
+  'sed -i "/  if (role !== .owner.) return json(/d" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ קצב: בלי מרווח מינימלי במסד" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/  if v_last is not null and now() < v_last + make_interval(secs => v_gap) then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/42_whatsapp_gowa.sql"
+
+expect_fail_code "★ קצב: בלי תקרה לדקה במסד" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/  if coalesce(array_length(v_recent, 1), 0) >= v_cap then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/42_whatsapp_gowa.sql"
+
+expect_fail_code "קצב: ערך 0 בהגדרות (תקרה) לא נחתך" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/else 4 end, 1), 60) as cap,/else 4 end, 0), 60) as cap,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/42_whatsapp_gowa.sql"
+
+expect_fail_code "★ קצב: התור בלי מרווח אקראי בין הודעות" \
+  "$DIR/../functions/_shared/send-queue.ts" \
+  'sed -i "/      await deps.sleep(gap);/d" "$F"' \
+  "node supabase/tests/send-queue.test.mjs"
+
+expect_fail_code "קצב: התור לא ממתין כשהמסד אומר \"לחכות\"" \
+  "$DIR/../functions/_shared/send-queue.ts" \
+  'sed -i "/      await deps.sleep(wait);/d" "$F"' \
+  "node supabase/tests/send-queue.test.mjs"
+
+expect_fail_code "★ wa-send: שליחה אמיתית בלי \"מקום\" מהמסד" \
+  "$DIR/../functions/wa-send/index.ts" \
+  'sed -i "s/    if (real) {/    if (false) {/" "$F"' \
+  "node supabase/tests/send-queue.test.mjs"
+
+expect_fail_code "★ wa-send: \"לא ברור אם נשלחה\" — נשלחת שוב (כפילות)" \
+  "$DIR/../functions/wa-send/index.ts" \
+  'sed -i "s/      if (result.uncertain) {/      if (false) {/" "$F"' \
+  "node supabase/tests/send-queue.test.mjs"
+
+expect_fail_code "★ טלפון: ‎+972-052… לא מנורמל בשרת" \
+  "$DIR/../functions/_shared/phone.ts" \
+  'sed -i "/  if (d.startsWith(.9720.)) d = /d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && node supabase/tests/phone-normalize.test.mjs"
+
+expect_fail_code "★ טלפון: 00972… לא מנורמל במסד" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/case when d0 like .00%. then substr(d0, 3) else d0 end/d0/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && node supabase/tests/phone-normalize.test.mjs"
+
+expect_fail_code "★ טלפון: ההרשמה חוזרת לנרמול משלה" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/  v_phone := f_normalize_phone(v_phone);.*/  if v_phone ~ \x27^0[0-9]{9}$\x27 then v_phone := \x27972\x27 || substr(v_phone, 2); end if;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && node supabase/tests/phone-normalize.test.mjs"
+
+expect_fail_code "★ המסך: \"לא מוגדר\" מוצג כשגיאה" \
+  "$DIR/../../src/components/WaConnect.tsx" \
+  'sed -i "s/  if (s \&\& !s.configured) {/  if (false) {/" "$F"' \
+  "node supabase/tests/wa-connect-ui.test.mjs"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash

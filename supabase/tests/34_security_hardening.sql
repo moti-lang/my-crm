@@ -125,11 +125,10 @@ select assert_true(to_regprocedure('public.t_seed_student_count()') is null
                    or not has_function_privilege('anon', 'public.t_seed_student_count()', 'execute'),
                    'פונקציית הבדיקה שנשארה בענן — לא פתוחה ל-anon');
 
-\echo 'wa_config — שרת בלבד (0057):'
-select assert_true(exists (select 1 from pg_policies where tablename = 'wa_config' and policyname = 'wa_config_server_only' and permissive = 'RESTRICTIVE'),
-                   'policy מגבילה מפורשת על wa_config');
-select assert_no_table_privilege('authenticated', '{wa_config}');
-select assert_no_table_privilege('anon', '{wa_config}');
+\echo 'wa_config — הוסרה עם השרת הישן (0065):'
+select assert_true(to_regclass('public.wa_config') is null, '★ wa_config (עם הסודות של השרת שנמחק) — לא קיימת');
+select assert_true(not exists (select 1 from pg_proc where proname in ('rpc_wa_provision', 'rpc_wa_issue_provision_token', 'rpc_wa_setup_report')),
+                   '★ פונקציות ההקמה של השרת הישן — לא קיימות');
 
 drop function t_sh(text, uuid);
 select drop_assert_helpers();

@@ -4,13 +4,9 @@
  */
 export const NAME_RE = /^[֐-׿A-Za-z'"\-\s]+$/;
 
-export function normalizePhone(raw: string): string {
-  const d = raw.replace(/\D/g, '');
-  return /^0\d{9}$/.test(d) ? `972${d.slice(1)}` : d;
-}
-export function isIsraeliMobile(raw: string): boolean {
-  return /^9725\d{8}$/.test(normalizePhone(raw));
-}
+// ★ הטלפון — המקור היחיד (אותו כלל בשרת ובמסד).
+import { normalizePhone, isValidIsraeliMobile as isIsraeliMobile } from '../../supabase/functions/_shared/phone.ts';
+export { normalizePhone, isIsraeliMobile };
 export function isEmail(v: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
 }

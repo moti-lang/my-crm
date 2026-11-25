@@ -23,7 +23,7 @@ export function replyOf(decision: Deliverable): string | undefined {
 }
 
 export type DeliveryResult =
-  | { delivered: true; reply: string }
+  | { delivered: true; reply: string; dryRun: boolean; providerMsgId: string | null }
   | { delivered: false; reason: 'no_reply' }
   | { delivered: false; reason: 'send_failed'; error: string };
 
@@ -42,7 +42,7 @@ export async function deliverReply(
   if (reply === undefined) return { delivered: false, reason: 'no_reply' };
 
   const sent = await wa.sendText(phone, reply, idempotencyKey);
-  if (sent.ok) return { delivered: true, reply };
+  if (sent.ok) return { delivered: true, reply, dryRun: sent.dryRun, providerMsgId: sent.providerMsgId };
 
   const error = sent.error ?? 'שגיאה לא ידועה';
   // כישלון שליחה אינו נבלע: הבעלים צריכה לדעת שמישהי נשארה בלי תשובה.

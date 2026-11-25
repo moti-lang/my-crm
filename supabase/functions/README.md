@@ -1,67 +1,41 @@
 # Edge Functions
 
-המערכת מדברת עם **whatsapp-hub** — שרת הוואטסאפ העצמאי
-([moti-lang/whatsapp-hub](https://github.com/moti-lang/whatsapp-hub)), לא עם ספק מנוהל.
+וואטסאפ: **GOWA** (go-whatsapp-web-multidevice v9) — קונטיינר נפרד מאחורי Basic Auth. החוזה המלא,
+הסודות, מצב הבדיקה וקצב השליחה: [docs/whatsapp-contract.md](../../docs/whatsapp-contract.md).
+רק `_shared/wa.ts` מדבר עם GOWA.
 
 ## השומר — חובה בכל פונקציה
 
-המשפט הראשון ב-handler של כל פונקציה הוא שומר מ-`_shared/guard.ts`: `requireCronSecret(req)` (cron-* ו-`wa-send`), `requireUserJwt(req)` (`ai-answer`, `ai-command`), או `verifyHubSignature` (`wa-webhook`). `function-guards.test.mjs` בודק את זה, ו-`scripts/functions-deploy-api.mjs` מסרב לפרוס פונקציה בלעדיו. ראה [SECURITY.md](../../SECURITY.md).
+המשפט הראשון ב-handler של כל פונקציה הוא שומר מ-`_shared/guard.ts`: `requireCronSecret(req)` (cron-* ו-`wa-send`), `requireUserJwt(req)` (`ai-answer`, `ai-command`, `wa-admin`), או `handleWaWebhook` (`wa-webhook` — חתימת HMAC של GOWA לפני כל גישה למסד). `function-guards.test.mjs` בודק את זה, ו-`scripts/functions-deploy-api.mjs` מסרב לפרוס פונקציה בלעדיו. ראה [SECURITY.md](../../SECURITY.md).
 
-## החוזה מול השרת
+## וואטסאפ בקצרה
 
-נלקח מהקוד של השרת עצמו, לא מהנחות.
-
-| פעולה | נקודת קצה | גוף | הזדהות |
-|---|---|---|---|
-| שליחה | `POST {WA_SERVER_URL}/api/send` | `{phone, text, source}` | `x-api-key` + `Idempotency-Key` |
-| בריאות | `GET {WA_SERVER_URL}/api/health` | — | `x-api-key` |
-| כניסה | השרת דוחף ל-`wa-webhook` | `{event, timestamp, data}` | `x-hub-signature` (HMAC-SHA256) |
-
-שלוש נקודות שקל לפספס:
-
-* **הפרמטרים הם `phone` ו-`text`**, לא `to` ו-`body`.
-* **`/api/health` מחזיר 503** כשוואטסאפ מנותק — התהליך חי, החיבור לא. שני מצבים שונים.
-* **הכניסה מאומתת בחתימת HMAC**, לא בסוד משותף בכותרת. החתימה היא על **הגוף הגולמי**;
-  אימות מול JSON שעבר פרסור וסריאליזציה מחדש ייכשל. `npm run test:wa` מוודא את זה.
-
-### אירועים שהשרת שולח
-
-`message.received` · `message.sent` · `message.failed` · `connection.changed` ·
-`campaign.finished` · `group.message`
-
-**אין אירוע מסירה או קריאה.** לכן `msg_status` צומצם ל-`queued/sent/failed`
-(מיגרציה 0006) ואין במערכת מצב "נמסר" שאפשר להציג.
+| פונקציה | מה |
+|---|---|
+| `wa-send` | שער היציאה היחיד: בריאות, שעות שקטות, קצב (`rpc_wa_reserve_send`), ניסיונות, רישום |
+| `cron-reminders` | התור — מרווח אקראי בין הודעות (`_shared/send-queue.ts`), זמן סבב מוגבל |
+| `wa-webhook` | הודעות נכנסות מ-GOWA — `X-Hub-Signature-256` נבדקת קודם (`_shared/wa-webhook-core.ts`) |
+| `wa-admin` | מסך ההגדרות (בעלים): מצב, QR (תמונה בלבד), ניתוק |
+| `cron-wa-health` | בדיקת בריאות; "לא מוגדר" אינו תקלה |
 
 ## דגלי הרצה יבשה
 
 | דגל | ברירת מחדל | מה קורה |
 |---|---|---|
-| `WA_DRY_RUN` | `true` | כל הלוגיקה רצה — בריאות, שעות שקטות, ניסיונות, רישום — והשרת לא נקרא |
+| `WA_DRY_RUN` | `true` | כל הלוגיקה רצה — בריאות, שעות שקטות, ניסיונות, רישום — ושום הודעה לא יוצאת (חוץ מ-`WA_TEST_PHONE`, אם הוגדר) |
 | `AI_DRY_RUN` | `true` | פלטים מוקלטים ותקפים מבחינת סכימה — גם לפקודות וגם לסוכן הלקוחות. Claude לא נקרא |
 
-**ברירת המחדל יבשה.** מעבר לחי מחייב `false` מפורש.
+**ברירת המחדל יבשה.** מעבר לחי מחייב `false` מפורש — ובוואטסאפ, רק אחרי אישור מפורש של הבעלים.
 
 ## משתני סביבה
 
+סודות הוואטסאפ (`WA_BASE_URL`, `WA_DEVICE_ID`, `WA_USER`, `WA_PASS`, `WA_WEBHOOK_SECRET`, `WA_TEST_PHONE`)
+— הבעלים מכניס אותם ישירות לסודות של ה-Edge Functions. לא בגיט, לא בפרונט, לא בצ'אט.
+
 ```bash
-supabase secrets set WA_SERVER_URL=https://hub.example.com
-supabase secrets set WA_API_KEY=...              # x-api-key של ה-Hub
-supabase secrets set WA_WEBHOOK_SECRET=...       # מ-POST /api/webhooks בשרת
-supabase secrets set WA_DRY_RUN=false
 supabase secrets set OWNER_ALERT_WEBHOOK=...     # ערוץ חלופי, ראה למטה
 supabase secrets set RESEND_API_KEY=... BACKUP_MAIL_TO=... BACKUP_MAIL_FROM=...   # הגיבוי היומי במייל
 ```
-
-רישום ה-webhook בשרת:
-
-```bash
-curl -X POST "$WA_SERVER_URL/api/webhooks" -H "x-api-key: $WA_API_KEY" \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"teichtal-crm","url":"https://<project>.supabase.co/functions/v1/wa-webhook",
-       "events":["message.received","connection.changed","message.sent","message.failed"]}'
-```
-
-הסוד שחוזר בתשובה הוא `WA_WEBHOOK_SECRET`.
 
 ## SUMIT — `sumit-checkout`, `sumit-webhook`, `cron-sumit-sync`
 
@@ -72,13 +46,13 @@ curl -X POST "$WA_SERVER_URL/api/webhooks" -H "x-api-key: $WA_API_KEY" \
 
 ## מניעת כפילויות — בשני הכיוונים
 
-שרת עצמאי שולח שוב אחרי ריסטארט. כפילות בפקודה כספית = הוצאה שנרשמת פעמיים.
+GOWA שולחת שוב כשלא מקבלת 2xx. כפילות בפקודה כספית = הוצאה שנרשמת פעמיים.
 
 * **כניסה:** `wa_messages.provider_msg_id` עם אינדקס ייחודי. מסירה חוזרת נופלת על
   שגיאה `23505` וה-webhook מסיים בשקט. האכיפה במסד ולא בקוד — קוד מפספס מרוצי תהליכים.
-* **יציאה:** כותרת `Idempotency-Key` שה-Hub מכיר. לתזכורת המפתח הוא `reminder-{id}`,
-  אחרת טביעת אצבע של היעד, הטקסט והדקה. ניסיון חוזר מחזיר את התשובה המקורית
-  במקום לשלוח שוב.
+* **יציאה:** ל-GOWA אין מפתח ייחודיות. לכן ניסיון חוזר רק כש-GOWA לא קיבלה את הבקשה
+  (429 / שער), ושליחה שלא חזרה עליה תשובה מסומנת "לא ברור אם נשלחה" ולא נשלחת שוב.
+  תזכורת נשלחת פעם אחת — הסטטוס שלה במסד הוא המפתח.
 
 ## ניטור החיבור
 

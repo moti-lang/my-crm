@@ -1807,42 +1807,6 @@ export type Database = {
           },
         ];
       };
-      wa_config: {
-        Row: {
-          id: number;
-          server_url: string | null;
-          api_key: string | null;
-          webhook_secret: string | null;
-          provisioned_at: string | null;
-          provision_token_hash: string | null;
-          provision_expires_at: string | null;
-          setup_log: string | null;
-          setup_log_at: string | null;
-        };
-        Insert: {
-          id?: number;
-          server_url?: string | null;
-          api_key?: string | null;
-          webhook_secret?: string | null;
-          provisioned_at?: string | null;
-          provision_token_hash?: string | null;
-          provision_expires_at?: string | null;
-          setup_log?: string | null;
-          setup_log_at?: string | null;
-        };
-        Update: {
-          id?: number;
-          server_url?: string | null;
-          api_key?: string | null;
-          webhook_secret?: string | null;
-          provisioned_at?: string | null;
-          provision_token_hash?: string | null;
-          provision_expires_at?: string | null;
-          setup_log?: string | null;
-          setup_log_at?: string | null;
-        };
-        Relationships: [];
-      };
       wa_messages: {
         Row: {
           id: string;
@@ -2711,28 +2675,6 @@ export type Database = {
           p_content_type: string;
           p_body: string;
           p_candidates: Json;
-        };
-        Returns: Json;
-      };
-      rpc_wa_issue_provision_token: {
-        Args: {
-          p_hours?: number;
-        };
-        Returns: string;
-      };
-      rpc_wa_provision: {
-        Args: {
-          p_token: string;
-          p_url: string;
-          p_api_key: string;
-          p_webhook_secret: string;
-        };
-        Returns: Json;
-      };
-      rpc_wa_setup_report: {
-        Args: {
-          p_token: string;
-          p_log: string;
         };
         Returns: Json;
       };

@@ -1,6 +1,6 @@
 # החוזה מול SUMIT — מה אומת, מה הונח
 
-מתועד כמו `whatsapp-hub`. **אומת** = תשובה אמיתית מארגון הבדיקה "חוגי טייכטל -
+מתועד כמו חוזה הוואטסאפ (`docs/whatsapp-contract.md`). **אומת** = תשובה אמיתית מארגון הבדיקה "חוגי טייכטל -
 בדיקות" (CompanyID 2410781753, מסוף בדיקות), ראיות ב-`docs/sumit-contract.raw.json`
 ובסבב 2026-10-05. **הנחה** = טרם נצפה. הגילוי רץ ב-`scripts/sumit-discover.mjs`
 דרך `supabase/functions/sumit-probe` (CRON_SECRET; נשמר בריפו, **לא פרוס** —
