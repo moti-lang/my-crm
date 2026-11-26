@@ -2159,6 +2159,57 @@ expect_fail_code "★ המסך: \"לא מוגדר\" מוצג כשגיאה" \
   'sed -i "s/  if (s \&\& !s.configured) {/  if (false) {/" "$F"' \
   "node supabase/tests/wa-connect-ui.test.mjs"
 
+# ─── חיבור הוראת קבע מ-SUMIT והערות (0066) ───
+expect_fail_code "★ חיבור מ-SUMIT: לא רק הבעלים" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לחבר הוראת קבע מ-SUMIT. using errcode = .42501.; end if;/  null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "★ חיבור מ-SUMIT: \"חיוב X מתוך N\" זז באחד (המיפוי)" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/coalesce(p_prev, p_next), v_status, p_sumit_status, p_next, p_prev, v_done - 1,/coalesce(p_prev, p_next), v_status, p_sumit_status, p_next, p_prev, v_done,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "★ חיבור מ-SUMIT: חיוב מלפני החיבור נרשם שוב (תשלום כפול)" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/coalesce(p_prev, p_next), v_status, p_sumit_status, p_next, p_prev, v_done - 1,/coalesce(p_prev, p_next), v_status, p_sumit_status, p_next, null, v_done - 1,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "חיבור מ-SUMIT: נותרו יותר מסך התשלומים — מתקבל" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/  if v_left < 1 or v_left > p_total then/  if v_left < 1 then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "חיבור מ-SUMIT: הוראה שבוטלה ב-SUMIT מתחברת" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/  if v_status in (.cancelled., .completed.) then raise exception/  if false then raise exception/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "★ הערות: מנהלת סניף עורכת תלמידה מסניף אחר" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/(v_role = .branch_manager. and s.branch_id in (select my_branches()))/(v_role = \x27branch_manager\x27)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "★ חיבור מ-SUMIT: פנייה ל-SUMIT לפני בדיקת ההרשאה" \
+  "$DIR/../functions/standing-order-link/index.ts" \
+  'sed -i "s/  if (error) return json({ ok: false, error: error.message }, 403);/  void error;/" "$F"' \
+  "node supabase/tests/standing-link.test.mjs"
+
+expect_fail_code "★ חיבור מ-SUMIT: הסכום מהדפדפן (לא מ-SUMIT)" \
+  "$DIR/../functions/standing-order-link/index.ts" \
+  'sed -i "s/p_amount: item.amount,/p_amount: Number((body as { amount?: unknown }).amount ?? item.amount),/" "$F"' \
+  "node supabase/tests/standing-link.test.mjs"
+
+expect_fail_code "חיבור מ-SUMIT: \"נותרו\" בלי החיוב האחרון" \
+  "$DIR/../functions/_shared/standing-link.ts" \
+  'sed -i "s/months(next, last) + 1 : null;/months(next, last) : null;/" "$F"' \
+  "node supabase/tests/standing-link.test.mjs"
+
+expect_fail_code "★ המסך: חיבור מ-SUMIT בלי אישור" \
+  "$DIR/../../src/components/LinkSumitStanding.tsx" \
+  'sed -i "s/                if (!window.confirm(\x60לחבר את/                if (false \&\& !window.confirm(\x60לחבר את/" "$F"' \
+  "node supabase/tests/standing-link-ui.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

@@ -2623,6 +2623,13 @@ export type Database = {
         };
         Returns: unknown[];
       };
+      rpc_student_set_notes: {
+        Args: {
+          p_id: string;
+          p_notes: string;
+        };
+        Returns: Json;
+      };
       rpc_tuition_preview: {
         Args: {
           p_student: string;

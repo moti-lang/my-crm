@@ -225,6 +225,18 @@ export function useStudentTuitionHistory(studentId: string | null) {
   });
 }
 
+/** הערות בכרטיס (הבעלים, ומנהלת סניף לתלמידות הסניף שלה) — rpc_student_set_notes. */
+export function useSetStudentNotes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; notes: string }) => {
+      const { error } = await supabase.rpc('rpc_student_set_notes', { p_id: input.id, p_notes: input.notes });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
 /** היסטוריית השם בכרטיס: מתי, מי, מאיזה שם לאיזה. */
 export function useStudentNameHistory(studentId: string | null) {
   return useQuery({

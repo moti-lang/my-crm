@@ -97,6 +97,9 @@ verify_jwt = true           # הבעלים מהמסך; ההרשאה נבדקת �
 [functions.standing-order-retry]
 verify_jwt = true           # הבעלים מהמסך; ההרשאה נבדקת במסד (rpc_standing_retry_preview)
 
+[functions.standing-order-link]
+verify_jwt = true           # חיבור הוראת קבע מ-SUMIT מהכרטיס; בעלים בלבד (rpc_standing_link_request במסד)
+
 [functions.wa-admin]
 verify_jwt = true           # מסך ההגדרות; בעלים בלבד (auth_role במסד)
 

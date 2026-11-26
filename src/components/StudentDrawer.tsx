@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory, useTransferStudent, useStudentBranchHistory, useTuitionPreview, useChangeTuition, useStudentTuitionHistory,
+import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory, useTransferStudent, useStudentBranchHistory, useTuitionPreview, useChangeTuition, useStudentTuitionHistory, useSetStudentNotes,
   useDiscountPreview, useApplyDiscount, useStudentDiscountHistory, usePaymentVoidHistory, useVoidPayment, STATUS_LABEL, STATUS_TONE,
   type VoidKind } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
 import { StandingOrderPanel } from '@/components/StandingOrderPanel';
+import { LinkSumitStanding } from '@/components/LinkSumitStanding';
 import { useStandingOrders } from '@/hooks/standing';
 import { formatILS, formatDate, formatDateTime, formatPhone } from '@/lib/format';
 import { NAME_RE, awaitsFirstCharge } from '@/lib/enrollment';
@@ -289,10 +290,14 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
 
           {(() => {
             const orders = (standing.data ?? []).filter((o) => o.student_id === student.id);
-            if (orders.length === 0) return null;
+            // ★ אין הוראה חיה — הבעלים יכולה לחבר הוראה שנפתחה ידנית ב-SUMIT (0066).
+            const canLink = profile?.role === 'owner' && Boolean(student.id) && standing.isSuccess
+              && !orders.some((o) => o.status !== 'cancelled' && o.status !== 'completed');
+            if (orders.length === 0 && !canLink) return null;
             return (
               <Section title="הוראת קבע">
                 <div className="space-y-3">{orders.map((o) => <StandingOrderPanel key={o.id} order={o} />)}</div>
+                {canLink && <div className={orders.length ? 'mt-3' : ''}><LinkSumitStanding studentId={student.id as string} name={student.full_name ?? ''} /></div>}
               </Section>
             );
           })()}
@@ -384,9 +389,11 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             </Section>
           )}
 
-          {student.notes && (
+          {(student.notes || ((profile?.role === 'owner' || profile?.role === 'branch_manager') && student.id)) && (
             <Section title="הערות">
-              <p className="whitespace-pre-wrap text-sm">{student.notes}</p>
+              {(profile?.role === 'owner' || profile?.role === 'branch_manager') && student.id
+                ? <NotesEditor id={student.id} notes={student.notes ?? ''} />
+                : <p className="whitespace-pre-wrap text-sm">{student.notes}</p>}
             </Section>
           )}
         </div>
@@ -457,6 +464,35 @@ function RenameForm({ id, fullName, onDone, onCancel }: { id: string; fullName: 
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={rename.isPending} onClick={onCancel}>ביטול</button>
       </div>
     </form>
+  );
+}
+
+/** הערות בכרטיס: מוצגות, ו"עריכה" פותחת שדה. נשמר דרך המסד (rpc_student_set_notes — הרשאה ויומן). */
+function NotesEditor({ id, notes }: { id: string; notes: string }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(notes);
+  const save = useSetStudentNotes();
+  useEffect(() => { setText(notes); setEditing(false); }, [id, notes]);
+  if (!editing) {
+    return (
+      <div className="space-y-1">
+        {notes ? <p className="whitespace-pre-wrap text-sm" data-testid="student-notes">{notes}</p> : <p className="text-xs text-soft">אין הערות.</p>}
+        <button type="button" className="btn-ghost px-2 py-0.5 text-xs" onClick={() => { save.reset(); setEditing(true); }}>✎ עריכת הערות</button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <textarea className="field min-h-24 text-sm" value={text} maxLength={2000} aria-label="הערות לתלמידה" onChange={(e) => setText(e.target.value)} />
+      {save.error != null && <p className="text-xs text-bad" role="alert">{humanError(save.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={save.isPending || text === notes}
+          onClick={() => save.mutate({ id, notes: text }, { onSuccess: () => setEditing(false) })}>
+          {save.isPending ? 'שומרת…' : 'שמירה'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={() => { setText(notes); setEditing(false); }}>ביטול</button>
+      </div>
+    </div>
   );
 }
 

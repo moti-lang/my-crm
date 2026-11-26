@@ -73,7 +73,7 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
 /** שינוי תאריך / סכום: "מ-X ל-Y". חיוב חוזר וחידוש: "על מה · מה קרה". */
 function eventText(e: Parameters<typeof eventChange>[0]): string {
   const [from, to] = eventChange(e, formatDate, formatILS);
-  return ['retry_charge', 'retry_declined', 'renewed', 'retry_refused', 'paid_elsewhere', 'card_link', 'card_replaced'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
+  return ['retry_charge', 'retry_declined', 'renewed', 'retry_refused', 'paid_elsewhere', 'card_link', 'card_replaced', 'linked'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
 }
 
 const DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
