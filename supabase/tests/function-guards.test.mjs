@@ -6,7 +6,8 @@
  * פירושו פונקציה פתוחה לעולם. כל פונקציה חייבת אחד משלושה:
  *   requireCronSecret — פנימיות (cron-*, wa-send)
  *   requireUserJwt    — נקראות מהדפדפן (ai-*)
- *   verifyHubSignature — wa-webhook בלבד
+ *   handleWaWebhook   — wa-webhook בלבד (חתימת HMAC של GOWA, לפני כל גישה למסד —
+ *                       ‏_shared/wa-webhook-core.ts; ההוכחה ההתנהגותית: wa-webhook.test.mjs)
  * והשומר חייב להופיע לפני כל גישה למסד. פונקציה חדשה בלי שומר מפילה את זה,
  * ו-functions-deploy-api.mjs מסרב לפרוס אותה.
  * הרצה:  npm run test:guards
@@ -20,7 +21,7 @@ let fails = 0;
 const check = (label, ok, detail = '') => { if (!ok) fails++; console.log(`  ${ok ? '✓' : '✗'} ${label}${ok || !detail ? '' : `\n      ${detail}`}`); };
 
 export const EXPECTED = {
-  'wa-webhook': 'verifyHubSignature',
+  'wa-webhook': 'handleWaWebhook',
   'ai-answer': 'requireUserJwt', 'ai-command': 'requireUserJwt',
   // SUMIT: סוד משותף בכותרת (webhook), והטוקן של הקישור עצמו (checkout).
   'sumit-webhook': 'requireSharedSecret', 'sumit-checkout': 'requirePayToken',
@@ -33,8 +34,10 @@ export const EXPECTED = {
   'student-discount': 'requireUserJwt',
   // ניסיון חיוב חוזר בהוראת קבע: הבעלים מהמסך; ההרשאה נבדקת במסד.
   'standing-order-retry': 'requireUserJwt',
-  // וואטסאפ: השרת החדש מוסר פרטים עם טוקן הקמה; מסך ההגדרות (בעלים) רואה מצב ו-QR.
-  'wa-provision': 'requireProvisionToken', 'wa-admin': 'requireUserJwt', 'wa-command-test': 'requireUserJwt', 'email-send': 'requireUserJwt', 'email-webhook': 'requireResendSignature',
+  // חיבור הוראת קבע שנפתחה ב-SUMIT: הבעלים מהמסך; ההרשאה נבדקת במסד.
+  'standing-order-link': 'requireUserJwt',
+  // וואטסאפ: מסך ההגדרות (בעלים) רואה מצב ו-QR.
+  'wa-admin': 'requireUserJwt', 'wa-command-test': 'requireUserJwt', 'email-send': 'requireUserJwt', 'email-webhook': 'requireResendSignature',
 };
 const dirs = readdirSync(ROOT).filter((d) => !d.startsWith('_') && statSync(join(ROOT, d)).isDirectory() && readdirSync(join(ROOT, d)).includes('index.ts'));
 check(`יש ${dirs.length} פונקציות`, dirs.length >= 12);
@@ -49,8 +52,13 @@ for (const d of dirs) {
   const hasHandle = /async function handle\(req: Request\)/.test(src);
   const handler = src.slice(src.indexOf(hasHandle ? 'async function handle(' : 'Deno.serve('));
   const body = handler.slice(handler.indexOf('{') + 1).trimStart();
-  const first = want === 'verifyHubSignature'
-    ? /^if \(req\.method[\s\S]{0,400}verifyHubSignature\(/.test(body)
+  // wa-webhook: כל הבקשה עוברת ל-handleWaWebhook, ושם החתימה נבדקת לפני שנוצר לקוח מסד.
+  const core = want === 'handleWaWebhook' ? codeOf(join(ROOT, '_shared/wa-webhook-core.ts')) : '';
+  const hw = core.slice(core.indexOf('export async function handleWaWebhook('));
+  const first = want === 'handleWaWebhook'
+    ? /^Deno\.serve\(\(req\) => handleWaWebhook\(req, \{ db: adminClient, provider: whatsappProvider \}\)\);?\s*$/.test(handler)
+      && hw.indexOf('verifyWebhookSignature(') > 0 && hw.indexOf('verifyWebhookSignature(') < hw.indexOf('deps.db()')
+      && hw.indexOf('verifyWebhookSignature(') < hw.indexOf('JSON.parse(')
     : new RegExp(`^const denied = (await )?${want}\\(req[^)]*\\);\\s*if \\(denied\\) return denied;`).test(body)
       || new RegExp(`^if \\(req\\.method[^\\n]*\\n\\s*const denied = ${want}\\(req\\);\\s*if \\(denied\\) return denied;`).test(body);
   check(`   ${d}: השומר הוא המשפט הראשון ב-handler`, first, body.slice(0, 120).replace(/\n/g, ' '));
@@ -59,13 +67,13 @@ for (const d of dirs) {
 const rem = codeOf(join(ROOT, 'cron-reminders/index.ts'));
 check('★ cron-reminders קורא ל-wa-send עם CRON_SECRET', /requireEnv\('CRON_SECRET'\)/.test(rem) && !/SUPABASE_SERVICE_ROLE_KEY/.test(rem));
 // CORS: כל פונקציה שהדפדפן קורא (verify_jwt=false + נקראת מ-src) עונה ל-OPTIONS.
-for (const d of ['enroll', 'sumit-checkout', 'standing-order-cancel', 'standing-order-reschedule', 'student-discount', 'standing-order-retry', 'ai-answer']) {
+for (const d of ['enroll', 'sumit-checkout', 'standing-order-cancel', 'standing-order-reschedule', 'student-discount', 'standing-order-retry', 'standing-order-link', 'ai-answer']) {
   const src = codeOf(join(ROOT, d, 'index.ts'));
   check(`★ ${d}: עונה ל-preflight (OPTIONS) ומחזירה כותרות CORS — אחרת הדפדפן לא שולח את ה-POST`, /const pre = preflight\(req\);\s*if \(pre\) return pre;/.test(src) && /withCors\(req, await handle\(req\)\)/.test(src));
 }
 const guard = codeOf(join(ROOT, '_shared/guard.ts'));
 check('★ requireUserJwt דורש role=authenticated (מפתח anon נדחה)', /payload\.role !== 'authenticated'/.test(guard));
-check('requireCronSecret משווה ל-CRON_SECRET', /Bearer \$\{requireEnv\('CRON_SECRET'\)\}/.test(guard));
+check('requireCronSecret משווה ל-CRON_SECRET, בזמן קבוע', /timingSafeEqualStr\(auth, `Bearer \$\{requireEnv\('CRON_SECRET'\)\}`\)/.test(guard) && !/auth !== `Bearer/.test(guard));
 const deploy = codeOf('scripts/functions-deploy-api.mjs');
 check('★ הפריסה מסרבת לפונקציה בלי שומר', /slugs\.filter\(\(s\) => !guardOf\(s\)\)/.test(deploy) && /if \(unguarded\.length\) \{[\s\S]*?process\.exit\(1\)/.test(deploy));
 check('★ פריסה כללית לא מעלה את sumit-probe (פרוקסי עם מפתח הארגון)', /DEV_ONLY = \['sumit-probe'\]/.test(deploy) && /wanted\.length \? wanted : all\.filter\(\(s\) => !DEV_ONLY\.includes\(s\)\)/.test(deploy));

@@ -77,7 +77,7 @@ select assert_true((rpc_standing_retry_charged('eeeeeeee-0000-0000-0000-00000000
 select assert_true(t_rt_plan('eeeeeeee-0000-0000-0000-000000000401') ->> 'stage' = 'renew'
                    and (t_rt_plan('eeeeeeee-0000-0000-0000-000000000401') ->> 'next')::date = '2026-12-06'
                    and (t_rt_plan('eeeeeeee-0000-0000-0000-000000000401') ->> 'remaining_after')::int = 6
-                   and t_rt_plan('eeeeeeee-0000-0000-0000-000000000401') -> 'lines' ->> 0 = 'החיוב החוזר כבר עבר ונרשם. נשאר לחדש את ההוראה ב-SUMIT — בלי חיוב נוסף.',
+                   and t_rt_plan('eeeeeeee-0000-0000-0000-000000000401') -> 'lines' ->> 0 = 'החיוב שנכשל כבר שולם ונרשם (בחיוב חוזר, או בנפרד). נשאר לחדש את ההוראה ב-SUMIT — בלי חיוב נוסף.',
                    '★ אחרי החיוב: רק "חידוש" — 6 חיובים מ-06/12, בלי חיוב נוסף');
 -- הסנכרון של ההוראה הישנה כותב תאריך חיוב ישן — החידוש עדיין לא מחייב שוב בנובמבר.
 update standing_orders set last_billing = '2026-10-29' where id = 'eeeeeeee-0000-0000-0000-000000000401';

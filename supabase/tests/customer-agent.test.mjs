@@ -284,7 +284,7 @@ console.log('\nהסכימה:');
 
 // ═══════ 8. מבני ═══════
 console.log('\nמבני:');
-const webhook = codeOf('supabase/functions/wa-webhook/index.ts');
+const webhook = codeOf('supabase/functions/_shared/wa-webhook-core.ts');
 check('★ wa-webhook מנתב את מסלול הלקוחות ל-answerCustomer', /answerCustomer\(/.test(webhook));
 check('★ התשובה נרשמת כהודעה יוצאת (היסטוריית השיחה)', /direction:\s*'out'/.test(webhook));
 const customer = codeOf('supabase/functions/_shared/customer.ts');

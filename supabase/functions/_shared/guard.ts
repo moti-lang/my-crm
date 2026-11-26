@@ -20,15 +20,23 @@ import { verifyResendSignature } from './email-core.ts';
  *     קטן, עם שדות ההרשמה. ההרשאה האמיתית היא הגבלת הקצב במסד.
  *   requireResendSignature — אירועי מסירה של מיילים (Resend): חתימת Svix על הגוף הגולמי,
  *     ונדחה אירוע ישן מ-5 דקות. בלי RESEND_WEBHOOK_SECRET — הכל נדחה.
- * wa-webhook מוגנת בחתימת HMAC של ה-Hub (verifyHubSignature) ואינה כאן.
+ * wa-webhook מוגנת בחתימת HMAC של GOWA (X-Hub-Signature-256, ב-_shared/wa-webhook-core.ts) ואינה כאן.
  */
 const deny = (status: number, error: string) =>
   new Response(JSON.stringify({ error }), { status, headers: { 'content-type': 'application/json' } });
 
 export function requireCronSecret(req: Request): Response | null {
   const auth = req.headers.get('authorization') ?? '';
-  if (auth !== `Bearer ${requireEnv('CRON_SECRET')}`) return deny(401, 'unauthorized');
+  if (!timingSafeEqualStr(auth, `Bearer ${requireEnv('CRON_SECRET')}`)) return deny(401, 'unauthorized');
   return null;
+}
+
+/** השוואה בזמן קבוע (סינכרונית): אורך שונה = שקר מיד (האורך אינו סוד), אחרת XOR על כל התווים. */
+export function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length || a.length === 0) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 export function requireUserJwt(req: Request): Response | null {
@@ -84,13 +92,6 @@ export async function requireEnrollBody(req: Request): Promise<Response | null> 
   if (!body || typeof body !== 'object' || Array.isArray(body)) return deny(400, 'גוף הבקשה אינו אובייקט');
   const keys = Object.keys(body as object);
   if (keys.length > 16 || !ENROLL_FIELDS.every((k) => k in (body as object))) return deny(400, 'חסרים שדות הרשמה');
-  return null;
-}
-
-/** wa-provision: השרת החדש מוסר את פרטיו עם טוקן הקמה חד-פעמי (64 hex) בכותרת. */
-export function requireProvisionToken(req: Request): Response | null {
-  const token = req.headers.get('x-provision-token') ?? '';
-  if (req.method !== 'POST' || !/^[0-9a-f]{64}$/.test(token)) return deny(401, 'unauthorized');
   return null;
 }
 

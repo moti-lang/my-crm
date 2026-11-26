@@ -8,7 +8,7 @@ import { useEnrolledUnpaid } from '@/hooks/enrollment';
 import { useStudentFlags } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
 import { useBranches } from '@/hooks/queries';
-import { formatILS, formatPhone, formatDate, formatPercent } from '@/lib/format';
+import { formatILS, formatPhone, formatDate, formatPercent, safeHttpsUrl } from '@/lib/format';
 import { renderTemplate } from '@/lib/template';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/States';
 import { useBranchPnl } from '@/hooks/queries';
@@ -298,7 +298,7 @@ function Reconciliation({ branchId }: { branchId: string }) {
                 <td className="px-3 py-2">{l.created_at ? formatDate(l.created_at) : ''}<span className="block text-xs text-soft">עד {l.expires_at ? formatDate(l.expires_at) : ''}</span></td>
                 <td className="px-3 py-2 tabular-nums">{formatILS(l.link_amount)}</td>
                 <td className="px-3 py-2 tabular-nums">{l.sumit_amount != null ? formatILS(l.sumit_amount) : '—'}
-                  {l.sumit_document_id ? <span className="block text-xs text-soft">{l.sumit_document_url ? <a className="underline" href={l.sumit_document_url} target="_blank" rel="noreferrer">קבלה {l.sumit_document_id}</a> : `קבלה ${l.sumit_document_id}`}{l.match_method === 'heuristic' ? ' · הותאם לפי שם וסכום' : ''}</span> : null}</td>
+                  {l.sumit_document_id ? <span className="block text-xs text-soft">{safeHttpsUrl(l.sumit_document_url) ? <a className="underline" href={safeHttpsUrl(l.sumit_document_url)!} target="_blank" rel="noreferrer">קבלה {l.sumit_document_id}</a> : `קבלה ${l.sumit_document_id}`}{l.match_method === 'heuristic' ? ' · הותאם לפי שם וסכום' : ''}</span> : null}</td>
                 <td className="px-3 py-2 tabular-nums">{l.recorded_amount != null ? formatILS(l.recorded_amount) : '—'}</td>
                 <td className="px-3 py-2">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${l.issue ? 'bg-bad text-white' : ['paid'].includes(l.status ?? '') ? 'bg-ok/15 text-ok' : 'bg-shade text-soft'}`}>

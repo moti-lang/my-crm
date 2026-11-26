@@ -4,13 +4,9 @@
  */
 export const NAME_RE = /^[֐-׿A-Za-z'"\-\s]+$/;
 
-export function normalizePhone(raw: string): string {
-  const d = raw.replace(/\D/g, '');
-  return /^0\d{9}$/.test(d) ? `972${d.slice(1)}` : d;
-}
-export function isIsraeliMobile(raw: string): boolean {
-  return /^9725\d{8}$/.test(normalizePhone(raw));
-}
+// ★ הטלפון — המקור היחיד (אותו כלל בשרת ובמסד).
+import { normalizePhone, isValidIsraeliMobile as isIsraeliMobile } from '../../supabase/functions/_shared/phone.ts';
+export { normalizePhone, isIsraeliMobile };
 export function isEmail(v: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
 }
@@ -125,9 +121,14 @@ export function checkPlan(p: PlanInput): { ok: boolean; message: string; tracks:
  * ממתינה לחיוב הראשון בכרטיס — כמו f_enrollment_unpaid במסד: "ממתינה", מסלול שאינו מזומן ואינו
  * תשלום חיצוני. לה שולחים "קישור הרשמה חדש" (ולא קישור תשלום רגיל, שלא משלים את ההרשמה ולא יוצר
  * הוראת קבע). המסד הוא שקובע; כאן רק איזה כפתור להציג.
+ * ★ מ-0058 גם "פעילה" במסלול הוראת קבע שלא שולם עליה כלום ואין לה הוראת קבע — למשל תלמידה שנוספה
+ *   ידנית כפעילה (אושרת ראובן, 15/11: נשלח לה קישור רגיל על כל 1,800 ₪ במקום הוראת קבע).
  */
-export function awaitsFirstCharge(status: string | null | undefined, method: string | null | undefined, external: boolean | null | undefined): boolean {
-  return status === 'pending' && !external && Boolean(method) && method !== 'cash';
+export function awaitsFirstCharge(status: string | null | undefined, method: string | null | undefined, external: boolean | null | undefined,
+                                  active?: { paid: number; hasStandingOrder: boolean }): boolean {
+  if (external || !method || method === 'cash') return false;
+  if (status === 'pending') return true;
+  return status === 'active' && method === 'standing_order' && active !== undefined && active.paid <= 0 && !active.hasStandingOrder;
 }
 
 /** סכום לקישור תשלום חלקי: מספר, לפחות 1 ₪, לא יותר מהחוב. כמו ב-rpc_create_payment_link. */

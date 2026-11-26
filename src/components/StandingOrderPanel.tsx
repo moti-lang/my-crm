@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 import {
-  EVENT_LABEL, STANDING_LABEL, STANDING_TONE, RescheduleChanged, RetryChanged, eventChange, useCancelStanding, useReschedulePreview, useRescheduleStanding,
-  useRetryPreview, useRetryStanding, useStandingEvents, type StandingOrder,
+  EVENT_LABEL, STANDING_LABEL, STANDING_TONE, RescheduleChanged, RetryChanged, eventChange, lastRetryText, useCancelStanding, usePaidElsewhere, useReschedulePreview, useRescheduleStanding,
+  useRetryPreview, useRetryStanding, useStandingCardLink, useStandingEvents, type StandingOrder,
 } from '@/hooks/standing';
 import { formatDate, formatDateTime, formatILS } from '@/lib/format';
 import { humanError } from '@/lib/errors';
+import { LinkResult } from '@/components/LinkResult';
 
 /** הוראת קבע של תלמידה: חיוב X מתוך N, הבא מתי, שינוי יום חיוב, ניסיון חיוב חוזר ועצירה לבעלים, והיומן שלה. */
 export function StandingOrderPanel({ order }: { order: StandingOrder }) {
@@ -16,6 +17,7 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
   const [retrying, setRetrying] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [retried, setRetried] = useState<string | null>(null);
+  const [paidElsewhere, setPaidElsewhere] = useState(false);
   const live = order.status && !['cancelled', 'completed'].includes(order.status);
   const owner = profile?.role === 'owner';
   return (
@@ -29,6 +31,10 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
         {live && order.billing_day ? ` · כל ${order.billing_day} לחודש` : ''}
       </p>
       {order.last_error && <p className="text-xs text-bad">{order.last_error}</p>}
+      {(() => {
+        const last = lastRetryText(events.data ?? [], formatDateTime, formatILS);
+        return last && <p className={`text-xs ${last.tone === 'ok' ? 'text-ok' : last.tone === 'bad' ? 'text-bad' : 'text-warn'}`} data-testid="last-retry">{last.text}</p>;
+      })()}
       {saved && <p className="text-xs text-ok" role="status">✓ נשמר ב-SUMIT: {saved}</p>}
       {cancel.error != null && <p className="text-xs text-bad" role="alert">{humanError(cancel.error)}</p>}
       {owner && order.status === 'active' && order.id && (rescheduling
@@ -37,7 +43,13 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
       {retried && <p className="text-xs text-ok" role="status">{retried}</p>}
       {owner && order.status === 'failed' && order.id && (retrying
         ? <RetryForm order={order} onDone={(msg) => { setRetried(msg); setRetrying(false); }} onCancel={() => setRetrying(false)} />
-        : <button type="button" className="btn-ghost mt-1 px-3 py-1 text-xs" onClick={() => { setRetried(null); setRetrying(true); }}>ניסיון חיוב חוזר</button>)}
+        : paidElsewhere
+          ? <PaidElsewhereForm order={order} onDone={(msg) => { setRetried(msg); setPaidElsewhere(false); setRetrying(true); }} onCancel={() => setPaidElsewhere(false)} />
+          : <span className="mt-1 flex flex-wrap gap-2">
+              <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => { setRetried(null); setRetrying(true); }}>ניסיון חיוב חוזר</button>
+              <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => { setRetried(null); setPaidElsewhere(true); }}>החיוב שולם בנפרד</button>
+              <CardLinkButton order={order} />
+            </span>)}
       {owner && live && order.id && !rescheduling && !retrying && (
         <button type="button" className="btn-ghost mt-1 px-3 py-1 text-xs text-bad" disabled={cancel.isPending}
           onClick={() => {
@@ -61,7 +73,7 @@ export function StandingOrderPanel({ order }: { order: StandingOrder }) {
 /** שינוי תאריך / סכום: "מ-X ל-Y". חיוב חוזר וחידוש: "על מה · מה קרה". */
 function eventText(e: Parameters<typeof eventChange>[0]): string {
   const [from, to] = eventChange(e, formatDate, formatILS);
-  return ['retry_charge', 'retry_declined', 'renewed'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
+  return ['retry_charge', 'retry_declined', 'renewed', 'retry_refused', 'paid_elsewhere', 'card_link', 'card_replaced', 'linked'].includes(e.kind ?? '') ? `${from} · ${to}` : `מ-${from} ל-${to}`;
 }
 
 const DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
@@ -142,6 +154,7 @@ function RetryForm({ order, onDone, onCancel }: { order: StandingOrder; onDone: 
               onSuccess: (r) => onDone([
                 r.charged > 0 ? `✓ החיוב עבר (${formatILS(r.charged)}).` : '',
                 r.renewed ? `ההוראה חודשה ב-SUMIT: ${r.remaining} חיובים מ-${formatDate(r.next)}.` : r.completed ? 'זה היה החיוב האחרון — ההוראה הסתיימה.' : '',
+                r.renewed ? (r.old_cancelled ? 'ההוראה הישנה (החסומה) בוטלה ב-SUMIT.' : 'את ההוראה הישנה (החסומה) לא הצלחנו לבטל ב-SUMIT — לבטל שם ידנית (נשלחה התראה).') : '',
               ].filter(Boolean).join(' ')),
             });
           }}>
@@ -150,5 +163,70 @@ function RetryForm({ order, onDone, onCancel }: { order: StandingOrder; onDone: 
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={retry.isPending} onClick={onCancel}>ביטול</button>
       </div>
     </div>
+  );
+}
+
+/**
+ * ★ "החיוב שולם בנפרד" (0061): החיוב שנכשל עבר מחוץ להוראה (למשל חיוב ידני בכרטיס ב-SUMIT). נרשם כאן
+ * בלי לחייב; אחר כך נפתח "ניסיון חיוב חוזר" בשלב החידוש בלבד — הוראה חדשה ב-SUMIT לחיובים שנותרו.
+ */
+function PaidElsewhereForm({ order, onDone, onCancel }: { order: StandingOrder; onDone: (msg: string) => void; onCancel: () => void }) {
+  const save = usePaidElsewhere();
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+  const [paidOn, setPaidOn] = useState(today);
+  const [note, setNote] = useState('');
+  return (
+    <div className="mt-1 space-y-2 rounded-field border border-rule p-2" data-testid="paid-elsewhere">
+      <p className="text-xs">
+        נרשם תשלום של {formatILS(order.amount)} על החיוב של {order.next_billing ? formatDate(order.next_billing) : 'החודש'} שנכשל, <b>בלי לחייב</b>.
+        אחר כך: חידוש ההוראה ב-SUMIT לחיובים שנותרו, מהחודש הבא — גם בלי חיוב.
+      </p>
+      <label className="block text-xs">תאריך התשלום
+        <input type="date" className="field mt-1" value={paidOn} max={today} onChange={(e) => setPaidOn(e.target.value)} />
+      </label>
+      <label className="block text-xs">איך שולם
+        <input className="field mt-1" value={note} placeholder="למשל: חיוב ידני בכרטיס ב-SUMIT, קבלה 1234" onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {save.error != null && <p className="text-xs text-bad" role="alert">{humanError(save.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={!note.trim() || !paidOn || save.isPending}
+          onClick={() => {
+            if (!order.id) return;
+            if (!window.confirm(`לרשום שהחיוב של ${order.full_name} (${formatILS(order.amount)}) שולם בנפרד? לא יבוצע שום חיוב.`)) return;
+            save.mutate({ id: order.id, paidOn, note: note.trim() }, {
+              onSuccess: (r) => onDone(`✓ נרשם תשלום של ${formatILS(r.amount)} (שולם בנפרד).${r.needs_renewal ? ' עכשיו: לחדש את ההוראה ב-SUMIT, בלי חיוב.' : ' זה היה החיוב האחרון.'}`),
+            });
+          }}>
+          {save.isPending ? 'רושמת…' : 'לרשום, בלי לחייב'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>ביטול</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ★ "קישור להחלפת כרטיס" (0062): כשהכרטיס השמור לא עובר (נדחה / גנוב / פג). ההורה משלמת בקישור את
+ * החיוב שנכשל בכרטיס חדש, ומאשרת בדף את המשך ההוראה עליו — אותו "חיוב X מתוך N", מהחודש הבא.
+ */
+function CardLinkButton({ order }: { order: StandingOrder }) {
+  const link = useStandingCardLink();
+  const [result, setResult] = useState<{ url: string; amount: number; whatsapp: Parameters<typeof LinkResult>[0]['whatsapp'] } | null>(null);
+  const after = (order.remaining ?? 1) - 1;
+  if (result) return <span className="block w-full" data-testid="card-link-result"><LinkResult url={result.url} amount={result.amount} whatsapp={result.whatsapp} /></span>;
+  return (
+    <span className="inline-flex flex-col items-start gap-1">
+      <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={link.isPending}
+        title="הכרטיס השמור לא עובר — ההורה משלמת בכרטיס חדש, וההוראה ממשיכה עליו"
+        onClick={() => {
+          if (!order.id) return;
+          const rest = after > 0 ? `\nבדף היא תאשר את המשך הוראת הקבע על הכרטיס החדש: עוד ${after} חיובים, מהחודש הבא. ההוראה הישנה תבוטל.` : '\nזה החיוב האחרון בהוראה.';
+          if (!window.confirm(`לשלוח להורה של ${order.full_name} קישור לתשלום ${formatILS(order.amount)} (החיוב שנכשל) בכרטיס חדש?${rest}\nקישור פתוח אחר שלה יבוטל. הקישור תקף 7 ימים.`)) return;
+          link.mutate(order.id, { onSuccess: (r) => setResult({ url: r.url, amount: Number(r.amount), whatsapp: r.whatsapp }) });
+        }}>
+        {link.isPending ? 'יוצרת…' : 'קישור להחלפת כרטיס'}
+      </button>
+      {link.error != null && <span className="text-xs text-bad" role="alert">{humanError(link.error)}</span>}
+    </span>
   );
 }

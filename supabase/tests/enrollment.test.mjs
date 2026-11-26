@@ -59,6 +59,16 @@ console.log('\nאיזה קישור לשלוח, וסכום חלקי:');
 check('★ ממתינה בהוראת קבע / בכרטיס — "קישור הרשמה חדש"', e.awaitsFirstCharge('pending', 'standing_order', false) && e.awaitsFirstCharge('pending', 'card_once', false));
 check('★ פעילה / מזומן / תשלום חיצוני / בלי מסלול — קישור תשלום רגיל', !e.awaitsFirstCharge('active', 'standing_order', false)
       && !e.awaitsFirstCharge('pending', 'cash', false) && !e.awaitsFirstCharge('pending', 'standing_order', true) && !e.awaitsFirstCharge('pending', null, false));
+{
+  // ★ 0058 (אושרת ראובן): פעילה במסלול הוראת קבע שלא שולם עליה כלום ואין לה הוראה — קישור הרשמה חדש.
+  const none = { paid: 0, hasStandingOrder: false };
+  check('★ פעילה, הוראת קבע, לא שילמה, בלי הוראה — "קישור הרשמה חדש"', e.awaitsFirstCharge('active', 'standing_order', false, none));
+  check('★ פעילה ששילמה משהו / שיש לה הוראת קבע — קישור רגיל', !e.awaitsFirstCharge('active', 'standing_order', false, { paid: 50, hasStandingOrder: false })
+        && !e.awaitsFirstCharge('active', 'standing_order', false, { paid: 0, hasStandingOrder: true }));
+  check('פעילה בכרטיס בתשלום אחד / מזומן / חיצוני / הפסיקה — קישור רגיל', !e.awaitsFirstCharge('active', 'card_once', false, none)
+        && !e.awaitsFirstCharge('active', 'cash', false, none) && !e.awaitsFirstCharge('active', 'standing_order', true, none)
+        && !e.awaitsFirstCharge('stopped', 'standing_order', false, none));
+}
 check('★ סכום: 1 עד החוב — תקין', e.linkAmountError('100', 2000) === null && e.linkAmountError('1', 2000) === null && e.linkAmountError('2000', 2000) === null);
 check('★ סכום: 0 / שלילי / מעל החוב / ריק / טקסט — הסבר', e.linkAmountError('0', 2000) === 'לפחות 1 ₪' && e.linkAmountError('-5', 2000) === 'לפחות 1 ₪'
       && e.linkAmountError('2001', 2000) === 'יותר מהחוב הפתוח' && e.linkAmountError('', 2000) === 'יש לכתוב סכום' && e.linkAmountError('abc', 2000) === 'יש לכתוב סכום');

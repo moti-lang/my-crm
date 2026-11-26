@@ -166,10 +166,10 @@ if step 4 "כל הבדיקות מול הענן, עם JWT אמיתיים"; then
 fi
 
 # ─────────── 5. וואטסאפ אמיתי ───────────
-if step 5 "webhook והודעה אחת אמיתית"; then
-  if need WA_SERVER_URL WA_API_KEY; then
-    node scripts/verify-whatsapp.mjs \
-      && ok "ה-webhook נרשם וההודעה יצאה" \
+if step 5 "וואטסאפ (GOWA): בריאות והודעת בדיקה למספר הבדיקה"; then
+  if need CRON_SECRET WA_TEST_PHONE; then
+    node scripts/verify-whatsapp.mjs --send \
+      && ok "GOWA מחוברת והודעת הבדיקה יצאה למספר הבדיקה" \
       || fail "מסלול הוואטסאפ נכשל"
   fi
 fi

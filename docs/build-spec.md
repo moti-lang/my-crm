@@ -4,7 +4,7 @@
 **קהל היעד:** סוכן פיתוח (Claude Code). מסמך זה הוא מקור האמת היחיד.
 
 > **שינויים מגרסה 2.0**
-> * **וואטסאפ: לא Green API.** המערכת עובדת מול `whatsapp-hub` — שרת עצמאי.
+> * **וואטסאפ: לא Green API.** המערכת עובדת מול GOWA (go-whatsapp-web-multidevice v9) — קונטיינר נפרד. ראה `docs/whatsapp-contract.md`.
 >   החוזה המחייב הוא [`docs/whatsapp-contract.md`](./whatsapp-contract.md),
 >   שנגזר מקוד השרת. במקרה של סתירה בין המסמך הזה לחוזה — **החוזה מנצח**,
 >   כי הוא נקרא מהקוד.
@@ -81,7 +81,7 @@
 | State / data | TanStack Query (React Query) |
 | טפסים | React Hook Form + Zod |
 | Backend | Supabase — Postgres, Auth, Storage, Edge Functions, pg_cron |
-| WhatsApp | `whatsapp-hub` (שרת עצמאי) — ראה `docs/whatsapp-contract.md` |
+| WhatsApp | GOWA v9 (קונטיינר נפרד) — ראה `docs/whatsapp-contract.md` |
 | AI | Claude API דרך Edge Function בלבד. המודל ב-`ANTHROPIC_MODEL`, ברירת מחדל `claude-haiku-4-5` |
 | גרפים | Recharts |
 | תאריכים | date-fns + `he` locale |
@@ -107,7 +107,7 @@
 ### 0.4 החלטות שכבר נסגרו (לא לשאול עליהן)
 
 * אין סליקת אשראי בגרסה 1. תשלומים נרשמים ידנית או דרך הוואטסאפ. טבלת `payments` מוכנה לסליקה עתידית.
-* מספר וואטסאפ אחד לכל העסק (instance אחד ב‑`whatsapp-hub`).
+* מספר וואטסאפ אחד לכל העסק (מכשיר אחד ב-GOWA — `WA_DEVICE_ID`).
 * שנת פעילות = `season`. מחיר הבסיס נקבע ברמת הסניף, וניתן לדריסה פר תלמידה.
 * סוכן המענה ללקוחות **לא נוקב במחירים** — מפנה לשיחה עם הבעלים. זה ערך ב‑`settings` שניתן לשינוי מהממשק.
 * עברית בלבד, ללא i18n.
@@ -131,10 +131,10 @@
 │   cron-reminders · cron-daily-summary · cron-attendance-watch      │
 │   cron-wa-health                                                   │
 └───────┬──────────────────────────────┬────────────────────────────┘
-        │ x-api-key / HMAC             │ Claude API
+        │ Basic Auth / HMAC            │ Claude API
    ┌────▼─────────┐               ┌────▼─────┐
-   │ whatsapp-hub │               │  Claude  │
-   │ (שרת עצמאי)  │               └──────────┘
+   │   GOWA v9    │               │  Claude  │
+   │ (קונטיינר)   │               └──────────┘
    └──────────────┘
         │
         ├── לקוחות נכנסים  → ai-answer (מאגר שאלות)
@@ -621,7 +621,7 @@ returns jsonb language plpgsql security definer as $$ ... $$;
 ## 4. Edge Functions
 
 כל הפונקציות ב‑`supabase/functions/`. משתני סביבה:
-`WA_SERVER_URL`, `WA_API_KEY`, `WA_WEBHOOK_SECRET`, `WA_DRY_RUN`,
+`WA_BASE_URL`, `WA_DEVICE_ID`, `WA_USER`, `WA_PASS`, `WA_WEBHOOK_SECRET`, `WA_TEST_PHONE`, `WA_DRY_RUN`,
 `ANTHROPIC_API_KEY`, `AI_DRY_RUN`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_ALERT_WEBHOOK`.
 
 `WA_DRY_RUN` ו‑`AI_DRY_RUN` הם `true` כברירת מחדל — צריך `false` מפורש כדי לצאת החוצה.
@@ -638,8 +638,8 @@ returns jsonb language plpgsql security definer as $$ ... $$;
 2. נרמול המספר ל‑`972XXXXXXXXX`.
 3. שעות שקטות (`settings.quiet_hours`, שבת וחגים). אם חסום — דחייה לחלון
    המותר הבא ועדכון `reminders.scheduled_at`.
-4. `POST {WA_SERVER_URL}/api/send` עם `{phone, text, source}`, כותרות
-   `x-api-key` ו‑`Idempotency-Key`.
+4. קצב: "מקום" לשליחה אמיתית מהמסד (`rpc_wa_reserve_send` — מרווח ותקרה לדקה).
+   ואז `POST {WA_BASE_URL}/send/message` עם `{phone, message}` (דרך `_shared/wa.ts`: Basic Auth + `X-Device-Id`).
 5. רישום ב‑`wa_messages` עם `provider_msg_id`, ועדכון `reminders.status`.
 
 **מפתח הייחודיות:** לתזכורת — `reminder-{id}`. אחרת — טביעת אצבע של
@@ -971,5 +971,5 @@ query    → question_type: "debtors"|"income"|"profit"|"student_count"|"attenda
 * כל כתיבה מוגנת ב‑Zod לפני שליחה.
 * כל פעולה הרסנית עם דיאלוג אישור.
 * Edge Functions: אימות קלט, try/catch, לוג שגיאה, ולעולם לא להחזיר שגיאה גולמית למשתמש בוואטסאפ — תמיד ניסוח אנושי בעברית.
-* אף מפתח API לא נוגע ב‑frontend. `ANTHROPIC_API_KEY`, `WA_API_KEY` ו‑`WA_WEBHOOK_SECRET` חיים רק ב‑Edge Functions.
+* אף מפתח API לא נוגע ב‑frontend. `ANTHROPIC_API_KEY`, `WA_PASS` ו‑`WA_WEBHOOK_SECRET` חיים רק ב‑Edge Functions.
 * בדיקות: יחידה לחישובי יתרה וחלוקה, ואינטגרציה לזרימת הפקודות מקצה לקצה.

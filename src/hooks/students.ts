@@ -151,6 +151,92 @@ export function useRenameStudent() {
   });
 }
 
+/**
+ * העברה לסניף אחר (הבעלים, 0063): התלמידה והוראת קבע חיה עוברות; תשלומים ונוכחות מהעבר נשארים
+ * בסניף שבו קרו; קישור פתוח מתבטל; הקבוצה מתאפסת.
+ */
+export function useTransferStudent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; branch: string }) => {
+      const { data, error } = await supabase.rpc('rpc_transfer_student', { p_student: input.id, p_branch: input.branch });
+      if (error) throw new Error(error.message);
+      return data as { ok: boolean; from: string; to: string; group_cleared: boolean; links_cancelled: number; reminders_moved: number; standing_moved: number };
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+/** היסטוריית הסניפים בכרטיס: מתי, מי, מאיזה סניף לאיזה. */
+export function useStudentBranchHistory(studentId: string | null) {
+  return useQuery({
+    queryKey: ['student-branch-history', studentId],
+    enabled: Boolean(studentId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_student_branch_history', { p_student: studentId as string });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as { changed_at: string; changed_by: string; from_branch: string; to_branch: string }[];
+    },
+  });
+}
+
+/**
+ * שינוי מחיר ידני (הבעלים, 0064): הסכום השנתי כולל דמי רישום. התוכנית מהמסד לפני השמירה.
+ * הוראת קבע פעילה לא משתנה (ההורה אישרה את הסכומים); ההפרש — חוב בגבייה.
+ */
+export type TuitionPlan =
+  | { ok: true; total_before: number; total_after: number; balance_before: number; balance_after: number; links: number; lines: string[] }
+  | { ok: false; error: string };
+
+export function useTuitionPreview(studentId: string | null, total: number | null) {
+  return useQuery({
+    queryKey: ['tuition-preview', studentId, total],
+    enabled: Boolean(studentId) && total !== null && Number.isFinite(total),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_tuition_preview', { p_student: studentId as string, p_total: total as number });
+      if (error) throw new Error(error.message);
+      return data as unknown as TuitionPlan;
+    },
+  });
+}
+
+export function useChangeTuition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { student: string; total: number; reason: string; expected: number }) => {
+      const { data, error } = await supabase.rpc('rpc_change_tuition', { p_student: input.student, p_total: input.total, p_reason: input.reason, p_expected: input.expected });
+      if (error) throw new Error(error.message);
+      return data as unknown as Extract<TuitionPlan, { ok: true }> & { links_cancelled: number };
+    },
+    onSettled: () => qc.invalidateQueries(),
+  });
+}
+
+/** היסטוריית המחיר בכרטיס: מתי, מי, מכמה לכמה, ולמה. */
+export function useStudentTuitionHistory(studentId: string | null) {
+  return useQuery({
+    queryKey: ['student-tuition-history', studentId],
+    enabled: Boolean(studentId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('rpc_student_tuition_history', { p_student: studentId as string });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as { changed_at: string; changed_by: string; from_total: number; to_total: number; reason: string | null }[];
+    },
+  });
+}
+
+/** הערות בכרטיס (הבעלים, ומנהלת סניף לתלמידות הסניף שלה) — rpc_student_set_notes. */
+export function useSetStudentNotes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; notes: string }) => {
+      const { error } = await supabase.rpc('rpc_student_set_notes', { p_id: input.id, p_notes: input.notes });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
 /** היסטוריית השם בכרטיס: מתי, מי, מאיזה שם לאיזה. */
 export function useStudentNameHistory(studentId: string | null) {
   return useQuery({

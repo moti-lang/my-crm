@@ -36,13 +36,8 @@ export function formatPhone(phone: string | null | undefined): string {
   return local.length === 10 ? `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}` : local;
 }
 
-/** כל טלפון נשמר מנורמל: 972XXXXXXXXX, בלי + ובלי מקפים. */
-export function normalizePhone(input: string): string {
-  const d = input.replace(/\D/g, '');
-  if (d.startsWith('972')) return d;
-  if (d.startsWith('0')) return `972${d.slice(1)}`;
-  return d;
-}
+/** כל טלפון נשמר מנורמל: 972XXXXXXXXX. ★ המקור היחיד — אותה פונקציה שרצה בשרת (ובמסד: f_normalize_phone). */
+export { normalizePhone } from '../../supabase/functions/_shared/phone.ts';
 
 export function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
@@ -52,4 +47,12 @@ const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמיש�
 export function formatWeekdays(days: number[] | null | undefined): string {
   if (!days?.length) return '—';
   return days.map((d) => WEEKDAYS[d] ?? '?').join(', ');
+}
+
+/**
+ * קישור שמגיע מספק חיצוני (למשל קבלה מ-SUMIT) — רק https. כתובת אחרת (javascript:, data:)
+ * לא תוצג כקישור לחיץ: React לא מסנן href, וקישור כזה היה מריץ קוד באתר.
+ */
+export function safeHttpsUrl(url: string | null | undefined): string | null {
+  return typeof url === 'string' && /^https:\/\/[^\s]+$/i.test(url.trim()) ? url.trim() : null;
 }

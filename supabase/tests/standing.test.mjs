@@ -209,7 +209,8 @@ console.log('\nניסיון חיוב חוזר — הזרימה (retryStanding):'
   const RENEW = { ...CHARGE, stage: 'renew' };
   const disabled = { ID: 42, Status: 3, Date_NextBilling: '2026-11-06T00:00:00+02:00', Date_PreviousBilling: null, Date_Last: '2027-05-06T00:00:00+03:00' };
   function env({ plans = [CHARGE, RENEW], denied = null, item = disabled, charge = { ok: true, payment: { ID: 9001, Amount: 137, Date: '2026-11-08T10:00:00+02:00', ValidPayment: true, StatusDescription: ' (קוד 000)' } },
-                 charged = { ok: true, valid: true, remaining: 6 }, create = { ok: true, recurringId: 77, immediatePayment: null }, renewed = { ok: true } } = {}) {
+                 charged = { ok: true, valid: true, remaining: 6 }, create = { ok: true, recurringId: 77, immediatePayment: null }, renewed = { ok: true },
+                 cancel = { ok: true } } = {}) {
     const log = [], inserts = [];
     let n = 0;
     const user = { rpc: async (fn, args) => { log.push(['user', fn, args]); return denied ? { data: null, error: { message: denied } } : { data: plans[Math.min(n++, plans.length - 1)], error: null }; } };
@@ -226,7 +227,7 @@ console.log('\nניסיון חיוב חוזר — הזרימה (retryStanding):'
       list: async () => { log.push(['sumit', 'list']); return item ? [item] : []; },
       chargeOnce: async (i) => { log.push(['sumit', 'chargeOnce', i]); return charge; },
       create: async (i) => { log.push(['sumit', 'create', i]); return create; },
-      update: async () => ({ ok: true }), cancel: async () => ({ ok: true }),
+      update: async () => ({ ok: true }), cancel: async (cid, rid) => { log.push(['sumit', 'cancel', { cid, rid }]); return cancel; },
     };
     return { log, inserts, run: (input) => retryStanding(user, admin, sumit, { id: ID, stage: 'charge', next: '2026-12-06', ...input }, 'owner-1') };
   }
@@ -235,7 +236,7 @@ console.log('\nניסיון חיוב חוזר — הזרימה (retryStanding):'
     const e = env(); const r = await e.run();
     check('★ עבר: תוכנית → SUMIT (מצב ההוראה) → חיוב אחד → נרשם → תוכנית שוב → הוראה חדשה → נרשמה',
       r.status === 200 && r.body.charged === 137 && r.body.renewed === true && JSON.stringify(calls(e)) ===
-      '["user:rpc_standing_retry_preview","sumit:list","sumit:chargeOnce","admin:rpc_standing_retry_charged","user:rpc_standing_retry_preview","sumit:create","admin:rpc_standing_retry_renewed"]', JSON.stringify(calls(e)));
+      '["user:rpc_standing_retry_preview","sumit:list","sumit:chargeOnce","admin:rpc_standing_retry_charged","user:rpc_standing_retry_preview","sumit:create","admin:rpc_standing_retry_renewed","sumit:cancel"]', JSON.stringify(calls(e)));
     const ch = e.log.find(([, fn]) => fn === 'chargeOnce')?.[2];
     check('★ החיוב: הסכום מהתוכנית, ללקוחה שלנו — בלי פרטי כרטיס', ch?.amount === 137 && ch?.customerId === 777 && Object.keys(ch).sort().join() === 'amount,customerId,description,itemName');
     const rec = e.log.find(([, fn]) => fn === 'rpc_standing_retry_charged')?.[2];
@@ -268,8 +269,38 @@ console.log('\nניסיון חיוב חוזר — הזרימה (retryStanding):'
     check('★ לפי SUMIT ההוראה בניסיון חוזר משלה (14) — לא מחייבים במקביל', r.status === 409 && !calls(e).includes('sumit:chargeOnce'));
   }
   {
+    // ★ 0060 (בנות הוכהייזר, 19/11): "חיוב חוזר" בממשק של SUMIT החזיר את ההוראה לפעילה (0).
+    const e = env({ item: { ...disabled, Status: 0, Date_NextBilling: '2026-11-19T00:00:00+02:00' } }); const r = await e.run();
+    const ref = e.log.find(([who, fn]) => who === 'admin' && fn === 'rpc_standing_retry_refused')?.[2];
+    check('★ פעילה שוב ב-SUMIT (0) — לא מחייבים, והמצב מ-SUMIT נקלט מיד (סטטוס, תאריך הבא, מי)',
+      r.status === 409 && r.body.refused === true && !calls(e).includes('sumit:chargeOnce')
+      && ref?.p_id === ID && ref?.p_sumit_status === 0 && ref?.p_next === '2026-11-19' && ref?.p_by === 'owner-1', JSON.stringify(ref));
+    check('★ ההודעה לבעלים: "לא חויב", ולמה', r.body.error.includes('לא חויב') && r.body.error.includes('לא מחייבים במקביל'), r.body.error);
+  }
+  {
     const e = env({ item: null }); const r = await e.run();
     check('ההוראה לא נמצאה אצל הלקוחה ב-SUMIT — לא מחייבים', r.status === 502 && !calls(e).includes('sumit:chargeOnce'));
+  }
+  {
+    // ★ ההוראה הישנה ("חסומה עקב אי תשלום" ב-SUMIT) מבוטלת שם — רק אחרי שהחדשה נוצרה ונרשמה.
+    const e = env({ plans: [RENEW, RENEW] }); const r = await e.run({ stage: 'renew' });
+    const c = e.log.find(([, fn]) => fn === 'cancel');
+    check('★ חידוש: ההוראה הישנה (42) מבוטלת ב-SUMIT, אצל הלקוחה שלנו — אחרי שהחדשה (77) נרשמה', r.status === 200 && r.body.old_cancelled === true
+          && c?.[2]?.cid === 777 && c[2].rid === 42 && calls(e).indexOf('sumit:cancel') > calls(e).indexOf('admin:rpc_standing_retry_renewed'));
+    check('...והחדשה לא מבוטלת', !e.log.some(([, fn, a]) => fn === 'cancel' && a?.rid === 77));
+  }
+  {
+    const e = env({ plans: [RENEW, RENEW], cancel: { ok: false, error: 'SUMIT: x' } }); const r = await e.run({ stage: 'renew' });
+    check('★ הביטול ב-SUMIT נכשל — החידוש עצמו הצליח, והתראה לבטל ידנית', r.status === 200 && r.body.renewed === true && r.body.old_cancelled === false
+          && e.inserts.some(([t, row]) => t === 'system_alerts' && row.kind === 'standing_order_old_not_cancelled' && row.body.includes('42')));
+  }
+  {
+    const e = env({ plans: [RENEW, RENEW], renewed: { ok: false } }); await e.run({ stage: 'renew' });
+    check('★ החדשה לא נרשמה אצלנו — הישנה לא מבוטלת', !calls(e).includes('sumit:cancel'));
+  }
+  {
+    const e = env({ create: { ok: false, error: 'SUMIT: שגיאה' } }); await e.run();
+    check('★ החדשה לא נוצרה — הישנה לא מבוטלת', !calls(e).includes('sumit:cancel'));
   }
   {
     const e = env({ create: { ok: false, error: 'SUMIT: שגיאה' } }); const r = await e.run();
@@ -280,7 +311,7 @@ console.log('\nניסיון חיוב חוזר — הזרימה (retryStanding):'
   {
     const e = env({ plans: [RENEW, RENEW] }); const r = await e.run({ stage: 'renew' });
     check('★ "חידוש" (אחרי חיוב שעבר): רק הוראה חדשה — בלי חיוב ובלי בדיקת מצב', r.status === 200 && r.body.charged === 0 && r.body.renewed === true
-          && JSON.stringify(calls(e)) === '["user:rpc_standing_retry_preview","user:rpc_standing_retry_preview","sumit:create","admin:rpc_standing_retry_renewed"]', JSON.stringify(calls(e)));
+          && JSON.stringify(calls(e)) === '["user:rpc_standing_retry_preview","user:rpc_standing_retry_preview","sumit:create","admin:rpc_standing_retry_renewed","sumit:cancel"]', JSON.stringify(calls(e)));
   }
   {
     const e = env(); const r = await e.run({ stage: 'renew' });
@@ -344,6 +375,28 @@ const S = { link_id: 'L1', student_name: 'רות', branch: 'ביתר', customer_
   await syncStandingOrders(f.db, sumit);
   check('★ SUMIT חייבה מיד — החיוב נרשם', f.calls.some((c) => c.fn === 'rpc_record_standing_charge' && c.args.p_sumit_payment_id === 99));
   check('★ ...והבעלים מקבלת התראה', f.inserts.some((i) => i.kind === 'standing_order_immediate_charge'));
+}
+{
+  // ★ החלפת כרטיס (0062): הוראה חדשה על הלקוחה החדשה, ורק אחרי שנוצרה — הישנה מבוטלת ב-SUMIT.
+  const log = [];
+  const mk = (createOk, cancelOk) => ({ ...so.standingProvider(),
+    create: async (i) => { log.push(['create', i.customerId, i.installments]); return createOk ? { ok: true, recurringId: 55, immediatePayment: null, dryRun: false } : { ok: false, error: 'SUMIT: x', dryRun: false }; },
+    cancel: async (cid, rid) => { log.push(['cancel', cid, rid]); return cancelOk ? { ok: true } : { ok: false, error: 'SUMIT: לא בוטלה' }; },
+    list: async () => [] });
+  const R = { ...S, customer_id: 888, installments: 8, replaces_customer_id: 777, replaces_recurring_id: 41 };
+  let f = fakeDb([R]);
+  await syncStandingOrders(f.db, mk(true, true));
+  check('★ החלפת כרטיס: נוצרת על הלקוחה החדשה (8 חיובים), ואחר כך הישנה מבוטלת', JSON.stringify(log) === '[["create",888,8],["cancel",777,41]]', JSON.stringify(log));
+  check('...בלי התראה כשהביטול עבר', !f.inserts.some((i) => i.kind === 'standing_order_old_not_cancelled'));
+  log.length = 0; f = fakeDb([R]);
+  await syncStandingOrders(f.db, mk(false, true));
+  check('★ היצירה נכשלה — הישנה לא מבוטלת', JSON.stringify(log) === '[["create",888,8]]', JSON.stringify(log));
+  log.length = 0; f = fakeDb([R]);
+  await syncStandingOrders(f.db, mk(true, false));
+  check('★ הביטול נכשל — התראה לבטל ידנית', f.inserts.some((i) => i.kind === 'standing_order_old_not_cancelled' && i.body.includes('41')));
+  log.length = 0; f = fakeDb([S]);
+  await syncStandingOrders(f.db, mk(true, true));
+  check('הוראה רגילה (הרשמה) — שום ביטול', !log.some(([k]) => k === 'cancel'));
 }
 {
   // ★ הלקוחה שלנו בלבד (listforcustomer). חיוב חדש = Date_PreviousBilling; כישלון = הסטטוס (rpc_standing_order_status בתוך observed).

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory,
+import { useStudentPayments, useStudentProductions, useStudentFlags, useDeleteStudent, useRenameStudent, useStudentNameHistory, useTransferStudent, useStudentBranchHistory, useTuitionPreview, useChangeTuition, useStudentTuitionHistory, useSetStudentNotes,
   useDiscountPreview, useApplyDiscount, useStudentDiscountHistory, usePaymentVoidHistory, useVoidPayment, STATUS_LABEL, STATUS_TONE,
   type VoidKind } from '@/hooks/students';
 import { StudentTags } from '@/components/StudentTags';
 import { StandingOrderPanel } from '@/components/StandingOrderPanel';
+import { LinkSumitStanding } from '@/components/LinkSumitStanding';
 import { useStandingOrders } from '@/hooks/standing';
 import { formatILS, formatDate, formatDateTime, formatPhone } from '@/lib/format';
 import { NAME_RE, awaitsFirstCharge } from '@/lib/enrollment';
@@ -12,6 +13,7 @@ import { PaymentLinkButton } from '@/components/PaymentLinkButton';
 import { RenewEnrollmentLinkButton } from '@/components/RenewEnrollmentLinkButton';
 import { useInstallmentProgress, useCancelEnrollment, useCancelEnrollmentOverride } from '@/hooks/enrollment';
 import { useAuth } from '@/auth/AuthProvider';
+import { useBranches } from '@/hooks/queries';
 import { humanError } from '@/lib/errors';
 import type { Views } from '@/lib/database.types';
 
@@ -44,7 +46,13 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const deleteStudent = useDeleteStudent();
   const cancelEnrollment = useCancelEnrollment();
   const nameHistory = useStudentNameHistory(student?.id ?? null);
+  const branchHistory = useStudentBranchHistory(student?.id ?? null);
+  const [transferring, setTransferring] = useState(false);
+  const [transferred, setTransferred] = useState<string | null>(null);
   const discountHistory = useStudentDiscountHistory(student?.id ?? null);
+  const tuitionHistory = useStudentTuitionHistory(student?.id ?? null);
+  const [pricing, setPricing] = useState(false);
+  const [priced, setPriced] = useState<string | null>(null);
   const [discounting, setDiscounting] = useState(false);
   const [discounted, setDiscounted] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -54,7 +62,7 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   const [voided, setVoided] = useState<string | null>(null);
   const [overriding, setOverriding] = useState(false);
   const [overrideDone, setOverrideDone] = useState<string | null>(null);
-  useEffect(() => { setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); setVoiding(null); setVoided(null); setOverriding(false); setOverrideDone(null); cancelEnrollment.reset(); }, [student?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPricing(false); setPriced(null); setTransferring(false); setTransferred(null); setRenaming(false); setRenamed(null); setDiscounting(false); setDiscounted(null); setVoiding(null); setVoided(null); setOverriding(false); setOverrideDone(null); cancelEnrollment.reset(); }, [student?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!student) return null;
 
@@ -70,7 +78,8 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
   // ממתינה לחיוב הראשון בכרטיס → "קישור הרשמה חדש" (לא קישור תשלום רגיל).
   const flag = student.id ? flags.data?.get(student.id) : undefined;
   const track = flag?.payment_track ?? null;
-  const firstCharge = awaitsFirstCharge(status, track?.method, flag?.external_payment);
+  const hasStandingOrder = (standing.data ?? []).some((o) => o.student_id === student.id);
+  const firstCharge = awaitsFirstCharge(status, track?.method, flag?.external_payment, { paid, hasStandingOrder });
 
   return (
     <>
@@ -104,6 +113,11 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
               {student.grade ? ` · כיתה ${student.grade}` : ''}
             </p>
             {renamed && <p className="mt-1 text-xs text-ok" role="status">{renamed}</p>}
+            {transferred && <p className="mt-1 text-xs text-ok" role="status">{transferred}</p>}
+            {profile?.role === 'owner' && student.id && student.branch_id && (transferring
+              ? <TransferForm id={student.id} name={student.full_name ?? ''} branchId={student.branch_id} branchName={student.branch_name ?? ''}
+                  onDone={(msg) => { setTransferring(false); setTransferred(msg); }} onCancel={() => setTransferring(false)} />
+              : <button type="button" className="btn-ghost mt-1 px-2 py-0.5 text-xs" onClick={() => { setTransferred(null); setTransferring(true); }}>⇄ העברה לסניף אחר</button>)}
           </div>
           <div className="flex items-center gap-2">
             <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_TONE[status]}`}>
@@ -186,6 +200,11 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
               ? <DiscountForm studentId={student.id} current={Number(student.discount ?? 0)} currentReason={student.discount_reason ?? ''}
                   onDone={(msg) => { setDiscounting(false); setDiscounted(msg); }} onCancel={() => setDiscounting(false)} />
               : <button type="button" className="btn-ghost mt-2 w-full" onClick={() => { setDiscounted(null); setDiscounting(true); }}>✎ הנחה</button>)}
+            {priced && <p className="mt-1 text-xs text-ok" role="status">{priced}</p>}
+            {profile?.role === 'owner' && student.id && (pricing
+              ? <TuitionForm studentId={student.id} total={Number(student.tuition_total ?? 0) + Number(student.registration_fee ?? 0)} fee={Number(student.registration_fee ?? 0)}
+                  onDone={(msg) => { setPricing(false); setPriced(msg); }} onCancel={() => setPricing(false)} />
+              : <button type="button" className="btn-ghost mt-2 w-full" onClick={() => { setPriced(null); setPricing(true); }}>✎ שינוי מחיר</button>)}
 
             {adding && student.id ? (
               <div className="mt-3">
@@ -202,7 +221,8 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
                   + רישום תשלום
                 </button>
                 {student.id && (firstCharge
-                  ? <RenewEnrollmentLinkButton studentId={student.id} standing={track?.method === 'standing_order'} hasPhone={Boolean(student.parent_phone)} />
+                  ? <RenewEnrollmentLinkButton studentId={student.id} standing={track?.method === 'standing_order'} hasPhone={Boolean(student.parent_phone)}
+                      note={status === 'active' ? `התלמידה במסלול ${track?.label ?? 'הוראת קבע'} ועוד לא שילמה. הקישור: התשלום הראשון ובחירת יום חיוב, והשאר בהוראת קבע — לא חיוב אחד על כל הסכום.` : undefined} />
                   : <PaymentLinkButton studentId={student.id} balance={balance} hasPhone={Boolean(student.parent_phone)} />)}
               </>
             )}
@@ -270,10 +290,14 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
 
           {(() => {
             const orders = (standing.data ?? []).filter((o) => o.student_id === student.id);
-            if (orders.length === 0) return null;
+            // ★ אין הוראה חיה — הבעלים יכולה לחבר הוראה שנפתחה ידנית ב-SUMIT (0066).
+            const canLink = profile?.role === 'owner' && Boolean(student.id) && standing.isSuccess
+              && !orders.some((o) => o.status !== 'cancelled' && o.status !== 'completed');
+            if (orders.length === 0 && !canLink) return null;
             return (
               <Section title="הוראת קבע">
                 <div className="space-y-3">{orders.map((o) => <StandingOrderPanel key={o.id} order={o} />)}</div>
+                {canLink && <div className={orders.length ? 'mt-3' : ''}><LinkSumitStanding studentId={student.id as string} name={student.full_name ?? ''} /></div>}
               </Section>
             );
           })()}
@@ -335,6 +359,26 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             </Section>
           )}
 
+          {(tuitionHistory.data ?? []).length > 0 && (
+            <Section title="שינויי מחיר">
+              <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית המחיר">
+                {(tuitionHistory.data ?? []).map((h, i) => (
+                  <li key={i}>{formatDateTime(h.changed_at)} · {h.changed_by}: {formatILS(h.from_total)} ← {formatILS(h.to_total)}{h.reason ? ` · ${h.reason}` : ''}</li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {(branchHistory.data ?? []).length > 0 && (
+            <Section title="מעברי סניף">
+              <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית הסניפים">
+                {(branchHistory.data ?? []).map((h, i) => (
+                  <li key={i}>{formatDateTime(h.changed_at)} · {h.changed_by}: מ{h.from_branch} ל{h.to_branch}</li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
           {(nameHistory.data ?? []).length > 0 && (
             <Section title="שינויי שם">
               <ul className="space-y-1 text-xs text-soft" aria-label="היסטוריית השם">
@@ -345,9 +389,11 @@ export function StudentDrawer({ student, onClose }: { student: Student | null; o
             </Section>
           )}
 
-          {student.notes && (
+          {(student.notes || ((profile?.role === 'owner' || profile?.role === 'branch_manager') && student.id)) && (
             <Section title="הערות">
-              <p className="whitespace-pre-wrap text-sm">{student.notes}</p>
+              {(profile?.role === 'owner' || profile?.role === 'branch_manager') && student.id
+                ? <NotesEditor id={student.id} notes={student.notes ?? ''} />
+                : <p className="whitespace-pre-wrap text-sm">{student.notes}</p>}
             </Section>
           )}
         </div>
@@ -418,6 +464,130 @@ function RenameForm({ id, fullName, onDone, onCancel }: { id: string; fullName: 
         <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={rename.isPending} onClick={onCancel}>ביטול</button>
       </div>
     </form>
+  );
+}
+
+/** הערות בכרטיס: מוצגות, ו"עריכה" פותחת שדה. נשמר דרך המסד (rpc_student_set_notes — הרשאה ויומן). */
+function NotesEditor({ id, notes }: { id: string; notes: string }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(notes);
+  const save = useSetStudentNotes();
+  useEffect(() => { setText(notes); setEditing(false); }, [id, notes]);
+  if (!editing) {
+    return (
+      <div className="space-y-1">
+        {notes ? <p className="whitespace-pre-wrap text-sm" data-testid="student-notes">{notes}</p> : <p className="text-xs text-soft">אין הערות.</p>}
+        <button type="button" className="btn-ghost px-2 py-0.5 text-xs" onClick={() => { save.reset(); setEditing(true); }}>✎ עריכת הערות</button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <textarea className="field min-h-24 text-sm" value={text} maxLength={2000} aria-label="הערות לתלמידה" onChange={(e) => setText(e.target.value)} />
+      {save.error != null && <p className="text-xs text-bad" role="alert">{humanError(save.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={save.isPending || text === notes}
+          onClick={() => save.mutate({ id, notes: text }, { onSuccess: () => setEditing(false) })}>
+          {save.isPending ? 'שומרת…' : 'שמירה'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={() => { setText(notes); setEditing(false); }}>ביטול</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ★ שינוי מחיר ידני (הבעלים, 0064): הסכום השנתי כולל דמי רישום, וסיבה. המסד מחשב מה ישתנה
+ * (חוב, הוראת קבע, מסלול, קישור פתוח) — ורק אז אפשר לשמור.
+ */
+function TuitionForm({ studentId, total, fee, onDone, onCancel }:
+  { studentId: string; total: number; fee: number; onDone: (msg: string) => void; onCancel: () => void }) {
+  const [raw, setRaw] = useState(String(total));
+  const [reason, setReason] = useState('');
+  const [value, setValue] = useState<number | null>(null);
+  useEffect(() => {
+    const t = window.setTimeout(() => { const n = Number(raw); setValue(raw.trim() !== '' && Number.isFinite(n) && n !== total ? n : null); }, 350);
+    return () => window.clearTimeout(t);
+  }, [raw, total]);
+  const preview = useTuitionPreview(studentId, value);
+  const save = useChangeTuition();
+  const plan = preview.data;
+  const ready = Boolean(plan?.ok) && !preview.isFetching && Number(raw) === value;
+  return (
+    <div className="mt-2 space-y-2 rounded-field border border-rule p-3 text-sm" data-testid="tuition-form">
+      <label className="block text-xs">מחיר שנתי (כולל {formatILS(fee)} דמי רישום)
+        <input className="field mt-0.5" inputMode="numeric" value={raw} onChange={(e) => { save.reset(); setRaw(e.target.value); }} aria-label="מחיר שנתי" />
+      </label>
+      <label className="block text-xs">סיבה (חובה)
+        <input className="field mt-0.5" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="למשל: הועברה לסניף אחר" aria-label="סיבת שינוי המחיר" />
+      </label>
+      {value !== null && preview.isFetching && <p className="text-xs text-soft">מחשבת…</p>}
+      {preview.error != null && <p className="text-xs text-bad" role="alert">{humanError(preview.error)}</p>}
+      {plan && !plan.ok && <p className="text-xs text-bad" role="alert">{plan.error}</p>}
+      {plan?.ok && (
+        <ul className="space-y-0.5 text-xs" data-testid="tuition-plan">
+          {plan.lines.map((l, i) => <li key={i} className={i === 0 ? 'font-medium' : ''}>{l}</li>)}
+        </ul>
+      )}
+      {save.error != null && <p className="text-xs text-bad" role="alert">{humanError(save.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={!ready || !reason.trim() || save.isPending}
+          onClick={() => {
+            if (!plan?.ok || value === null) return;
+            if (!window.confirm(`לשנות את המחיר השנתי ל-${formatILS(value)} במקום ${formatILS(total)}?`)) return;
+            save.mutate({ student: studentId, total: value, reason: reason.trim(), expected: plan.balance_after },
+              { onSuccess: (r) => onDone(`✓ המחיר עודכן: ${formatILS(r.total_after)} במקום ${formatILS(r.total_before)}. נשאר לשלם: ${formatILS(Math.max(r.balance_after, 0))}.`
+                  + (r.links_cancelled ? ' הקישור הפתוח בוטל — אפשר ליצור חדש.' : '')) });
+          }}>
+          {save.isPending ? 'שומרת…' : 'שמירת המחיר'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={save.isPending} onClick={onCancel}>ביטול</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ★ העברה לסניף אחר (הבעלים, 0063). בוחרים סניף, רואים מה יקרה, מאשרים. ההעברה במסד — שם גם
+ * הבדיקות (סניף פעיל, אין תלמידה באותו שם בסניף החדש).
+ */
+function TransferForm({ id, name, branchId, branchName, onDone, onCancel }:
+  { id: string; name: string; branchId: string; branchName: string; onDone: (msg: string) => void; onCancel: () => void }) {
+  const branches = useBranches();
+  const transfer = useTransferStudent();
+  const [to, setTo] = useState('');
+  const options = (branches.data ?? []).filter((b) => b.is_active && b.id !== branchId);
+  const toName = options.find((b) => b.id === to)?.name ?? '';
+  return (
+    <div className="mt-2 space-y-2 rounded-field border border-rule p-2 text-xs" data-testid="transfer">
+      <label className="block">לאיזה סניף
+        <select className="field mt-1 py-1 text-sm" value={to} aria-label="סניף חדש" onChange={(e) => { transfer.reset(); setTo(e.target.value); }}>
+          <option value="">בחרי סניף</option>
+          {options.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+      </label>
+      <ul className="list-disc space-y-0.5 pr-4 text-soft">
+        <li>מעכשיו היא ברשימה, בנוכחות ובגבייה של הסניף החדש. הקבוצה מתאפסת.</li>
+        <li>תשלומים ונוכחות מהעבר נשארים ב{branchName} — הדוחות של החודשים הקודמים לא משתנים.</li>
+        <li>הוראת קבע ממשיכה כרגיל (ב-SUMIT לא משתנה כלום); החיובים הבאים נרשמים בסניף החדש.</li>
+        <li>קישור תשלום פתוח מתבטל — אפשר ליצור חדש. שכר הלימוד וההנחה נשארים.</li>
+      </ul>
+      {transfer.error != null && <p className="text-bad" role="alert">{humanError(transfer.error)}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-primary px-3 py-1 text-xs" disabled={!to || transfer.isPending}
+          onClick={() => {
+            if (!window.confirm(`להעביר את ${name} מ${branchName} ל${toName}?`)) return;
+            transfer.mutate({ id, branch: to }, {
+              onSuccess: (r) => onDone(`✓ ${name} הועברה מ${r.from} ל${r.to}.`
+                + (r.standing_moved ? ' הוראת הקבע ממשיכה — החיובים הבאים בסניף החדש.' : '')
+                + (r.links_cancelled ? ` ${r.links_cancelled === 1 ? 'קישור תשלום פתוח בוטל' : `${r.links_cancelled} קישורי תשלום פתוחים בוטלו`} — אפשר ליצור חדש.` : '')),
+            });
+          }}>
+          {transfer.isPending ? 'מעבירה…' : 'העברה'}
+        </button>
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={transfer.isPending} onClick={onCancel}>ביטול</button>
+      </div>
+    </div>
   );
 }
 

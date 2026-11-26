@@ -1,201 +1,79 @@
-# חוזה whatsapp-hub
+# חוזה וואטסאפ — GOWA
 
-**מקור:** [`moti-lang/whatsapp-hub`](https://github.com/moti-lang/whatsapp-hub) **@ `v1.0.0`**
-**נקרא מהקוד, לא מתיעוד.** אם השרת משתנה — זה הקובץ שמשווים מולו.
+**מקור:** [`aldinokemal/go-whatsapp-web-multidevice`](https://github.com/aldinokemal/go-whatsapp-web-multidevice) **@ `v9.10.0`**
+(commit `c24d02c`). הכל נלקח מהתיעוד ומהקוד של התגית — `docs/openapi.yaml`, `docs/webhook-payload.md`,
+`src/ui/rest/app.go`, `src/infrastructure/whatsapp/webhook.go`, `src/pkg/utils/whatsapp.go` — לא מהזיכרון.
+התקציר שהבדיקות רצות מולו: `supabase/tests/fixtures/gowa-contract.json` (בדיקה: `wa-contract.test.mjs`).
 
-> `v1.0.0` הוא commit `76a2617`. אם ה-tag עדיין לא נדחף, ה-hash הוא ההצמדה
-> התקפה. מגרסה 1.0.0 ואילך השרת נושא `CHANGELOG.md` ובדיקת חוזה
-> (`test/contract.test.ts`) שנכשלת כשמבנה `message.received`, רשימת
-> האירועים או אלגוריתם החתימה משתנים — כלומר שינוי שובר יתגלה אצלו,
-> לא אצלנו בייצור.
+> **החלטה קבועה (16/11/2026):** כל חיבור וואטסאפ לא רשמי — על GOWA v9. השרת הקודם נמחק (25/11/2026).
+> GOWA של טייכטל רצה בקונטיינר נפרד (`wa-teichtal`) מאחורי Caddy עם Basic Auth. Supabase ו-Netlify נשארים בענן.
 
-הקבצים שמהם נגזר החוזה:
+## קובץ אחד מדבר עם GOWA
 
-| מה | איפה בשרת |
+`supabase/functions/_shared/wa.ts` — ורק הוא. כל השאר (wa-send, wa-webhook, wa-admin, cron-wa-health,
+התשובות לשולחות) משתמש בממשק שלו. בדיקה מוודאת שאף קובץ אחר לא קורא את הסודות או פונה לכתובות של GOWA.
+
+## סודות — רק ב-Edge Functions
+
+| משתנה | מה |
 |---|---|
-| הזדהות | `src/api/auth.ts` |
-| נקודות קצה | `src/api/routes.ts` |
-| מפתח ייחודיות | `src/store/idempotency.ts` |
-| רשימת האירועים וחתימה | `src/store/webhooks.ts` |
-| מסירת webhook | `src/webhooks/dispatcher.ts` |
-| מבנה ההודעה הנכנסת | `src/wa/client.ts` |
+| `WA_BASE_URL` | כתובת GOWA, https בלבד (למשל `https://wa-teichtal.automation1.io`) |
+| `WA_DEVICE_ID` | המכשיר ב-GOWA (כותרת `X-Device-Id` בכל קריאה) |
+| `WA_USER` · `WA_PASS` | Basic Auth |
+| `WA_WEBHOOK_SECRET` | הסוד שבו GOWA חותמת את ה-webhook (`WHATSAPP_WEBHOOK_SECRET` שלה) |
+| `WA_TEST_PHONE` | מצב בדיקה: הודעה אמיתית יוצאת **רק** למספר הזה |
+| `WA_DRY_RUN` | `true` (ברירת המחדל) — שום הודעה לא יוצאת, חוץ ממספר הבדיקה |
 
----
+לא בגיט, לא בפרונט, לא בצ'אט. הבעלים מכניס אותם ישירות לסודות של ה-Edge Functions.
+**חסר אחד מהארבעה הראשונים → "לא מוגדר"**: המסך מציג את זה, שום דבר לא קורס ושום דבר לא נשלח
+(תזכורות נשארות בתור).
 
-## 1. הזדהות
+## מתי הודעה יוצאת באמת
 
-כל קריאה ל-API דורשת כותרת **`x-api-key`** עם הערך שב-`.env` של השרת.
+1. `WA_TEST_PHONE` מוגדר → רק למספר הזה. כל השאר — הרצה יבשה (גם אם `WA_DRY_RUN=false`).
+2. אחרת → רק כש-`WA_DRY_RUN=false` במפורש.
 
-```
-x-api-key: <WA_API_KEY>
-```
+## הקריאות
 
-ההשוואה בשרת עמידה לתקיפת תזמון: הוא משווה תקצירי SHA-256 ולא מחרוזות,
-כך שגם אורך הסוד לא דולף (`safeEqual` ב-`auth.ts`).
+אימות בכל קריאה: `Authorization: Basic …` + `X-Device-Id: <WA_DEVICE_ID>`.
 
-> **⚠️ שינוי מהתכנון המקורי.** האפיון דיבר על `X-WA-Secret`. השרת אינו מכיר
-> כותרת כזו. הכותרת היא `x-api-key`.
+| פעולה | קריאה | גוף | תשובה |
+|---|---|---|---|
+| טקסט | `POST /send/message` | JSON: `{phone, message}` | `results.message_id` |
+| תמונה | `POST /send/image` | multipart: `phone`, `caption`, `image` או `image_url` | `results.message_id` |
+| קובץ | `POST /send/file` | multipart: `phone`, `caption`, `file` או `file_url` | `results.message_id` |
+| מצב | `GET /app/status` | — | `results.is_connected`, `is_logged_in`, `jid` |
+| QR | `GET /app/login` | — | `results.qr_link` (PNG תחת `/statics/…`), `qr_duration` |
+| ניתוק | `GET /app/logout` | — | — |
 
----
+* **טלפון:** במערכת תמיד `972XXXXXXXXX` (נרמול אחד — `_shared/phone.ts`, ובמסד `f_normalize_phone`).
+  הסיומת `@s.whatsapp.net` מתווספת רק בתוך `wa.ts`.
+* **QR:** `qr_link` נבנה ב-GOWA מהמארח שהבקשה הגיעה אליו. לא סומכים עליו: לוקחים רק את הנתיב
+  (`/statics/…`) ומבקשים אותו מ-`WA_BASE_URL` עם האימות. הדפדפן מקבל תמונה בלבד (דרך wa-admin).
+* **שגיאות:** 429/502/503/504 — GOWA לא קיבלה, מותר לנסות שוב. 4xx/500 — לא. **אין תשובה (פג זמן)** —
+  "לא ברור אם נשלחה", ולא חוזרים: ל-GOWA אין מפתח ייחודיות, וניסיון חוזר עלול לשלוח פעמיים.
 
-## 2. שליחת הודעה
+## webhook נכנס
 
-```http
-POST {WA_SERVER_URL}/api/send
-x-api-key: <WA_API_KEY>
-Idempotency-Key: <מפתח>
-Content-Type: application/json
+כתובת: `https://kzoxlusbocxjinfxckhe.supabase.co/functions/v1/wa-webhook` (verify_jwt = false — GOWA לא שולחת JWT).
 
-{ "phone": "972521234567", "text": "...", "source": "teichtal-crm" }
-```
+* **חתימה:** `X-Hub-Signature-256: sha256=<hex HMAC-SHA256(WA_WEBHOOK_SECRET, הגוף הגולמי)>`.
+  נבדקת **לפני כל נגיעה במסד** (`_shared/wa-webhook-core.ts`). חסרה / שגויה / אין סוד → 401, בלי מסד.
+  ההוכחה: `wa-webhook.test.mjs` (מסד מזויף שסופר כל קריאה), ובקרת שלילה.
+* **מעטפת:** `{event, device_id, session_id, payload}`. הודעה: `event = "message"`, ב-`payload`:
+  `id`, `chat_id`, `from`, `from_name`, `sender_display_name`, `timestamp`, `is_from_me`, `body`.
+* מתעלמים: הודעות שלי, קבוצות / סטטוסים / ערוצים, ושאר האירועים. בלי `id` או בלי מספר (LID בלבד) — לא מעובדת, והבעלים מקבלת התראה.
+* `device.logged_out` / `device.temporary_ban` / `device.reachout_timelock` → הבריאות "down" והתראה קריטית; התור נעצר.
+* GOWA מנסה שוב כשאין 2xx. מניעת הכפילויות: מפתח ייחודי על `wa_messages.provider_msg_id`.
 
-> **⚠️ שינוי מהתכנון.** הפרמטרים הם `phone` ו-`text`, **לא** `to` ו-`body`.
-> הנתיב הוא `/api/send`, **לא** `/send`.
+## קצב שליחה
 
-### תשובה
+הודעות רבות באותו נוסח ברצף — מה שוואטסאפ חוסם עליו. ההגדרות ב-`settings.wa_pacing` (עריכה במסך הגדרות ← וואטסאפ):
+`min_gap_seconds` / `max_gap_seconds` (מרווח אקראי בין הודעות בתור, ברירת מחדל 8–20), `max_per_minute` (4),
+`run_budget_seconds` (זמן סבב של התור, 110). התור (`cron-reminders` → `_shared/send-queue.ts`) ממתין מרווח אקראי;
+המסד אוכף מרווח מינימלי ותקרה לדקה לכל שליחה אמיתית (`rpc_wa_reserve_send`), גם מול שליחות במקביל.
+שליחה להרבה נמענים תמיד עוברת בתור התזכורות. כשמפעילים את התור: `cron-reminders` כל 2–5 דקות.
 
-| מצב | גוף |
-|---|---|
-| הצלחה | `{ ok: true, waId: "3EB0...", phone: "972...", guessed: false, note?: "..." }` |
-| כשל | `{ ok: false, error: "..." }` |
-| `409` | `{ ok: false, error: "בקשה זהה עם אותו מפתח כבר בביצוע" }` |
+## בדיקה חיה
 
-`waId` הוא מזהה ההודעה של וואטסאפ, ויכול לחזור `null` גם בשליחה מוצלחת.
-
-### `Idempotency-Key`
-
-השרת שומר `(key, endpoint)` בטבלה ב-DB, עם TTL של **24 שעות**. ניסיון חוזר עם
-אותו מפתח מחזיר את התשובה המקורית במקום לשלוח שוב. המפתח הוא **פר נקודת קצה** —
-אותו מפתח ב-`/send` וב-`/send-media` הן שתי בקשות נפרדות.
-
-**איך אנחנו מייצרים אותו** (`wa-send/index.ts`):
-* תזכורת → `reminder-{id}`
-* אחרת → `crm-{sha256(phone|text|YYYY-MM-DDTHH:mm)[:12]}`
-
-`409` אינו שגיאה שכדאי לנסות שוב עליה — ההודעה כבר בדרך.
-
-### פורמט הטלפון
-
-השרת מנרמל ל-E.164 **בלי `+`** (`src/lib/phone.ts`), למשל `972521234567` —
-זהה לפורמט שבו אנחנו שומרים מספרים.
-
----
-
-## 3. בריאות
-
-```http
-GET {WA_SERVER_URL}/api/health
-x-api-key: <WA_API_KEY>
-```
-
-```json
-{
-  "ok": true,
-  "healthy": true,
-  "whatsapp": { "state": "connected", "phone": "972...", "connectedAt": "...", "lastError": null },
-  "uptimeSeconds": 812340,
-  "memory": { "rssMb": 210, "heapUsedMb": 90, "heapTotalMb": 130 },
-  "disk": { "freeMb": 18000, "totalMb": 40000 },
-  "database": { "sizeKb": 4200, "messages": 18431 },
-  "queue": { "activeCampaignId": null, "busy": false },
-  "rateLimit": { "limit": 20, "remaining": 20 }
-}
-```
-
-> **⚠️ קריטי.** השרת מחזיר **`503`** כשוואטסאפ אינו מחובר (`healthy: false`).
-> זה מבדיל בין שני מצבים שונים לגמרי:
-> * **`503`** — התהליך חי, החיבור לוואטסאפ נפל (QR פג, הטלפון נותק, הקישור בוטל).
-> * **timeout / connection refused** — השרת עצמו מת.
->
-> systemd מטפל בשני, לא בראשון. הראשון הוא הנפילה השקטה.
-
----
-
-## 4. אירועים נכנסים (webhook)
-
-### רישום
-
-```bash
-curl -X POST "$WA_SERVER_URL/api/webhooks" \
-  -H "x-api-key: $WA_API_KEY" -H 'Content-Type: application/json' \
-  -d '{"name":"teichtal-crm",
-       "url":"https://<project>.supabase.co/functions/v1/wa-webhook",
-       "events":["message.received","connection.changed","message.sent","message.failed"]}'
-```
-
-הסוד שחוזר בתשובה הוא `WA_WEBHOOK_SECRET`. אפשר לסובב אותו ב-
-`POST /api/webhooks/:id/rotate-secret`.
-
-### כותרות המסירה
-
-| כותרת | תוכן |
-|---|---|
-| `x-hub-event` | שם האירוע |
-| `x-hub-delivery` | מזהה המסירה (עולה בניסיונות חוזרים) |
-| `x-hub-signature` | `sha256=<hex>` |
-
-### אלגוריתם החתימה
-
-```
-signature = "sha256=" + HMAC_SHA256(raw_request_body, webhook_secret).hex()
-```
-
-> **⚠️ שינוי מהתכנון.** האימות אינו סוד משותף בכותרת אלא **HMAC על הגוף הגולמי**.
-> זה חזק יותר, ויש לו מלכודת אחת: חייבים לחתום על **הבתים כפי שהתקבלו**.
-> אימות מול JSON שעבר `JSON.parse` ואז `JSON.stringify` ייכשל — אלה בתים אחרים.
-> `npm run test:wa` מאמת את זה מול מימוש זהה ל-`sign()` של השרת, כולל עברית
-> ואימוג׳י ב-UTF-8.
-
-### לוח הניסיונות החוזרים
-
-`30 שניות · 2 דקות · 10 דקות · 30 דקות · שעתיים`, ואחרי **20 כשלים רצופים**
-ה-webhook מושבת אוטומטית. תשובת `5xx` מצדנו גורמת לניסיון חוזר — וזה רצוי.
-תשובת `2xx` סוגרת את המסירה.
-
-### מעטפת ה-payload
-
-```json
-{ "event": "message.received", "timestamp": "2026-09-02T10:00:00.000Z", "data": { } }
-```
-
-### האירועים
-
-| אירוע | `data` |
-|---|---|
-| `message.received` | `{ id, phone, display, name, type, text, fileName, mediaPath, mediaUrl, waId, receivedAt }` |
-| `message.sent` | `{ id, phone, type, text, source, campaignId }` |
-| `message.failed` | `{ id, phone, type, text, error, source, campaignId }` |
-| `connection.changed` | `{ state, phone, error }` |
-| `campaign.finished` | פרטי הקמפיין |
-| `group.message` | הודעת קבוצה; תשובת `{reply}` נשלחת חזרה לקבוצה |
-
-> **⚠️ אין אירוע מסירה ואין אירוע קריאה.**
-> זו הסיבה ש-`msg_status` צומצם ל-`queued/sent/failed` (מיגרציה 0006).
-> למערכת אין מידע על "נמסר", ולכן אין ערך כזה שאפשר להציג.
-
-`id` הוא מזהה השורה ב-DB של ה-Hub ותמיד קיים. `waId` הוא של וואטסאפ ויכול
-להיות `null`. **אנחנו מדדפים לפי `id`** ונופלים ל-`waId` רק אם חסר.
-
----
-
-## 5. ההנחות שאנחנו מסתמכים עליהן
-
-אם אחת מאלה משתנה בשרת, משהו אצלנו נשבר בשקט:
-
-1. **`data.id` תמיד קיים ב-`message.received`.** בלעדיו אין מניעת כפילויות.
-   `parseHubEvent` מחזיר `null` והאירוע לא מעובד — בכוונה.
-2. **`x-hub-signature` הוא `sha256=<hex>` על הגוף הגולמי.**
-3. **`/api/health` מחזיר `503` כשמנותק** — לא `200` עם דגל.
-4. **הטלפון הוא E.164 בלי `+`.**
-5. **`Idempotency-Key` נשמר 24 שעות.** מעבר לזה, אותו מפתח = בקשה חדשה.
-
----
-
-## 6. מה שאנחנו לא משתמשים בו (עדיין)
-
-`/api/send-media` · `/api/check` · `/api/contacts/*` (opt-in / opt-out) ·
-`/api/templates` · `/api/campaigns` · `/api/compliance/check-content` ·
-`/api/number-health` · `/api/backups`
-
-חלקם רלוונטיים לסבבים הבאים — במיוחד `contacts/opt-out` לתאימות רגולטורית
-ו-`number-health` לניטור מוניטין המספר.
+`node scripts/verify-whatsapp.mjs` — בריאות דרך המערכת. `--send` — הודעת בדיקה אחת למספר הבדיקה, דרך wa-send.

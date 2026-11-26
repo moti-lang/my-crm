@@ -1,0 +1,22 @@
+{
+  "source": "aldinokemal/go-whatsapp-web-multidevice @ v9.10.0 (c24d02c1171c4595732ad30418810a7f754bad27)",
+  "files": ["docs/openapi.yaml", "docs/webhook-payload.md", "src/ui/rest/app.go", "src/infrastructure/whatsapp/webhook.go", "src/pkg/utils/whatsapp.go"],
+  "auth": { "scheme": "basic", "deviceHeader": "X-Device-Id" },
+  "endpoints": {
+    "sendText":  { "method": "POST", "path": "/send/message", "body": "json", "fields": ["phone", "message"], "result": "message_id" },
+    "sendImage": { "method": "POST", "path": "/send/image", "body": "multipart", "fields": ["phone", "caption", "image", "image_url"], "result": "message_id" },
+    "sendFile":  { "method": "POST", "path": "/send/file", "body": "multipart", "fields": ["phone", "caption", "file", "file_url"], "result": "message_id" },
+    "status":    { "method": "GET", "path": "/app/status", "results": ["is_connected", "is_logged_in", "jid"] },
+    "login":     { "method": "GET", "path": "/app/login", "results": ["qr_link", "qr_duration"], "qrLinkBuiltFrom": "request scheme + host + AppBasePath + /statics/..." },
+    "logout":    { "method": "GET", "path": "/app/logout" }
+  },
+  "phone": { "note": "ParseJID: a value without '@' becomes <digits>@s.whatsapp.net; we always send the full JID", "jidSuffix": "@s.whatsapp.net" },
+  "webhook": {
+    "signatureHeader": "X-Hub-Signature-256",
+    "signatureFormat": "sha256=<lowercase hex HMAC-SHA256(secret, raw body)>",
+    "retries": "GOWA retries on non-2xx",
+    "envelope": ["event", "device_id", "session_id", "payload"],
+    "messagePayload": ["id", "chat_id", "from", "from_lid", "from_name", "sender_display_name", "timestamp", "is_from_me", "body"],
+    "deviceEvents": ["device.logged_out", "device.temporary_ban", "device.reachout_timelock"]
+  }
+}

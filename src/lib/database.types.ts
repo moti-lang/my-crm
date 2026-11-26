@@ -1807,42 +1807,6 @@ export type Database = {
           },
         ];
       };
-      wa_config: {
-        Row: {
-          id: number;
-          server_url: string | null;
-          api_key: string | null;
-          webhook_secret: string | null;
-          provisioned_at: string | null;
-          provision_token_hash: string | null;
-          provision_expires_at: string | null;
-          setup_log: string | null;
-          setup_log_at: string | null;
-        };
-        Insert: {
-          id?: number;
-          server_url?: string | null;
-          api_key?: string | null;
-          webhook_secret?: string | null;
-          provisioned_at?: string | null;
-          provision_token_hash?: string | null;
-          provision_expires_at?: string | null;
-          setup_log?: string | null;
-          setup_log_at?: string | null;
-        };
-        Update: {
-          id?: number;
-          server_url?: string | null;
-          api_key?: string | null;
-          webhook_secret?: string | null;
-          provisioned_at?: string | null;
-          provision_token_hash?: string | null;
-          provision_expires_at?: string | null;
-          setup_log?: string | null;
-          setup_log_at?: string | null;
-        };
-        Relationships: [];
-      };
       wa_messages: {
         Row: {
           id: string;
@@ -2533,6 +2497,20 @@ export type Database = {
         };
         Returns: Json;
       };
+      rpc_standing_card_link: {
+        Args: {
+          p_id: string;
+        };
+        Returns: Json;
+      };
+      rpc_standing_paid_elsewhere: {
+        Args: {
+          p_id: string;
+          p_paid_on: string;
+          p_note: string;
+        };
+        Returns: Json;
+      };
       rpc_renew_enrollment_link: {
         Args: {
           p_student: string;
@@ -2645,6 +2623,48 @@ export type Database = {
         };
         Returns: unknown[];
       };
+      rpc_student_set_notes: {
+        Args: {
+          p_id: string;
+          p_notes: string;
+        };
+        Returns: Json;
+      };
+      rpc_tuition_preview: {
+        Args: {
+          p_student: string;
+          p_total: number;
+        };
+        Returns: Json;
+      };
+      rpc_change_tuition: {
+        Args: {
+          p_student: string;
+          p_total: number;
+          p_reason: string;
+          p_expected: number;
+        };
+        Returns: Json;
+      };
+      rpc_student_tuition_history: {
+        Args: {
+          p_student: string;
+        };
+        Returns: unknown[];
+      };
+      rpc_transfer_student: {
+        Args: {
+          p_student: string;
+          p_branch: string;
+        };
+        Returns: Json;
+      };
+      rpc_student_branch_history: {
+        Args: {
+          p_student: string;
+        };
+        Returns: unknown[];
+      };
       rpc_student_name_history: {
         Args: {
           p_student: string;
@@ -2662,28 +2682,6 @@ export type Database = {
           p_content_type: string;
           p_body: string;
           p_candidates: Json;
-        };
-        Returns: Json;
-      };
-      rpc_wa_issue_provision_token: {
-        Args: {
-          p_hours?: number;
-        };
-        Returns: string;
-      };
-      rpc_wa_provision: {
-        Args: {
-          p_token: string;
-          p_url: string;
-          p_api_key: string;
-          p_webhook_secret: string;
-        };
-        Returns: Json;
-      };
-      rpc_wa_setup_report: {
-        Args: {
-          p_token: string;
-          p_log: string;
         };
         Returns: Json;
       };

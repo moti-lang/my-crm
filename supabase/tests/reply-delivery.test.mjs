@@ -203,13 +203,13 @@ check(`כל ${declaredSet.length} המסלולים המוגדרים נבדקו`,
 // ═════════ 6. ה-webhook באמת קורא למסירה ═════════
 // בדיקת מבנה ולא מחרוזת: הקוד נקרא בלי הערות, ומחפשים קריאה לפונקציה.
 console.log('\n★ החיבור ב-wa-webhook:');
-const hook = codeOf('supabase/functions/wa-webhook/index.ts');
+const hook = codeOf('supabase/functions/_shared/wa-webhook-core.ts');
 check('wa-webhook קורא ל-deliverReply', hasCall(hook, 'deliverReply'),
       'ההחלטה מחושבת ואיש אינו שולח אותה');
 check('deliverReply מיובאת מהמקור המשותף',
-      /import\s*\{[^}]*deliverReply[^}]*\}\s*from\s*'\.\.\/_shared\/reply\.ts'/.test(hook));
+      /import\s*\{[^}]*deliverReply[^}]*\}\s*from\s*'\.\/reply\.ts'/.test(hook));
 check('מפתח האידמפוטנטיות נגזר ממזהה ההודעה',
-      /reply:\$\{message\.providerMsgId\}/.test(rawOf('supabase/functions/wa-webhook/index.ts')));
+      /reply:\$\{message\.providerMsgId\}/.test(rawOf('supabase/functions/_shared/wa-webhook-core.ts')));
 
 console.log(fails === 0 ? '\nכל reply מגיע לשליחה' : `\n${fails} בדיקות נכשלו`);
 process.exit(fails === 0 ? 0 : 1);

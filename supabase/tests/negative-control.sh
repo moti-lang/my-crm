@@ -111,8 +111,10 @@ expect_fail "הסרת האינדקס שמונע הודעות כפולות" \
 
 # 05 ולא 02: מאז 0020 הסכום הכולל נשמר גם בחור הזה (הנפילה לחלוקה שווה),
 # ורק ההשוואה לפי סניף בין התפקידים תופסת אותו.
+# מאז 0056 f_general_allocation נקראת רק מתוך private.v_general_allocation (SECURITY DEFINER), ולכן
+# החור הוא ששתיהן ירוצו בהרשאות הקורא.
 expect_fail "החזרת חלוקת ההוצאות להרשאות הקורא (מספר שגוי לרואת חשבון)" \
-  "alter function f_general_allocation(uuid) security invoker" 05_role_consistency_proof.sql
+  "alter function f_general_allocation(uuid) security invoker; alter function private.v_general_allocation() security invoker; grant execute on function f_general_allocation(uuid) to authenticated" 05_role_consistency_proof.sql
 
 expect_fail "החזרת הדוחות הכספיים לתלות ב-RLS של students" \
   "\\i $DIR/holes/invoker_financial_views.sql" \
@@ -238,7 +240,7 @@ expect_fail_code "פלט פגום של המודל מגיע להורה" \
   "node supabase/tests/customer-agent.test.mjs"
 
 expect_fail_code "wa-webhook מפסיק לנתב לקוחות לסוכן" \
-  "$DIR/../../supabase/functions/wa-webhook/index.ts" \
+  "$DIR/../../supabase/functions/_shared/wa-webhook-core.ts" \
   'sed -i "s/? await answerCustomer(db, { alert: (a) => alertOwner(db, a) }, { phone, body: message.body })/? decision/" "$F"' \
   "node supabase/tests/customer-agent.test.mjs"
 
@@ -308,8 +310,8 @@ expect_fail_code "אימות השחזור סופר שורות בלבד (שם ת�
   'sed -i "s/const got = (await ex.run(/const got = want.size ? [...want.keys()] : (await ex.run(/" "$F"' \
   "./scripts/restore-drill.sh >/dev/null && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal_drill -qc \"update students set full_name = full_name || \x27 X\x27 where id = (select id from students limit 1)\" && PGURL=postgresql://\${PGUSER:-postgres}@localhost:\${PGPORT:-5433}/teichtal_drill?host=\${PGHOST:-/tmp} node scripts/restore-verify.mjs \$(ls backups/teichtal-*.json | sort | tail -1)"
 
-expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (greatest מוסר מ-0023, ההגדרה האחרונה)" \
-  "$DIR/../migrations/0033_student_delete.sql" \
+expect_fail_code "יתרת זכות מקזזת חובות של אחרות בחוב הפתוח של הסניף (greatest מוסר ההגדרה האחרונה: 0056)" \
+  "$DIR/../migrations/0056_views_security_invoker.sql" \
   'sed -i "s/sum(GREATEST(vb.balance, 0::numeric))/sum(vb.balance)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
@@ -348,13 +350,13 @@ expect_fail_code "0020: חלוקה לפי תלמידות בלי תלמידות �
   'sed -i "s/case when (select students from totals) > 0 then ab.students::numeric else 1::numeric end/ab.students::numeric/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
-expect_fail_code "0020: הרווחיות חוזרת להישען על הסניף הנוכחי של התלמידה (ההגדרה האחרונה ב-0023)" \
-  "$DIR/../migrations/0033_student_delete.sql" \
+expect_fail_code "0020: הרווחיות חוזרת להישען על הסניף הנוכחי של התלמידה (ההגדרה האחרונה: 0056)" \
+  "$DIR/../migrations/0056_views_security_invoker.sql" \
   'sed -i "s/WHERE p.branch_id = b.id AND p.deleted_at IS NULL) AS income_students/WHERE s.branch_id = b.id AND p.deleted_at IS NULL) AS income_students/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
 expect_fail_code "0020: סגירת סניף בלי לבדוק תלמידות פעילות" \
-  "$DIR/../migrations/0020_real_data_findings.sql" \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
   'sed -i "s/if v_open > 0 then/if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/14_real_data.sql"
 
@@ -424,17 +426,17 @@ expect_fail_code "הרשמה: מבנה תשלום של סניף לא תקין ע
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: התקנון לא חובה" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if v_terms is distinct from true then return/  if false then return/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת הקצב מוסרת" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הסכום נלקח מהבקשה (הזרקה)" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/          coalesce((v_plan ->> .tuition.)::numeric, 0), coalesce((v_plan ->> .registration_fee.)/          coalesce((p ->> \x27tuition_total\x27)::numeric, (v_plan ->> \x27tuition\x27)::numeric, 0), coalesce((v_plan ->> \x27registration_fee\x27)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -464,7 +466,7 @@ expect_fail_code "הרשמה: rpc_enroll נפתחת שוב ל-anon (עוקפים
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "הרשמה: הגבלת ה-IP מוסרת" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if v_n_phone >= 3 or (p_ip is not null and p_ip <> .. and v_n_ip >= 10) then/  if v_n_phone >= 3 then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -643,7 +645,7 @@ expect_fail_code "שינוי מנוע התבניות בצד אחד בלבד" \
 # ★ הבקרה של הממצא: ניתוק החיבור בין ההחלטה לשליחה.
 #    זה בדיוק המצב שהיה בייצור — ההחלטה חושבה ואיש לא שלח אותה.
 expect_fail_code "ניתוק המסירה מ-wa-webhook" \
-  "$DIR/../functions/wa-webhook/index.ts" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
   'sed -i "s|  const delivery = await deliverReply(|  const delivery = { delivered: false, reason: \"no_reply\" }; const _unused = (|" "$F"' \
   "node supabase/tests/reply-delivery.test.mjs"
 
@@ -744,7 +746,7 @@ expect_fail_code "מסלולים: הוראות קבע מוצגות להורים 
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "מזומן: נוצר קישור תשלום" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if b.collect_payments and v_track ->> .method. <> .cash. then/  if b.collect_payments then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -754,12 +756,12 @@ expect_fail_code "וואטסאפ: תזכורות יוצאות גם למי שענ
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "צילום: התשובה לא נכתבת לשדה שחוסם הפקות" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/          coalesce(v_photo, false), case when v_photo is not null then b.photo_consent_text end,/          true, case when v_photo is not null then b.photo_consent_text end,/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
 expect_fail_code "שאלה מוסתרת: התשובה נלקחת מהבקשה בכל זאת" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/  if (v_opts ->> .ask_whatsapp.)::boolean then/  v_wa := (p ->> \x27whatsapp\x27) = \x27yes\x27;\n  if (v_opts ->> \x27ask_whatsapp\x27)::boolean then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -799,7 +801,7 @@ expect_fail_code "מחיקת שאלה ללא מענה בלי אישור" \
   "node supabase/tests/question-delete.test.mjs"
 
 expect_fail_code "הודעת ההרשמה חוזרת ל\"תודה שנרשמת לחוג\"" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/coalesce(. ל. || v_program, ..)/coalesce(\x27 ל\x27 || v_program, \x27 לחוג\x27)/g" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/17_enrollment.sql"
 
@@ -809,12 +811,12 @@ expect_fail_code "כותרת הטופס חוזרת ל\"הרשמה לחוג\"" \
   "node supabase/tests/program-word.test.mjs"
 
 expect_fail_code "★ מחיקת תלמידה משנה את דוח ההכנסות החודשי (תשלומים של מחוקה יוצאים מהדוח)" \
-  "$DIR/../migrations/0033_student_delete.sql" \
+  "$DIR/../migrations/0056_views_security_invoker.sql" \
   'sed -i "s/          WHERE p.deleted_at IS NULL$/          WHERE p.deleted_at IS NULL AND s.deleted_at IS NULL/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
 
 expect_fail_code "★ מחיקת תלמידה משנה את ההכנסות לפי סניף" \
-  "$DIR/../migrations/0033_student_delete.sql" \
+  "$DIR/../migrations/0056_views_security_invoker.sql" \
   'sed -i "s/WHERE p.branch_id = b.id AND p.deleted_at IS NULL) AS income_students/WHERE p.branch_id = b.id AND p.deleted_at IS NULL AND s.deleted_at IS NULL) AS income_students/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/20_student_delete.sql"
 
@@ -893,33 +895,8 @@ expect_fail_code "★ דף התשלום — RPC שגוי (ההורה לא רוא
   'sed -i "s/rpc(.rpc_payment_link_public.,/rpc(\x27rpc_payment_link_publicx\x27 as never,/" "$F"' \
   "node supabase/tests/ui-public.test.mjs"
 
-expect_fail_code "★ טוקן הקמה לא נמחק אחרי שימוש (אפשר לדרוס את כתובת השרת)" \
-  "$DIR/../migrations/0034_wa_provision.sql" \
-  'sed -i "s/provisioned_at = now(), provision_token_hash = null, provision_expires_at = null/provisioned_at = now()/" "$F"' \
-  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/21_wa_provision.sql"
-
-expect_fail_code "★ טוקן הקמה לא נבדק" \
-  "$DIR/../migrations/0034_wa_provision.sql" \
-  'sed -i "s/     or c.provision_token_hash <> encode(extensions.digest(coalesce(p_token, ..), .sha256.), .hex.) then/     then/" "$F"' \
-  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/21_wa_provision.sql"
-
-expect_fail_code "★ הנפקת טוקן לפי current_user (כל משתמשת עוברת — הבאג שנתפס)" \
-  "$DIR/../migrations/0034_wa_provision.sql" \
-  'sed -i "s/  if nullif(current_setting(.request.jwt.claims., true), ..) is not null and auth_role() is distinct from .owner. then/  if coalesce(auth_role()::text, \x27\x27) <> \x27owner\x27 and current_user not in (\x27postgres\x27, \x27service_role\x27) then/" "$F"' \
-  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/21_wa_provision.sql"
-
-expect_fail_code "★ wa-admin בלי בדיקת בעלים (QR לכל מחוברת)" \
-  "$DIR/../functions/wa-admin/index.ts" \
-  'sed -i "/  if (role !== .owner.) return json(/d" "$F"' \
-  "node supabase/tests/wa-provision.test.mjs"
-
-expect_fail_code "wa-provision שומר בלי לוודא שהשרת עונה" \
-  "$DIR/../functions/wa-provision/index.ts" \
-  'sed -i "/השרת לא אישר את המפתח/d" "$F"' \
-  "node supabase/tests/wa-provision.test.mjs"
-
 expect_fail_code "★ הבוט כבוי — והודעות נכנסות עדיין מעובדות" \
-  "$DIR/../functions/wa-webhook/index.ts" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
   'sed -i "/if (paused?.value === true) return json/d" "$F"' \
   "node supabase/tests/wa-bot-switch.test.mjs"
 
@@ -1005,7 +982,7 @@ expect_fail_code "★ פקודות: מספר מורשה נשמר כמו שהוק
 
 expect_fail_code "פקודות: לבעלים אין הרשאה לנרמול — הוספה מהמסך נכשלת" \
   "$DIR/../migrations/0038_commands_screen.sql" \
-  'sed -i "/^grant execute on function f_normalize_phone(text) to authenticated, service_role;/d" "$F"' \
+  'sed -i "s/^grant execute on function f_normalize_phone(text) to authenticated, service_role;/revoke execute on function f_normalize_phone(text) from authenticated; grant execute on function f_normalize_phone(text) to service_role;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/23_commands_screen.sql"
 
 expect_fail_code "★ פקודות: ניסיון שנדחה בהרשאות לא נרשם ביומן" \
@@ -1285,12 +1262,12 @@ expect_fail_code "★ מספר החיובים שנותרו ב-SUMIT לא נבד�
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
 expect_fail_code "★ הרשמה: יום חיוב 29 (או זבל) מתקבל" \
-  "$DIR/../migrations/0041_billing_day.sql" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
   'sed -i "s/    if v_day !~ .\^\[0-9\]{1,2}\$. or v_day::int not between 1 and 28 then/    if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
 expect_fail_code "★ הרשמה: התאריכים בנוסח לא לפי היום שנבחר" \
-  "$DIR/../migrations/0044_pay_page_billing_day.sql" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
   'sed -i "s/    v_dates := f_standing_dates_on_day(coalesce(p_on, f_today_il()), v_day, v_n);/    v_dates := f_standing_dates(coalesce(p_on, current_date), v_n);/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/26_billing_day.sql"
 
@@ -1340,7 +1317,7 @@ expect_fail_code "★ הרשמה: יום החיוב לא נשלח" \
   "node supabase/tests/billing-day-ui.test.mjs"
 
 expect_fail_code "★ מכסה: הוראה שנוצרה עכשיו נבדקת מיד באותה ריצה (קריאה כפולה ל-SUMIT)" \
-  "$DIR/../migrations/0042_no_check_after_create.sql" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
   'sed -i "s/          case when p_ok then now() end)/          null)/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/18_standing_orders.sql"
 
@@ -1351,27 +1328,27 @@ expect_fail_code "★ עריכת שם: שינוי שם לא נרשם ביומן"
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "★ עריכת שם: מנהלת סניף משנה שם של תלמידה מסניף אחר" \
-  "$DIR/../migrations/0043_student_rename.sql" \
-  'sed -i "s/  if not (v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches()))) then/  if not (v_role = \x27owner\x27 or v_role = \x27branch_manager\x27) then/" "$F"' \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
+  'sed -i "s/  if not coalesce(v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches())), false) then/  if not (v_role = \x27owner\x27 or v_role = \x27branch_manager\x27) then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "★ עריכת שם: כל משתמשת (גם רואת חשבון) משנה שם" \
-  "$DIR/../migrations/0043_student_rename.sql" \
-  'sed -i "s/  if not (v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches()))) then/  if false then/" "$F"' \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
+  'sed -i "s/  if not coalesce(v_role = .owner. or (v_role = .branch_manager. and s.branch_id in (select my_branches())), false) then/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "עריכת שם: שם כפול בסניף מתקבל" \
-  "$DIR/../migrations/0043_student_rename.sql" \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
   'sed -i "s/  if exists (select 1 from students o where o.id <> s.id/  if false and exists (select 1 from students o where o.id <> s.id/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "★ עריכת שם: הודעה שכבר יצאה נכתבת מחדש (התיעוד משתנה)" \
-  "$DIR/../migrations/0043_student_rename.sql" \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
   'sed -i "s/     where student_id = s.id and status = .scheduled./     where student_id = s.id/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
 expect_fail_code "★ עריכת שם: תזכורת שעוד לא יצאה נשארת עם השם הישן" \
-  "$DIR/../migrations/0043_student_rename.sql" \
+  "$DIR/../migrations/0053_role_checks_null_safe.sql" \
   'sed -i "s/     where student_id = s.id and status = .scheduled./     where student_id = s.id and status = \x27cancelled\x27/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/27_student_rename.sql"
 
@@ -1433,12 +1410,12 @@ expect_fail_code "★ הנחה: שינוי הנחה לא נרשם ביומן" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
 
 expect_fail_code "★ הנחה: הקטנת הנחה (העלאת סכום) בהוראת קבע פעילה מתקבלת" \
-  "$DIR/../migrations/0045_student_discount.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/^    if v_delta < 0 then\$/    if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
 
 expect_fail_code "★ הנחה: בהוראת קבע נשמרת ההנחה שביקשו ולא מה שמתחלק בפועל" \
-  "$DIR/../migrations/0045_student_discount.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/    v_after := s.discount + v_cut \* v_remaining;/    v_after := p_amount;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/28_student_discount.sql"
 
@@ -1489,7 +1466,7 @@ expect_fail_code "★ הנחה: אפשר לשמור בלי סיבה" \
 
 # ─── קישור הרשמה חדש וסכום חלקי (0046; מוגדרות מחדש ב-0047 וב-0049) ───
 expect_fail_code "★ קישור הרשמה חדש: נוצר כקישור חוב (בלי הוראת קבע ובלי השלמת ההרשמה)" \
-  "$DIR/../migrations/0050_payment_void.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/  values (v_id, v_token, .tl-. || v_id, s.id, s.branch_id, v_amount, .enrollment., auth.uid());/  values (v_id, v_token, \x27tl-\x27 || v_id, s.id, s.branch_id, v_amount, \x27debt\x27, auth.uid());/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
@@ -1499,22 +1476,22 @@ expect_fail_code "★ קישור תשלום רגיל לתלמידה שממתינ
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "★ קישור הרשמה חדש: לא רק הבעלים ומנהלת הסניף" \
-  "$DIR/../migrations/0050_payment_void.sql" \
-  'sed -i "/function rpc_renew_enrollment_link/,/^end/ s/^  if auth_role() is distinct from .owner.\$/  if false and auth_role() is distinct from \x27owner\x27/" "$F"' \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
+  'sed -i "/FUNCTION public.rpc_renew_enrollment_link/,/^end/ s/^  if auth_role() is distinct from .owner.\$/  if false and auth_role() is distinct from \x27owner\x27/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "קישור הרשמה חדש: גם במסלול מזומן" \
-  "$DIR/../migrations/0050_payment_void.sql" \
+  "$DIR/../migrations/0058_standing_link_for_active.sql" \
   'sed -i "s/     and s.payment_track is not null and coalesce(s.payment_track ->> .method., .cash.) <> .cash./     and s.payment_track is not null/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "★ קישור הרשמה חדש: הקישור הקודם נשאר חי" \
-  "$DIR/../migrations/0050_payment_void.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/^  update payment_links set status = .cancelled. where student_id = s.id and status in (.pending., .opened.);\$/  perform 1;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
 expect_fail_code "קישור הרשמה חדש: לא נרשם ביומן" \
-  "$DIR/../migrations/0050_payment_void.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/.renew_enrollment_link., .students., s.id,/\x27x_renew\x27, \x27students\x27, s.id,/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/29_renew_enrollment_link.sql"
 
@@ -1566,7 +1543,7 @@ expect_fail_code "★ הרשמה: מסך הסיום מבטיח שהקישור נ
 
 # ─── ניסיון חיוב חוזר בהוראת קבע (0048) ───
 expect_fail_code "★ חיוב חוזר: גם להוראה פעילה" \
-  "$DIR/../migrations/0048_standing_retry.sql" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
   'sed -i "s/^  if not o.needs_renewal and o.status <> .failed. then\$/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
@@ -1576,12 +1553,12 @@ expect_fail_code "★ חיוב חוזר: לא רק הבעלים" \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
 expect_fail_code "★ חיוב חוזר: אחרי חיוב שעבר — שוב \"חיוב\" (כפול) ולא \"חידוש\"" \
-  "$DIR/../migrations/0048_standing_retry.sql" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
   'sed -i "s/  v_stage := case when o.needs_renewal then .renew. else .charge. end;/  v_stage := \x27charge\x27;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
 expect_fail_code "★ חיוב חוזר: החידוש לפי התאריך הישן מהסנכרון (חיוב שני באותו חודש)" \
-  "$DIR/../migrations/0048_standing_retry.sql" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
   'sed -i "s/    v_last := greatest(o.last_billing, v_paid, v_charged);/    v_last := o.last_billing;/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
@@ -1641,7 +1618,7 @@ expect_fail_code "★ חיוב חוזר: החיבור נפל — והמסך או
   "node supabase/tests/standing.test.mjs"
 
 expect_fail_code "★ חיוב חוזר: אחרי \"לא ברור אם חויב\" — אפשר לחייב שוב מיד" \
-  "$DIR/../migrations/0048_standing_retry.sql" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
   'sed -i "s/^  if v_stage = .charge. and o.retry_uncertain_at > now() - interval .24 hours. then\$/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/30_standing_retry.sql"
 
@@ -1657,12 +1634,12 @@ expect_fail_code "★ רישום ידני שמכסה הכל — קישור הר�
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/31_activate_on_payment.sql"
 
 expect_fail_code "★ \"קישור הרשמה חדש\" למי שכבר שילמה את החיוב הראשון" \
-  "$DIR/../migrations/0050_payment_void.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/^  if f_first_charge_covered(s) then\$/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/31_activate_on_payment.sql"
 
 expect_fail_code "\"ממתינה לחיוב הראשון\" גם כשהחיוב הראשון שולם" \
-  "$DIR/../migrations/0050_payment_void.sql" \
+  "$DIR/../migrations/0058_standing_link_for_active.sql" \
   'sed -i "s/^     and not f_first_charge_covered(s)\$/     and true/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/31_activate_on_payment.sql"
 
@@ -1698,7 +1675,7 @@ expect_fail_code "★ ביטול תשלום: קישור הרשמה ששולם ב
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/32_payment_void.sql"
 
 expect_fail_code "★ קישור הרשמה חדש כשיש הוראת קבע ב-SUMIT (הוראה שנייה)" \
-  "$DIR/../migrations/0050_payment_void.sql" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
   'sed -i "s/^  if exists (select 1 from standing_orders o where o.student_id = s.id and o.status in (.active., .retrying., .failed.)) then\$/  if false then/" "$F"' \
   "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/32_payment_void.sql"
 
@@ -1762,6 +1739,492 @@ expect_fail_code "ביטול חריג: בלי אישור" \
   "$DIR/../../src/components/StudentDrawer.tsx" \
   'sed -i "s/if (!window.confirm(.לבטל את ההרשמה של/if (false \&\& !window.confirm(\x60לבטל את ההרשמה של/" "$F"' \
   "node supabase/tests/cancel-override-ui.test.mjs"
+
+# ─── הקשחת אבטחה 11/2026 (0052–0057) ───
+expect_fail "★ החזרת שני ה-views שאפשר לכתוב דרכם (רצים כבעלים, ALL ל-authenticated)" \
+  "\\i $DIR/holes/updatable_definer_views.sql" \
+  "34_security_hardening.sql"
+
+expect_fail "UPDATE/DELETE ל-authenticated על view (גם כשהוא לא ניתן לעדכון)" \
+  "grant update, delete on v_students_accounting to authenticated" \
+  "34_security_hardening.sql"
+
+expect_fail "TRUNCATE ל-authenticated (עוקף RLS)" \
+  "grant truncate on students to authenticated" \
+  "34_security_hardening.sql"
+
+expect_fail "ברירת מחדל שמעניקה ALL ל-authenticated על טבלאות חדשות" \
+  "alter default privileges for role postgres in schema public grant all on tables to authenticated" \
+  "34_security_hardening.sql"
+
+expect_fail "★ סגירת סניף — בדיקת תפקיד שבה NULL עובר" \
+  "\\i $DIR/holes/close_branch_null_role.sql" \
+  "34_security_hardening.sql"
+
+expect_fail "★ שינוי שם — בדיקת תפקיד שבה NULL עובר, ו-my_branches() למושבתת" \
+  "\\i $DIR/holes/rename_student_null_role.sql" \
+  "34_security_hardening.sql"
+
+expect_fail "★ חלוקת ההוצאות שוב פתוחה לכל משתמשת מחוברת" \
+  "grant execute on function f_general_allocation(uuid) to authenticated" \
+  "34_security_hardening.sql"
+
+expect_fail "פונקציה בלי search_path קבוע" \
+  "alter function f_today_il() reset search_path" \
+  "34_security_hardening.sql"
+
+expect_fail "פונקציה ב-private פתוחה ל-anon" \
+  "grant usage on schema private to anon; grant execute on function private.v_debtors() to anon" \
+  "34_security_hardening.sql"
+
+expect_fail "פונקציה חדשה פתוחה ל-anon (מעבר לשש של הדפים הציבוריים)" \
+  "create function public.hole_count() returns bigint language sql security definer set search_path = public as 'select count(*) from students'; grant execute on function public.hole_count() to anon" \
+  "34_security_hardening.sql"
+
+expect_fail_code "★ CSP: סקריפטים inline מותרים" \
+  "$DIR/../../netlify.toml" \
+  "sed -i \"s/script-src 'self';/script-src 'self' 'unsafe-inline';/\" \"\$F\"" \
+  "node supabase/tests/security-headers.test.mjs"
+
+expect_fail_code "★ CSP: חיבור לכל דומיין" \
+  "$DIR/../../netlify.toml" \
+  "sed -i \"s/connect-src 'self' /connect-src 'self' https: /\" \"\$F\"" \
+  "node supabase/tests/security-headers.test.mjs"
+
+expect_fail_code "★ CSP שחוסם את האפליקציה עצמה נתפס בבדיקות המסך" \
+  "$DIR/../../netlify.toml" \
+  "sed -i \"s/script-src 'self';/script-src 'none';/\" \"\$F\"" \
+  "node supabase/tests/payment-void-ui.test.mjs"
+
+expect_fail_code "השוואת סוד ה-cron חוזרת להיות לא בזמן קבוע" \
+  "$DIR/../../supabase/functions/_shared/guard.ts" \
+  "sed -i 's/if (!timingSafeEqualStr(auth, \`Bearer \${requireEnv(.CRON_SECRET.)}\`))/if (auth !== \`Bearer \${requireEnv(\"CRON_SECRET\")}\`)/' \"\$F\"" \
+  "node supabase/tests/function-guards.test.mjs"
+
+# ─── קישור הוראת קבע לפעילה שלא שילמה (0058) ───
+expect_fail_code "★ פעילה בהוראת קבע שלא שילמה — שוב רק קישור רגיל על כל הסכום" \
+  "$DIR/../migrations/0058_standing_link_for_active.sql" \
+  'sed -i "s/          or (s.status = .active. and s.payment_track ->> .method. = .standing_order./          or (false and s.status = \x27active\x27 and s.payment_track ->> \x27method\x27 = \x27standing_order\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/35_standing_link_active.sql"
+
+expect_fail_code "★ פעילה שיש לה הוראת קבע — מקבלת קישור הרשמה (הוראה שנייה)" \
+  "$DIR/../migrations/0058_standing_link_for_active.sql" \
+  'sed -i "s/              and not exists (select 1 from standing_orders o where o.student_id = s.id)))/              ))/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/35_standing_link_active.sql"
+
+expect_fail_code "פעילה ששילמה משהו — מקבלת קישור הרשמה" \
+  "$DIR/../migrations/0058_standing_link_for_active.sql" \
+  'sed -i "s/where p.student_id = s.id and p.deleted_at is null) <= 0/where p.student_id = s.id and p.deleted_at is null) < 1000000/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/35_standing_link_active.sql"
+
+expect_fail_code "★ המסך: פעילה בהוראת קבע שלא שילמה — שוב כפתור קישור תשלום רגיל" \
+  "$DIR/../../src/lib/enrollment.ts" \
+  'sed -i "s/  return status === .active. \&\& method === .standing_order./  return false \&\& status === \x27active\x27 \&\& method === \x27standing_order\x27/" "$F"' \
+  "node supabase/tests/standing-link-active-ui.test.mjs"
+
+expect_fail_code "המסך: בלי ההסבר שזה לא חיוב אחד על כל הסכום" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/note={status === .active. ? /note={false ? /" "$F"' \
+  "node supabase/tests/standing-link-active-ui.test.mjs"
+
+# ─── הנחה ומסלול (0059) ───
+expect_fail_code "★ הנחה בלי קישור פתוח — סכומי המסלול נשארים בלי ההנחה" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
+  'sed -i "s/^  if v_track is null and s.payment_track is not null and v_paid = 0 and/  if false and v_track is null and s.payment_track is not null and v_paid = 0 and/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/36_discount_track.sql"
+
+expect_fail_code "★ קישור הרשמה חדש — מהמסלול הישן, בלי ההנחה" \
+  "$DIR/../migrations/0059_discount_updates_track.sql" \
+  'sed -i "s/^    s.payment_track := f_track_with_tuition(s.payment_track, s.tuition_total - s.discount, s.registration_fee);/    null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/36_discount_track.sql"
+
+# ─── חיוב חוזר שלא בוצע (0060) ───
+expect_fail_code "★ חיוב חוזר שלא בוצע — המצב מ-SUMIT לא נקלט (המסך נשאר \"הושבתה\")" \
+  "$DIR/../../supabase/functions/_shared/standing-retry.ts" \
+  'sed -i "s/      const { data: ref } = await admin.rpc(.rpc_standing_retry_refused., {/      const { data: ref } = await admin.rpc(\x27x_disabled\x27, {/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ חיוב חוזר שלא בוצע — הסטטוס אצלנו לא מתעדכן לפי SUMIT" \
+  "$DIR/../migrations/0060_standing_retry_refused.sql" \
+  'sed -i "s/^  v_obs := rpc_standing_billing_observed(p_id, p_sumit_status, p_next, p_prev, p_final);/  v_obs := null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/37_standing_retry_refused.sql"
+
+expect_fail_code "חיוב חוזר שלא בוצע — לא נרשם ביומן" \
+  "$DIR/../migrations/0060_standing_retry_refused.sql" \
+  'sed -i "s/  values (o.id, .retry_refused., o.next_billing,/  values (o.id, \x27sumit_change\x27, o.next_billing,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/37_standing_retry_refused.sql"
+
+expect_fail_code "★ המסך: בלי שורת \"ניסיון חיוב חוזר אחרון\"" \
+  "$DIR/../../src/components/StandingOrderPanel.tsx" \
+  'sed -i "s/        const last = lastRetryText(events.data ?? \[\], formatDateTime, formatILS);/        const last = null as ReturnType<typeof lastRetryText>;/" "$F"' \
+  "node supabase/tests/standing-retry-ui.test.mjs"
+
+# ─── החיוב שולם בנפרד (0061) ───
+expect_fail_code "★ שולם בנפרד: לא רק הבעלים" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לרשום חיוב ששולם בנפרד./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "שולם בנפרד: בלי \"איך שולם\"" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/  if v_note is null then raise exception .יש לכתוב איך שולם/  if false then raise exception \x27x/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "★ שולם בנפרד: ההוראה לא מסומנת \"צריך לחדש\" (הלחיצה הבאה הייתה מחייבת שוב)" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/         needs_renewal = v_after > 0,/         needs_renewal = false,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "★ שולם בנפרד: אפשר לרשום פעמיים" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/  if o.status <> .failed. or o.needs_renewal then/  if o.status <> \x27failed\x27 then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "יומן ההוראה בלי שם מי שעשתה" \
+  "$DIR/../migrations/0061_standing_paid_elsewhere.sql" \
+  'sed -i "s/    new.actor_label := coalesce((select full_name from profiles where id = new.actor), .משתמשת לא מזוהה.);/    new.actor_label := \x27משתמשת לא מזוהה\x27;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/38_standing_paid_elsewhere.sql"
+
+expect_fail_code "★ המסך: \"שולם בנפרד\" בלי אישור" \
+  "$DIR/../../src/components/StandingOrderPanel.tsx" \
+  'sed -i "s/            if (!window.confirm(\x60לרשום שהחיוב של/            if (false \&\& !window.confirm(\x60לרשום שהחיוב של/" "$F"' \
+  "node supabase/tests/standing-retry-ui.test.mjs"
+
+# ─── קישור להחלפת כרטיס (0062) ───
+expect_fail_code "★ החלפת כרטיס: לא רק הבעלים" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לשלוח קישור להחלפת כרטיס./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ החלפת כרטיס: ההוראה הישנה לא נסגרת כשההורה משלמת (אפשר לחייב אותה שוב)" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/       set status = case when v_done then .completed. else .cancelled. end,/       set status = case when v_done then \x27completed\x27 else status end,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ החלפת כרטיס: \"חיוב X מתוך N\" מתחיל מחדש בהוראה החדשה" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/case when p_ok then .active. else .setup_failed. end, case when p_ok then v_start end, old.charged_count + 1,/case when p_ok then \x27active\x27 else \x27setup_failed\x27 end, case when p_ok then v_start end, 0,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ החלפת כרטיס: הוראה שנייה אחרי שההוראה כבר טופלה (חיוב כפול)" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/(l.standing_installments > 0 and old.status = .cancelled.)/(l.standing_installments > 0)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "החלפת כרטיס: קישור פתוח נשאר אחרי \"שולם בנפרד\"" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/  if old.status = .failed. and not old.needs_renewal and (new.status <> .failed. or new.needs_renewal) then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "החלפת כרטיס: בחיוב האחרון ההוראה לא מסתיימת" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/           charged_count = charged_count + case when v_done then 1 else 0 end,/           charged_count = charged_count,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ החלפת כרטיס: נוסח האישור לא לפי החיובים שנותרו" \
+  "$DIR/../migrations/0062_standing_card_replace.sql" \
+  'sed -i "s/    v_n := l.standing_installments;/    v_n := l.standing_installments + 1;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/39_standing_card_replace.sql"
+
+expect_fail_code "★ סנכרון: ההוראה הישנה לא מבוטלת ב-SUMIT אחרי החלפת כרטיס" \
+  "$DIR/../functions/_shared/standing-sync.ts" \
+  'sed -i "s/      const c = await sumit.cancel(Number(s.replaces_customer_id), Number(s.replaces_recurring_id));/      const c = { ok: true } as { ok: true } | { ok: false; error: string };/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ סנכרון: הישנה מבוטלת גם כשהחדשה לא נוצרה" \
+  "$DIR/../functions/_shared/standing-sync.ts" \
+  'sed -i "s/    if (!r.ok) { out.setup_failed++; continue; }/    if (!r.ok) { out.setup_failed++; if (s.replaces_recurring_id \&\& s.replaces_customer_id) await sumit.cancel(Number(s.replaces_customer_id), Number(s.replaces_recurring_id)); continue; }/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ המסך: קישור להחלפת כרטיס בלי אישור" \
+  "$DIR/../../src/components/StandingOrderPanel.tsx" \
+  'sed -i "s/          if (!window.confirm(\x60לשלוח להורה של/          if (false \&\& !window.confirm(\x60לשלוח להורה של/" "$F"' \
+  "node supabase/tests/standing-retry-ui.test.mjs"
+
+# ─── העברת תלמידה לסניף אחר (0063) ───
+expect_fail_code "★ העברה: לא רק הבעלים" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה להעביר תלמידה לסניף אחר./  if false then raise exception \x27x\x27/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: הוראת קבע פעילה נשארת בסניף הקודם" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  with c as (update standing_orders set branch_id = p_branch where student_id = s.id and status not in (.cancelled., .completed.) returning 1)/  with c as (select 1 from standing_orders where false)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "העברה: גם הוראה שהסתיימה זזה (ההיסטוריה משתנה)" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/where student_id = s.id and status not in (.cancelled., .completed.) returning 1)/where student_id = s.id returning 1)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: קישור פתוח עם שם הסניף הקודם נשאר" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  with c as (update payment_links set status = .cancelled. where student_id = s.id and status in (.pending., .opened.) returning reminder_id)/  with c as (select null::uuid as reminder_id where false)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "העברה: הקבוצה של הסניף הקודם נשארת" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  update students set branch_id = p_branch, group_name = null where id = s.id;/  update students set branch_id = p_branch where id = s.id;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: לסניף סגור" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/where id = p_branch and deleted_at is null and is_active;/where id = p_branch;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: כפילות שם בסניף החדש" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  if exists (select 1 from students o where o.id <> s.id and o.season_id = s.season_id and o.branch_id = p_branch/  if false and exists (select 1 from students o where o.id <> s.id and o.season_id = s.season_id and o.branch_id = p_branch/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "העברה: שינוי סניף ישיר לא נרשם ביומן" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/  for each row when (old.branch_id is distinct from new.branch_id) execute function f_student_branch_audit();/  for each row when (false) execute function f_student_branch_audit();/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ העברה: ההיסטוריה גלויה למנהלת שכבר לא אחראית על התלמידה" \
+  "$DIR/../migrations/0063_student_transfer.sql" \
+  'sed -i "s/(auth_role() = .branch_manager. and s.branch_id in (select my_branches()))/(auth_role() = \x27branch_manager\x27)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/40_student_transfer.sql"
+
+expect_fail_code "★ המסך: העברה בלי אישור" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/            if (!window.confirm(\x60להעביר את/            if (false \&\& !window.confirm(\x60להעביר את/" "$F"' \
+  "node supabase/tests/student-transfer-ui.test.mjs"
+
+expect_fail_code "★ המסך: גם מנהלת סניף רואה \"העברה לסניף אחר\"" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/            {profile?.role === .owner. \&\& student.id \&\& student.branch_id \&\& (transferring/            {(profile?.role === \x27owner\x27 || profile?.role === \x27branch_manager\x27) \&\& student.id \&\& student.branch_id \&\& (transferring/" "$F"' \
+  "node supabase/tests/student-transfer-ui.test.mjs"
+
+# ─── שינוי מחיר ידני (0064) ───
+expect_fail_code "★ מחיר: לא רק הבעלים" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לשנות מחיר. using errcode = .42501.; end if;/  null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ מחיר: הורדה מתחת למה שהוראת הקבע עוד תגבה" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/    if v_after < v_order_left then/    if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ מחיר: נשמר למרות שהיתרה השתנתה מאז התוכנית" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  if (v_plan ->> .balance_after.)::numeric is distinct from p_expected then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ מחיר: null של JSON מוחק את המסלול" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/         payment_track = case when jsonb_typeof(v_plan -> .track.) = .object. then v_plan -> .track. else payment_track end/         payment_track = coalesce(v_plan -> \x27track\x27, payment_track)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "מחיר: המסלול לא מחושב מחדש כשעוד לא שולם" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/    v_track := f_track_with_tuition(s.payment_track, v_tuition - s.discount, s.registration_fee);/    v_track := s.payment_track;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ מחיר: קישור בסכום הישן נשאר פתוח" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  with c as (update payment_links set status = .cancelled. where student_id = s.id and status in (.pending., .opened.) returning 1)/  with c as (select 1 where false)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "מחיר: בלי סיבה" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  if v_reason is null then raise exception .יש לכתוב למה המחיר משתנה.; end if;/  null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "מחיר: הסיבה נשארת לעדכון הבא" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  perform set_config(.app.tuition_reason., .., true);/  null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "מחיר: שינוי ישיר לא נרשם ביומן" \
+  "$DIR/../migrations/0064_tuition_change.sql" \
+  'sed -i "s/  for each row when (old.tuition_total is distinct from new.tuition_total) execute function f_student_tuition_audit();/  for each row when (false) execute function f_student_tuition_audit();/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/41_tuition_change.sql"
+
+expect_fail_code "★ המסך: שינוי מחיר בלי אישור" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/            if (!window.confirm(\x60לשנות את המחיר השנתי/            if (false \&\& !window.confirm(\x60לשנות את המחיר השנתי/" "$F"' \
+  "node supabase/tests/student-tuition-ui.test.mjs"
+
+expect_fail_code "★ המסך: גם מנהלת סניף רואה \"שינוי מחיר\"" \
+  "$DIR/../../src/components/StudentDrawer.tsx" \
+  'sed -i "s/            {profile?.role === .owner. \&\& student.id \&\& (pricing/            {(profile?.role === \x27owner\x27 || profile?.role === \x27branch_manager\x27) \&\& student.id \&\& (pricing/" "$F"' \
+  "node supabase/tests/student-tuition-ui.test.mjs"
+
+# ─── וואטסאפ על GOWA (0065) ───
+expect_fail_code "★ webhook: לקוח המסד נוצר לפני בדיקת החתימה" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
+  'sed -i "s|  // ─── 1. אימות. לפני כל נגיעה במסד. ───|  deps.db(); // ─── 1. אימות. לפני כל נגיעה במסד. ───|" "$F"' \
+  "node supabase/tests/wa-webhook.test.mjs"
+
+expect_fail_code "★ webhook: בלי בדיקת חתימה (verify_jwt=false — פתוח לעולם)" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
+  'sed -i "s|  if (!(await verifyWebhookSignature(rawBody, req.headers.get(.x-hub-signature-256.)))) {|  if (false) {|" "$F"' \
+  "node supabase/tests/wa-webhook.test.mjs"
+
+expect_fail_code "webhook: קורא את כותרת החתימה הישנה (x-hub-signature)" \
+  "$DIR/../functions/_shared/wa-webhook-core.ts" \
+  'sed -i "s|req.headers.get(.x-hub-signature-256.)|req.headers.get(\x27x-hub-signature\x27)|" "$F"' \
+  "node supabase/tests/wa-webhook.test.mjs"
+
+expect_fail_code "★ webhook: הודעה בלי מזהה מעובדת (אין מניעת כפילויות)" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "/  if (!id) return { kind: .unparsable., reason: .no_id. };/d" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "webhook: הודעה שלי מעובדת (הבוט עונה לעצמו)" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "/  if (p.is_from_me === true) return { kind: .ignore., reason: .from_me. };/d" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ מצב בדיקה: הודעה אמיתית לכל מספר, לא רק למספר הבדיקה" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "s|  if (test) return normalizePhone(to) === test;|  if (test) return true;|" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ הרצה יבשה לא נאכפת (שליחה אמיתית להורים)" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "s|    if (!realSendAllowed(to)) {|    if (false) {|" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ הסיסמה נשלחת בכתובת http" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "s/  if (u.protocol !== .https:. || u.username || u.password) return null;/  if (u.username || u.password) return null;/" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ QR: התמונה נשלפת מהמארח ש-GOWA החזירה (הסיסמה יוצאת למארח אחר)" \
+  "$DIR/../functions/_shared/wa.ts" \
+  'sed -i "s|const img = await fetch(.*path\.slice(at)}.,|const img = await fetch(String(r.body.results?.qr_link),|" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ wa-admin: בלי בדיקת בעלים (QR וניתוק לכל מחוברת)" \
+  "$DIR/../functions/wa-admin/index.ts" \
+  'sed -i "/  if (role !== .owner.) return json(/d" "$F"' \
+  "node supabase/tests/wa-gowa.test.mjs"
+
+expect_fail_code "★ קצב: בלי מרווח מינימלי במסד" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/  if v_last is not null and now() < v_last + make_interval(secs => v_gap) then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/42_whatsapp_gowa.sql"
+
+expect_fail_code "★ קצב: בלי תקרה לדקה במסד" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/  if coalesce(array_length(v_recent, 1), 0) >= v_cap then/  if false then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/42_whatsapp_gowa.sql"
+
+expect_fail_code "קצב: ערך 0 בהגדרות (תקרה) לא נחתך" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/else 4 end, 1), 60) as cap,/else 4 end, 0), 60) as cap,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/42_whatsapp_gowa.sql"
+
+expect_fail_code "★ קצב: התור בלי מרווח אקראי בין הודעות" \
+  "$DIR/../functions/_shared/send-queue.ts" \
+  'sed -i "/      await deps.sleep(gap);/d" "$F"' \
+  "node supabase/tests/send-queue.test.mjs"
+
+expect_fail_code "קצב: התור לא ממתין כשהמסד אומר \"לחכות\"" \
+  "$DIR/../functions/_shared/send-queue.ts" \
+  'sed -i "/      await deps.sleep(wait);/d" "$F"' \
+  "node supabase/tests/send-queue.test.mjs"
+
+expect_fail_code "★ wa-send: שליחה אמיתית בלי \"מקום\" מהמסד" \
+  "$DIR/../functions/wa-send/index.ts" \
+  'sed -i "s/    if (real) {/    if (false) {/" "$F"' \
+  "node supabase/tests/send-queue.test.mjs"
+
+expect_fail_code "★ wa-send: \"לא ברור אם נשלחה\" — נשלחת שוב (כפילות)" \
+  "$DIR/../functions/wa-send/index.ts" \
+  'sed -i "s/      if (result.uncertain) {/      if (false) {/" "$F"' \
+  "node supabase/tests/send-queue.test.mjs"
+
+expect_fail_code "★ טלפון: ‎+972-052… לא מנורמל בשרת" \
+  "$DIR/../functions/_shared/phone.ts" \
+  'sed -i "/  if (d.startsWith(.9720.)) d = /d" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && node supabase/tests/phone-normalize.test.mjs"
+
+expect_fail_code "★ טלפון: 00972… לא מנורמל במסד" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/case when d0 like .00%. then substr(d0, 3) else d0 end/d0/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && node supabase/tests/phone-normalize.test.mjs"
+
+expect_fail_code "★ טלפון: ההרשמה חוזרת לנרמול משלה" \
+  "$DIR/../migrations/0065_whatsapp_gowa.sql" \
+  'sed -i "s/  v_phone := f_normalize_phone(v_phone);.*/  if v_phone ~ \x27^0[0-9]{9}$\x27 then v_phone := \x27972\x27 || substr(v_phone, 2); end if;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && node supabase/tests/phone-normalize.test.mjs"
+
+expect_fail_code "★ המסך: \"לא מוגדר\" מוצג כשגיאה" \
+  "$DIR/../../src/components/WaConnect.tsx" \
+  'sed -i "s/  if (s \&\& !s.configured) {/  if (false) {/" "$F"' \
+  "node supabase/tests/wa-connect-ui.test.mjs"
+
+# ─── חיבור הוראת קבע מ-SUMIT והערות (0066) ───
+expect_fail_code "★ חיבור מ-SUMIT: לא רק הבעלים" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/  if auth_role() is distinct from .owner. then raise exception .רק הבעלים יכולה לחבר הוראת קבע מ-SUMIT. using errcode = .42501.; end if;/  null;/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "★ חיבור מ-SUMIT: \"חיוב X מתוך N\" זז באחד (המיפוי)" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/coalesce(p_prev, p_next), v_status, p_sumit_status, p_next, p_prev, v_done - 1,/coalesce(p_prev, p_next), v_status, p_sumit_status, p_next, p_prev, v_done,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "★ חיבור מ-SUMIT: חיוב מלפני החיבור נרשם שוב (תשלום כפול)" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/coalesce(p_prev, p_next), v_status, p_sumit_status, p_next, p_prev, v_done - 1,/coalesce(p_prev, p_next), v_status, p_sumit_status, p_next, null, v_done - 1,/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "חיבור מ-SUMIT: נותרו יותר מסך התשלומים — מתקבל" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/  if v_left < 1 or v_left > p_total then/  if v_left < 1 then/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "חיבור מ-SUMIT: הוראה שבוטלה ב-SUMIT מתחברת" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/  if v_status in (.cancelled., .completed.) then raise exception/  if false then raise exception/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "★ הערות: מנהלת סניף עורכת תלמידה מסניף אחר" \
+  "$DIR/../migrations/0066_standing_link_external.sql" \
+  'sed -i "s/(v_role = .branch_manager. and s.branch_id in (select my_branches()))/(v_role = \x27branch_manager\x27)/" "$F"' \
+  "./supabase/tests/reset.sh >/dev/null 2>&1 && psql -h \${PGHOST:-/tmp} -p \${PGPORT:-5433} -U \${PGUSER:-postgres} -d teichtal -v ON_ERROR_STOP=1 -f supabase/tests/43_standing_link_external.sql"
+
+expect_fail_code "★ חיבור מ-SUMIT: פנייה ל-SUMIT לפני בדיקת ההרשאה" \
+  "$DIR/../functions/standing-order-link/index.ts" \
+  'sed -i "s/  if (error) return json({ ok: false, error: error.message }, 403);/  void error;/" "$F"' \
+  "node supabase/tests/standing-link.test.mjs"
+
+expect_fail_code "★ חיבור מ-SUMIT: הסכום מהדפדפן (לא מ-SUMIT)" \
+  "$DIR/../functions/standing-order-link/index.ts" \
+  'sed -i "s/p_amount: item.amount,/p_amount: Number((body as { amount?: unknown }).amount ?? item.amount),/" "$F"' \
+  "node supabase/tests/standing-link.test.mjs"
+
+expect_fail_code "חיבור מ-SUMIT: \"נותרו\" בלי החיוב האחרון" \
+  "$DIR/../functions/_shared/standing-link.ts" \
+  'sed -i "s/months(next, last) + 1 : null;/months(next, last) : null;/" "$F"' \
+  "node supabase/tests/standing-link.test.mjs"
+
+expect_fail_code "★ המסך: חיבור מ-SUMIT בלי אישור" \
+  "$DIR/../../src/components/LinkSumitStanding.tsx" \
+  'sed -i "s/                if (!window.confirm(\x60לחבר את/                if (false \&\& !window.confirm(\x60לחבר את/" "$F"' \
+  "node supabase/tests/standing-link-ui.test.mjs"
+
+# ─── חידוש הוראה: הישנה (החסומה) מבוטלת ב-SUMIT ───
+expect_fail_code "★ חידוש: ההוראה החסומה הישנה לא מבוטלת ב-SUMIT" \
+  "$DIR/../functions/_shared/standing-retry.ts" \
+  'sed -i "s/    const c = await sumit.cancel(customerId, Number(o.sumit_recurring_id));/    const c = { ok: true } as { ok: true } | { ok: false; error: string };/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ חידוש: מבוטלת ההוראה החדשה במקום הישנה" \
+  "$DIR/../functions/_shared/standing-retry.ts" \
+  'sed -i "s/    const c = await sumit.cancel(customerId, Number(o.sumit_recurring_id));/    const c = await sumit.cancel(customerId, Number(created.recurringId));/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "חידוש: ביטול שנכשל — בלי התראה" \
+  "$DIR/../functions/_shared/standing-retry.ts" \
+  'sed -i "s/kind: .standing_order_old_not_cancelled., severity: .warning.,/kind: \x27standing_x\x27, severity: \x27warning\x27,/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
 
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash

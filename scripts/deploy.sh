@@ -53,11 +53,10 @@ fi
 step "3 · Edge Functions"
 if need SUPABASE_PROJECT_REF; then
   # ברירת המחדל יבשה. מעבר לחי הוא החלטה נפרדת, אחרי אימות.
+  # ★ סודות הוואטסאפ (WA_BASE_URL, WA_DEVICE_ID, WA_USER, WA_PASS, WA_WEBHOOK_SECRET, WA_TEST_PHONE)
+  #   לא נקבעים כאן — הבעלים מכניס אותם ישירות לסודות של ה-Edge Functions ב-Supabase.
   npx supabase secrets set \
     WA_DRY_RUN="${WA_DRY_RUN:-true}" AI_DRY_RUN="${AI_DRY_RUN:-true}" \
-    ${WA_SERVER_URL:+WA_SERVER_URL="$WA_SERVER_URL"} \
-    ${WA_API_KEY:+WA_API_KEY="$WA_API_KEY"} \
-    ${WA_WEBHOOK_SECRET:+WA_WEBHOOK_SECRET="$WA_WEBHOOK_SECRET"} \
     ${ANTHROPIC_API_KEY:+ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"} \
     ${OWNER_ALERT_WEBHOOK:+OWNER_ALERT_WEBHOOK="$OWNER_ALERT_WEBHOOK"} \
     ${SITE_URL:+SITE_URL="$SITE_URL"} \
