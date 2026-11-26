@@ -2210,6 +2210,22 @@ expect_fail_code "★ המסך: חיבור מ-SUMIT בלי אישור" \
   'sed -i "s/                if (!window.confirm(\x60לחבר את/                if (false \&\& !window.confirm(\x60לחבר את/" "$F"' \
   "node supabase/tests/standing-link-ui.test.mjs"
 
+# ─── חידוש הוראה: הישנה (החסומה) מבוטלת ב-SUMIT ───
+expect_fail_code "★ חידוש: ההוראה החסומה הישנה לא מבוטלת ב-SUMIT" \
+  "$DIR/../functions/_shared/standing-retry.ts" \
+  'sed -i "s/    const c = await sumit.cancel(customerId, Number(o.sumit_recurring_id));/    const c = { ok: true } as { ok: true } | { ok: false; error: string };/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "★ חידוש: מבוטלת ההוראה החדשה במקום הישנה" \
+  "$DIR/../functions/_shared/standing-retry.ts" \
+  'sed -i "s/    const c = await sumit.cancel(customerId, Number(o.sumit_recurring_id));/    const c = await sumit.cancel(customerId, Number(created.recurringId));/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
+expect_fail_code "חידוש: ביטול שנכשל — בלי התראה" \
+  "$DIR/../functions/_shared/standing-retry.ts" \
+  'sed -i "s/kind: .standing_order_old_not_cancelled., severity: .warning.,/kind: \x27standing_x\x27, severity: \x27warning\x27,/" "$F"' \
+  "node supabase/tests/standing.test.mjs"
+
 # ★ אימות שהסקריפט עצמו לא בלע בקרה.
 # פונקציה שהוגדרה אחרי הקריאה נותנת "command not found" ש-bash
 # מדפיס לשגיאה וממשיך — והסקריפט היה מדווח שהכל עבר בזמן שבקרה

@@ -154,6 +154,7 @@ function RetryForm({ order, onDone, onCancel }: { order: StandingOrder; onDone: 
               onSuccess: (r) => onDone([
                 r.charged > 0 ? `✓ החיוב עבר (${formatILS(r.charged)}).` : '',
                 r.renewed ? `ההוראה חודשה ב-SUMIT: ${r.remaining} חיובים מ-${formatDate(r.next)}.` : r.completed ? 'זה היה החיוב האחרון — ההוראה הסתיימה.' : '',
+                r.renewed ? (r.old_cancelled ? 'ההוראה הישנה (החסומה) בוטלה ב-SUMIT.' : 'את ההוראה הישנה (החסומה) לא הצלחנו לבטל ב-SUMIT — לבטל שם ידנית (נשלחה התראה).') : '',
               ].filter(Boolean).join(' ')),
             });
           }}>

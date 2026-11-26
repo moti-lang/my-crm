@@ -147,5 +147,18 @@ export async function retryStanding(user: UserDb, admin: AdminDb, sumit: Standin
       body: `${who}: חיוב של ${ip.Amount} ₪ בוצע מיד ולא ב-${plan.next}. החיוב נרשם. לבדוק ב-SUMIT שמספר החיובים הנותרים נכון.`,
       meta: { standing_order_id: id, sumit_payment_id: ip.ID } });
   }
-  return { status: 200, body: { ok: true, charged, renewed: true, completed: false, next: plan.next, remaining: plan.remaining_after } };
+  // ★ ההוראה הישנה — "חסומה עקב אי תשלום" ב-SUMIT — מבוטלת שם, אחרי שהחדשה נוצרה ונרשמה. כך ב-SUMIT נשארות
+  //   "חסומות" רק הוראות שעוד לא טופלו. לא עבר — לא מבטלים שום דבר אחר; התראה לבטל ידנית.
+  let oldCancelled = false;
+  if (Number(o.sumit_recurring_id) !== Number(created.recurringId)) {
+    const c = await sumit.cancel(customerId, Number(o.sumit_recurring_id));
+    oldCancelled = c.ok;
+    if (!c.ok) {
+      await admin.from('system_alerts').insert({ kind: 'standing_order_old_not_cancelled', severity: 'warning',
+        title: 'ההוראה חודשה, אבל הישנה לא בוטלה ב-SUMIT',
+        body: `${who}: ההוראה החדשה (${created.recurringId}) פעילה. ביטול הישנה (${o.sumit_recurring_id}, "חסומה עקב אי תשלום") ב-SUMIT נכשל: ${c.error}. לבטל ידנית ב-SUMIT — היא לא תחייב, אבל מבלבלת ברשימה.`,
+        meta: { standing_order_id: id, sumit_recurring_id: o.sumit_recurring_id } });
+    }
+  }
+  return { status: 200, body: { ok: true, charged, renewed: true, completed: false, next: plan.next, remaining: plan.remaining_after, old_cancelled: oldCancelled } };
 }

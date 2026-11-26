@@ -150,7 +150,7 @@ export function useRetryPreview(orderId: string | null, enabled: boolean) {
   });
 }
 
-export type RetryResult = { charged: number; renewed: boolean; completed: boolean; next: string | null; remaining: number };
+export type RetryResult = { charged: number; renewed: boolean; completed: boolean; next: string | null; remaining: number; old_cancelled?: boolean };
 export class RetryChanged extends Error {
   constructor(message: string, readonly plan: RetryPlan) { super(message); }
 }

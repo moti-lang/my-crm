@@ -57,7 +57,7 @@ const sumit = {
   list: async () => { sumitCalls.push({ fn: 'list' }); return [{ ID: RECURRING, Status: listStatus, Date_NextBilling: listNext, Date_PreviousBilling: null, Date_Last: null }]; },
   chargeOnce: async (i) => { sumitCalls.push({ fn: 'chargeOnce', ...i }); return chargeResult; },
   create: async (i) => { sumitCalls.push({ fn: 'create', ...i }); return { ok: true, recurringId: NEW_RECURRING, immediatePayment: null, dryRun: true }; },
-  update: async () => ({ ok: true }), cancel: async () => ({ ok: true }),
+  update: async () => ({ ok: true }), cancel: async (cid, rid) => { sumitCalls.push({ fn: 'cancel', customerId: cid, recurringId: rid }); return { ok: true }; },
 };
 
 const { check, failed: failedCount } = reporter();
@@ -93,9 +93,11 @@ try {
     check('★ אישור לפני חיוב אמיתי', dialogs.length === 1 && dialogs[0].includes('לחייב עכשיו ₪100 בכרטיס השמור'), dialogs.join(' | '));
     const done = (await card.getByRole('status').filter({ hasText: 'החיוב עבר' }).textContent()) ?? '';
     check('★ במסך: החיוב עבר, וההוראה חודשה — כמה ומתי', done.includes('✓ החיוב עבר (₪100).') && done.includes(`ההוראה חודשה ב-SUMIT: 6 חיובים מ-${ddmmyyyy(PLAN.next)}`), done);
-    check('★ SUMIT: בדיקה, חיוב אחד (100 ₪, ללקוחה שלנו), הוראה חדשה ל-6 חיובים מהתאריך בתוכנית',
-          JSON.stringify(sumitCalls.map((c) => c.fn)) === '["list","chargeOnce","create"]' && sumitCalls[1].amount === 100 && sumitCalls[1].customerId === CUSTOMER
-          && sumitCalls[2].installments === 6 && sumitCalls[2].dateStart === PLAN.next, JSON.stringify(sumitCalls));
+    check('★ SUMIT: בדיקה, חיוב אחד (100 ₪, ללקוחה שלנו), הוראה חדשה ל-6 חיובים מהתאריך בתוכנית, וביטול הישנה',
+          JSON.stringify(sumitCalls.map((c) => c.fn)) === '["list","chargeOnce","create","cancel"]' && sumitCalls[1].amount === 100 && sumitCalls[1].customerId === CUSTOMER
+          && sumitCalls[2].installments === 6 && sumitCalls[2].dateStart === PLAN.next
+          && sumitCalls[3].customerId === CUSTOMER && sumitCalls[3].recurringId === RECURRING, JSON.stringify(sumitCalls));
+    check('★ במסך: "ההוראה הישנה (החסומה) בוטלה ב-SUMIT"', done.includes('ההוראה הישנה (החסומה) בוטלה ב-SUMIT'), done);
     check('★ במסד: פעילה, המזהה החדש, חיוב 4 מתוך 10, בלי "צריך לחדש"',
           sql(`select status || '|' || sumit_recurring_id || '|' || charged_count || '|' || needs_renewal from standing_orders where id = '${ORDER}'`) === `active|${NEW_RECURRING}|3|false`);
     check('★ התשלום בכרטיס התלמידה', sql(`select count(*) || '|' || sum(amount) from payments where student_id = '${SHIRA}' and note like '%חיוב חוזר%'`) === '1|100.00');
@@ -179,6 +181,7 @@ try {
     await card.getByRole('button', { name: 'לחדש את ההוראה ב-SUMIT' }).click();
     await card.getByText('ההוראה חודשה ב-SUMIT', { exact: false }).first().waitFor({ timeout: 10000 });
     check('★ ב-SUMIT: רק הוראה חדשה — בלי שום חיוב', !sumitCalls.some((c) => c.fn === 'chargeOnce') && sumitCalls.some((c) => c.fn === 'create'), JSON.stringify(sumitCalls));
+    check('★ ...והישנה ("חסומה עקב אי תשלום") בוטלה ב-SUMIT', sumitCalls.some((c) => c.fn === 'cancel' && c.recurringId === RECURRING), JSON.stringify(sumitCalls));
     check('★ במסד: פעילה, המזהה החדש', sql(`select status || '|' || sumit_recurring_id || '|' || needs_renewal from standing_orders where id = '${ORDER}'`) === `active|${NEW_RECURRING}|false`);
     check('בלי שגיאות דף ובלי שאילתות שבורות', log.pageErrors.length === 0 && log.badResponses.length === 0, [...log.pageErrors, ...log.badResponses].join('\n'));
     await page.close();
